@@ -69,6 +69,11 @@ export const SUPPORTED_LOCALES = [
     code: "es",
     name: "Spanish 🇪🇸",
   },
+    {
+    code: "ta",
+    name: "Tamil IN",
+  },
+
   {
     code: "fr",
     name: "French 🇫🇷",
