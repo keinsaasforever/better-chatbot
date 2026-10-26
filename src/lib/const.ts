@@ -71,8 +71,9 @@ export const SUPPORTED_LOCALES = [
   },
     {
     code: "ta",
-    name: "Tamil IN",
+    name: "தமிழ் 🇮🇳", 
   },
+
 
   {
     code: "fr",
