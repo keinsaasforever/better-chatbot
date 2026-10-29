@@ -1,0 +1,65 @@
+name: Schema Parity
+
+# The migration journal and schema.pg.ts are both hand-maintained, so they can
+# drift apart: an object pushed straight to a deployed database never gets a
+# migration, and a replay then produces a database the code cannot run against.
+# This replays the journal and diffs it against a schema push.
+
+on:
+  pull_request:
+    branches: [main, staging]
+    paths:
+      - 'apps/web/src/lib/db/**'
+      - 'scripts/check-schema-parity.ts'
+      - '.github/workflows/schema-parity.yml'
+
+jobs:
+  schema_parity:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: pgvector/pgvector:pg17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.2.1
+          run_install: false
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Create throwaway databases
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h localhost -U postgres -c 'CREATE DATABASE parity_replay;'
+          psql -h localhost -U postgres -c 'CREATE DATABASE parity_push;'
+          psql -h localhost -U postgres -d parity_push -c 'CREATE EXTENSION IF NOT EXISTS vector;'
+
+      - name: Check schema parity
+        env:
+          POSTGRES_URL: postgres://postgres:postgres@localhost:5432/parity_replay
+          PARITY_PUSH_URL: postgres://postgres:postgres@localhost:5432/parity_push
+        run: pnpm db:check-parity

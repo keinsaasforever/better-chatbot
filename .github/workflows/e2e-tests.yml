@@ -4,11 +4,14 @@ on:
   push:
     branches: [main, develop]
   pull_request:
-    branches: [main]
+    # staging is where features accumulate before a release, so it needs the
+    # same gate as main — otherwise the branch that feeds releases is the one
+    # branch nothing is checked against.
+    branches: [main, staging]
 
 jobs:
   e2e:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
 
     env:
@@ -31,9 +34,14 @@ jobs:
       DISABLE_EMAIL_SIGN_IN: 0
       FILE_BASED_MCP_CONFIG: false
 
+      # Schema is provisioned via db:push below (the migration chain assumes a
+      # push-managed baseline and cannot run on an empty database), so the app
+      # boot must not replay migrations.
+      SKIP_DB_MIGRATE: "1"
+
     services:
       postgres:
-        image: postgres:17
+        image: pgvector/pgvector:pg17
         env:
           POSTGRES_USER: testuser
           POSTGRES_PASSWORD: testpass
@@ -82,13 +90,20 @@ jobs:
           # Create minimal .env for Playwright (only non-runtime vars if needed)
           touch .env
 
-      - name: Run database migrations
-        run: pnpm db:migrate
+      - name: Push schema to test database
+        # Fresh databases are bootstrapped with db:push (see CLAUDE.md and
+        # instrumentation.ts); db:migrate assumes existing push-managed tables.
+        run: pnpm db:push --force
 
       - name: Seed test users once before all tests
         run: pnpm test:e2e:seed
 
       - name: Build application
+        # `next build` peaks close to V8's default ~2 GB old-space limit on the
+        # runner and has died with "JavaScript heap out of memory" (run 433).
+        # The ubuntu-latest runner has 16 GB, so give the build room.
+        env:
+          NODE_OPTIONS: --max-old-space-size=4096
         run: pnpm build:local
 
       - name: Run E2E tests

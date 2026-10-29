@@ -1,0 +1,14 @@
+{
+  "name": "navigator-e2b-template-builder",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Builds this repo's custom E2B templates with the v2 SDK.",
+  "scripts": {
+    "build": "tsx build.ts"
+  },
+  "dependencies": {
+    "e2b": "2.19.4",
+    "tsx": "4.20.6"
+  }
+}

@@ -1,0 +1,16 @@
+{
+  "name": "@keinsaas/mcp-stdio-filesystem",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Pinned stdio launcher for the official MCP filesystem server (docs/monorepo.md Phase 6)",
+  "type": "module",
+  "bin": {
+    "mcp-filesystem": "./src/launch-filesystem.mjs"
+  },
+  "scripts": {
+    "start": "node ./src/launch-filesystem.mjs"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/server-filesystem": "^0.6.2"
+  }
+}

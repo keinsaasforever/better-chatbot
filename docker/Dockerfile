@@ -1,4 +1,4 @@
-FROM node:23-alpine AS builder
+FROM node:22-alpine AS builder
 ARG DOCKER_BUILD="1"
 WORKDIR /app
 
@@ -15,7 +15,7 @@ ENV NEXT_STANDALONE_OUTPUT="true"
 
 RUN pnpm build
 
-FROM node:23-alpine AS runner
+FROM node:22-alpine AS runner
 
 WORKDIR /app
 
@@ -26,15 +26,14 @@ ENV NEXT_TELEMETRY_DISABLED=1
 RUN addgroup --system --gid 1001 nodejs
 RUN adduser --system --uid 1001 nextjs
 
-COPY --from=builder /app/public ./public
-
-# Automatically leverage output traces to reduce image size
-# https://nextjs.org/docs/advanced-features/output-file-tracing
-COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
-COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
+# The standalone output mirrors the monorepo layout: server.js lives at
+# apps/web/server.js inside the traced bundle.
+COPY --from=builder --chown=nextjs:nodejs /app/apps/web/.next/standalone ./
+COPY --from=builder --chown=nextjs:nodejs /app/apps/web/.next/static ./apps/web/.next/static
+COPY --from=builder /app/apps/web/public ./apps/web/public
 
 # Copy migrations content
-COPY --from=builder /app/src/lib/db/migrations ./src/lib/db/migrations
+COPY --from=builder /app/apps/web/src/lib/db/migrations ./apps/web/src/lib/db/migrations
 
 USER nextjs
 
@@ -45,4 +44,4 @@ EXPOSE 3000
 
 # server.js is created by next build from the standalone output
 # https://nextjs.org/docs/pages/api-reference/config/next-config-js/output
-CMD ["node", "server.js"]
+CMD ["node", "apps/web/server.js"]

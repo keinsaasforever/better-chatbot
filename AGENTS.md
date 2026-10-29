@@ -1,42 +1,48 @@
 # Repository Guidelines
 
-## Project Structure & Module Organization
-- App code lives in `src`.
-  - `src/app` (Next.js routes, API, middleware)
-  - `src/components` (UI; reusable components in PascalCase)
-  - `src/lib` (helpers: auth, db, ai, validations, etc.)
-  - `src/hooks` (React hooks: `useX`)
-- Assets in `public/`. End‑to‑end tests in `tests/`. Scripts in `scripts/`. Docker files in `docker/`.
+## Layout
 
-## Build, Test, and Development Commands
-- `pnpm dev` — Run the app locally (Next.js dev server).
-- `pnpm build` / `pnpm start` — Production build and run.
-- `pnpm lint` / `pnpm lint:fix` — ESLint + Biome checks and autofix.
-- `pnpm format` — Format with Biome.
-- `pnpm test` / `pnpm test:watch` — Unit tests (Vitest).
-- `pnpm test:e2e` — Playwright tests; uses `playwright.config.ts` webServer.
-- DB: `pnpm db:push`, `pnpm db:studio`, `pnpm db:migrate` (Drizzle Kit).
-- Docker: `pnpm docker-compose:up` / `:down` to run local stack.
+pnpm + Turborepo workspace.
 
-## Coding Style & Naming Conventions
-- TypeScript everywhere. Prefer `zod` for validation.
-- Formatting via Biome: 2 spaces, LF, width 80, double quotes.
-- Components: `PascalCase.tsx`; hooks/utilities: `camelCase.ts`.
-- Co-locate small module tests next to code; larger suites under `tests/`.
-- Keep modules focused; avoid circular deps; use `src/lib` for shared logic.
+- `apps/web` — the Next.js app; almost all changes happen here
+  - `src/app` (routes, API, middleware), `src/components` (UI),
+    `src/lib` (auth, db, ai, storage), `src/hooks`
+- `apps/desktop` — Electron shell (local MCP servers, filesystem, keychain)
+- `packages/*` — shared MCP schemas and contracts; never import from `apps/web`
+- `servers/mcp-stdio` — local-exec MCP server used by the desktop app
+- `tests/` (end-to-end), `scripts/` (maintenance), `docker/`
 
-## Testing Guidelines
-- Unit tests: Vitest, filename `*.test.ts(x)`.
-- E2E: Playwright under `tests/`, filename `*.spec.ts`.
-- Run locally: `pnpm test` and `pnpm test:e2e` (ensure app is running or let Playwright start via config).
-- Add tests for new features and bug fixes; cover happy path + one failure mode.
+Root commands pass through to `apps/web`, so `pnpm dev` and friends work from
+the repository root.
 
-## Commit & Pull Request Guidelines
-- Conventional Commits: `feat:`, `fix:`, `chore:`, `docs:`, etc. Example: `feat: add image generation tool`.
-- Branch names: `feat/…`, `fix/…`, `chore/…`.
-- PRs: clear description, linked issues, screenshots or terminal output when UI/CLI changes; list test coverage and manual steps.
-- Before opening PR: `pnpm check` (lint+types+tests) should pass.
+## Commands
 
-## Security & Configuration Tips
-- Copy `.env.example` to `.env`; never commit secrets. For local HTTP use `NO_HTTPS=1` or `pnpm build:local`.
-- If using DB/Redis locally, start services via Docker scripts or your own stack.
+| Command | What it does |
+| --- | --- |
+| `pnpm dev` | Run locally |
+| `pnpm build` / `pnpm start` | Production build and run |
+| `pnpm check` | Lint, typecheck, unit tests — the gate before every commit |
+| `pnpm test` / `pnpm test:e2e` | Vitest / Playwright |
+| `pnpm db:migrate` / `pnpm db:studio` | Apply migrations / browse the database |
+| `pnpm db:check-parity` | Verify a journal replay matches the schema |
+| `pnpm docker-compose:up` | Full local stack |
+
+## Conventions
+
+- **Verification gate:** `pnpm check` before every commit. Add `pnpm build` for
+  changes to streaming, the schema, or the client/server boundary.
+- **Commits:** Conventional Commits (`feat:`, `fix:`, `docs:`, …). Filenames
+  are kebab-case. Biome formats and lints on commit.
+- **Migrations are hand-written SQL** in `apps/web/src/lib/db/migrations/pg/`
+  plus a matching `meta/_journal.json` entry. Do not run
+  `drizzle-kit generate` — it produces drifted snapshots against this schema.
+  A journal entry's timestamp must be newer than every entry before it, or the
+  migration is silently skipped on databases that are already past it.
+- **Auth:** API routes go through `withAuth` from `lib/auth/route-guard`.
+  Repository reads and writes are scoped by user and workspace — do not widen
+  them. Never return a raw error message from a 500 handler.
+- **Chat history reads stay bounded** by `CHAT_MESSAGE_WINDOW` (`lib/const.ts`).
+- **Streamed markdown** is split into block-stable units and memoized; keep
+  per-update work proportional to the tail block, not the whole message.
+- **Tests** cover the happy path plus one failure mode, and run without a
+  database — mock `pgDb`.

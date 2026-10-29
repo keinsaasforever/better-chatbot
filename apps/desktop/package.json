@@ -1,0 +1,49 @@
+{
+  "name": "desktop",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Keinsaas Navigator desktop shell (Electron)",
+  "main": "dist/main/index.js",
+  "scripts": {
+    "dev": "concurrently -k \"cross-env SKIP_DB_MIGRATE=1 pnpm --filter web dev\" \"pnpm run dev:electron\"",
+    "dev:electron": "pnpm run build && wait-on http://localhost:3000 && cross-env NODE_ENV=development electron .",
+    "build": "node scripts/sync-icons.mjs && node scripts/build-main.mjs && tsc -p tsconfig.preload.json",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "check-types": "tsc --noEmit",
+    "dist": "pnpm run build && electron-builder --mac --publish never",
+    "dist:mac": "pnpm run build && electron-builder --mac --publish never",
+    "dist:win": "pnpm run build && electron-builder --win --publish never",
+    "dist:linux": "pnpm run build && electron-builder --linux --publish never",
+    "dist:publish:mac": "pnpm run build && electron-builder --mac --publish never && node scripts/publish-to-spaces.mjs",
+    "dist:publish:win": "pnpm run build && electron-builder --win --publish never && node scripts/publish-to-spaces.mjs",
+    "release:sync-version": "node scripts/sync-version.mjs",
+    "release:publish": "node scripts/publish-to-spaces.mjs",
+    "smoke": "pnpm run build && node scripts/smoke-test.mjs"
+  },
+  "dependencies": {
+    "@keinsaas/mcp-core": "workspace:*",
+    "@keinsaas/mcp-router": "workspace:*",
+    "@keinsaas/mcp-types": "workspace:*",
+    "@modelcontextprotocol/sdk": "^1.26.0",
+    "@opentelemetry/api": "^1.9.1",
+    "@opentelemetry/api-logs": "^0.221.0",
+    "@opentelemetry/exporter-logs-otlp-http": "^0.221.0",
+    "@opentelemetry/exporter-trace-otlp-http": "^0.221.0",
+    "@opentelemetry/resources": "^2.10.0",
+    "@opentelemetry/sdk-logs": "^0.221.0",
+    "@opentelemetry/sdk-node": "^0.221.0",
+    "electron-updater": "^6.6.2"
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.1",
+    "cross-env": "^7.0.3",
+    "electron": "^35.7.5",
+    "electron-builder": "^26.0.12",
+    "esbuild": "^0.25.0",
+    "typescript": "^5.9.3",
+    "vitest": "^3.2.4",
+    "wait-on": "^8.0.5"
+  }
+}

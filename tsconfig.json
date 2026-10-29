@@ -1,50 +1,44 @@
 {
+  // Root project: typechecks the root-level tests/ and scripts/ trees, which
+  // stay at the repo root per docs/monorepo.md §2.1 until the web move is stable.
+  // Aliases resolve into apps/web/src so root scripts keep importing app code.
+  "extends": "./tsconfig.base.json",
   "compilerOptions": {
-    "target": "ES2017",
-    "lib": ["dom", "dom.iterable", "esnext"],
     "allowJs": true,
-    "skipLibCheck": true,
-    "strict": true,
     "noEmit": true,
-    "esModuleInterop": true,
-    "module": "esnext",
-    "moduleResolution": "bundler",
-    "resolveJsonModule": true,
-    "isolatedModules": true,
-    "jsx": "react-jsx",
-    "incremental": true,
+    "jsx": "preserve",
     "emitDecoratorMetadata": true,
     "experimentalDecorators": true,
     "noUnusedLocals": true,
     "strictPropertyInitialization": false,
     "noUnusedParameters": false,
     "noImplicitAny": false,
-    "plugins": [
-      {
-        "name": "next"
-      }
-    ],
     "paths": {
-      "ui/*": ["./src/components/ui/*"],
-      "auth/*": ["./src/lib/auth/*"],
-      "app-types/*": ["./src/types/*"],
-      "logger": ["./src/lib/logger.ts"],
-      "lib/*": ["./src/lib/*"],
-      "load-env": ["./src/lib/load-env.ts"],
-      "@/*": ["./src/*"]
+      "ui/*": ["./apps/web/src/components/ui/*"],
+      "auth/*": ["./apps/web/src/lib/auth/*"],
+      "app-types/*": ["./apps/web/src/types/*"],
+      "logger": ["./apps/web/src/lib/logger.ts"],
+      "lib/*": ["./apps/web/src/lib/*"],
+      "load-env": ["./apps/web/src/lib/load-env.ts"],
+      "@/*": ["./apps/web/src/*"]
     }
   },
   "include": [
-    "next-env.d.ts",
-    "**/*.ts",
-    "**/*.tsx",
-    ".next/types/**/*.ts",
-    "src/types/global.d.ts",
-    "vitest.setup.ts",
-    "vitest.config.ts",
-    "drizzle.config.ts",
     "tests/**/*.ts",
-    ".next/dev/types/**/*.ts"
+    "scripts/**/*.ts",
+    "playwright.config.ts",
+    "apps/web/src/types/global.d.ts"
   ],
-  "exclude": ["node_modules"]
+  "exclude": [
+    "node_modules",
+    "apps/web/node_modules",
+    "supabase/functions",
+    "firmware/**",
+    "custom-mcp-server",
+    "prototype",
+    // Community implementations of the edition seams. They only resolve once
+    // copied into apps/web by the sync, which typechecks them there — see
+    // .github/workflows/oss-sync.yml.
+    "scripts/oss-sync/overlay"
+  ]
 }

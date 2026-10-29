@@ -1,0 +1,9 @@
+{
+  "extends": "../../tsconfig.base.json",
+  // Source-consumed package (apps/web transpiles it): typecheck-only, no emit.
+  "compilerOptions": {
+    "noEmit": true
+  },
+  "include": ["src/**/*.ts"],
+  "exclude": ["node_modules"]
+}

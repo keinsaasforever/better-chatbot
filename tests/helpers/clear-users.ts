@@ -1,4 +1,4 @@
-import { pgDb } from "../../src/lib/db/pg/db.pg";
+import { pgDb } from "../../apps/web/src/lib/db/pg/db.pg";
 import {
   UserTable,
   SessionTable,
@@ -9,9 +9,7 @@ import {
   AgentTable,
   WorkflowTable,
   McpServerTable,
-  ArchiveTable,
-  ArchiveItemTable,
-} from "../../src/lib/db/pg/schema.pg";
+} from "../../apps/web/src/lib/db/pg/schema.pg";
 
 /**
  * Clear all users from the database for first-user testing
@@ -25,37 +23,31 @@ export async function clearAllUsers() {
   console.log("🧹 Clearing all users for first-user testing...");
 
   // Clear in order of dependencies (most dependent first)
-  // 1. Clear archive items first (depends on archives)
-  await pgDb.delete(ArchiveItemTable);
-
-  // 2. Clear archives (depends on users)
-  await pgDb.delete(ArchiveTable);
-
-  // 3. Clear chat messages (depends on threads)
+  // 1. Clear chat messages (depends on threads)
   await pgDb.delete(ChatMessageTable);
 
-  // 4. Clear chat threads (depends on users)
+  // 2. Clear chat threads (depends on users)
   await pgDb.delete(ChatThreadTable);
 
-  // 5. Clear workflows (depends on users)
+  // 3. Clear workflows (depends on users)
   await pgDb.delete(WorkflowTable);
 
-  // 6. Clear agents (depends on users)
+  // 4. Clear agents (depends on users)
   await pgDb.delete(AgentTable);
 
-  // 7. Clear MCP servers (depends on users)
+  // 5. Clear MCP servers (depends on users)
   await pgDb.delete(McpServerTable);
 
-  // 8. Clear sessions (depends on users)
+  // 6. Clear sessions (depends on users)
   await pgDb.delete(SessionTable);
 
-  // 9. Clear accounts (depends on users)
+  // 7. Clear accounts (depends on users)
   await pgDb.delete(AccountTable);
 
-  // 10. Clear verifications (depends on users)
+  // 8. Clear verifications (depends on users)
   await pgDb.delete(VerificationTable);
 
-  // 11. Finally clear users
+  // 9. Finally clear users
   await pgDb.delete(UserTable);
 
   console.log("✅ All users and related data cleared");

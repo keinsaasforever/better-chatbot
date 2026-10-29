@@ -1,0 +1,44 @@
+# Build context ignore for voice-bridge.Dockerfile
+# Keep only what the bridge script needs: apps/web/src/, scripts/, tsconfig, package files
+
+# Large firmware C++ source tree
+firmware/
+
+# Next.js app artifacts
+**/.next/
+out/
+build/
+
+# Dev/test/docs
+tests/
+docs/
+coverage/
+playwright-report/
+test-results/
+
+# Static assets (not needed in bridge)
+**/public/
+
+# Root-level project config not needed in bridge image
+e2b.Dockerfile
+*.md
+*.ignore
+.cursorrules
+.cursor
+memory-bank/
+local-data/
+
+# Git
+.git/
+.gitignore
+.gitmodules
+
+# Env files (secrets should come via env vars, not baked in)
+# Keep .env.example — postinstall copies it to .env if missing
+.env
+.env.local
+.env.production
+.env.staging
+
+# node_modules (installed fresh in container)
+node_modules/

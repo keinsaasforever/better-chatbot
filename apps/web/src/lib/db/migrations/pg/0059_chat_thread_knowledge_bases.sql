@@ -1,0 +1,18 @@
+-- Knowledge sources attached to a chat thread from the composer's knowledge
+-- base menu.
+--
+-- Until now the only way to give a chat retrieval was to bind knowledge bases
+-- to an agent (`agent.instructions.knowledgeBases`) and mention that agent, or
+-- to open the thread inside a project. Attaching a knowledge base directly to
+-- the thread needs somewhere durable to live: the client store is not
+-- persisted, so a reload silently detached it and the model quietly stopped
+-- finding context.
+--
+-- Shape mirrors the agent binding exactly so both paths resolve through the
+-- same retrieval builder:
+--
+--   [{ "type": "kb" | "project", "id": "<uuid>", "name": "<label>" }]
+--
+-- The ids are references, never grants: `buildAgentKnowledgeRetrievalPrompt`
+-- re-checks owner/org access on each one before it searches a namespace.
+ALTER TABLE "chat_thread" ADD COLUMN IF NOT EXISTS "knowledge_bases" jsonb DEFAULT '[]'::jsonb NOT NULL;
