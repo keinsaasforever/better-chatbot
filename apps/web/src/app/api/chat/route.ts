@@ -202,7 +202,14 @@ const logger = globalLogger.withDefaults({
 // that: the AI SDK budgets below still finish inside this with room to persist a
 // terminal state. Per-route override — the project-level default cannot exceed
 // 800s, but a function may go higher in code.
-export const maxDuration = 600;
+export const maxDuration = 300;
+
+// Derived from maxDuration so the budgets below still nest inside it when the
+// limit is lower (the community edition ships 300s, the most Vercel Hobby
+// allows): the turn ends with a minute left to persist, and a step never
+// outlives the turn.
+const CHAT_TOTAL_MS = maxDuration * 1000 - 60_000;
+const CHAT_STEP_MS = Math.min(300_000, CHAT_TOTAL_MS);
 
 function chatErrorResponse(
   code: string,
@@ -1470,9 +1477,9 @@ export async function POST(request: Request) {
           // toolMs bounds a server-executed tool call; the headless code tool
           // runs for up to 90s plus sandbox creation and artifact upload.
           timeout: {
-            totalMs: 540_000,
-            stepMs: 300_000,
-            chunkMs: 180_000,
+            totalMs: CHAT_TOTAL_MS,
+            stepMs: CHAT_STEP_MS,
+            chunkMs: Math.min(180_000, CHAT_STEP_MS),
             toolMs: SERVER_TOOL_STEP_BUDGET_MS,
           },
           // First model output chunk → time-to-first-token. The gap between

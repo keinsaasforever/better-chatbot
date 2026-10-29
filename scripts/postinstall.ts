@@ -33,7 +33,7 @@ async function main() {
       process.exit(1);
     }
     console.log(
-      "Running on Vercel, skipping database migration to prevent timeout.",
+      "Running on Vercel, skipping database migration in postinstall.",
     );
     // await runCommand("pnpm db:migrate", "Database migration"); // DISABLED: Causes 45min timeout
   } else if (IS_DOCKER_ENV) {

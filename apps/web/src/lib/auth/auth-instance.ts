@@ -36,6 +36,7 @@ import {
 } from "lib/organization/member-cap";
 import logger from "logger";
 import { headers } from "next/headers";
+import { unstable_rethrow } from "next/navigation";
 import { cache } from "react";
 import { getAuthConfig } from "./config";
 import { organizationAc, organizationRoles } from "./organization-permissions";
@@ -609,6 +610,9 @@ export const getSession = cache(async () => {
     }
     return session;
   } catch (error) {
+    // Next signals "this route is dynamic" by throwing from headers() during a
+    // static render; that is control flow, not a failed lookup.
+    unstable_rethrow(error);
     logger.error("Error getting session:", error);
     return null;
   }

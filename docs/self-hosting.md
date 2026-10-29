@@ -54,6 +54,10 @@ What happens without further configuration:
 - **Models need no key.** On Vercel the AI Gateway authenticates with the
   deployment's OIDC token and bills your Vercel team. Set `AI_GATEWAY_API_KEY`
   only if you want to bill a different account.
+- **It fits the free Hobby plan.** Functions run for at most 300 seconds there,
+  and the chat route is set to that limit; a turn wraps up a minute before it
+  so the answer is always saved. On Pro, very long reasoning turns benefit from
+  raising `maxDuration` in `apps/web/src/app/api/chat/route.ts` to 600.
 - **URLs are inferred.** Sign-in works on the `*.vercel.app` URL and on custom
   domains without configuration. Set `BETTER_AUTH_URL` and
   `NEXT_PUBLIC_BASE_URL` to your custom domain once you add OAuth providers,

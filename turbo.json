@@ -28,6 +28,7 @@
       "outputs": [".next/**", "!.next/cache/**"],
       "env": [
         "POSTGRES_URL",
+        "DATABASE_URL",
         "NEXT_PUBLIC_*",
         "BETTER_AUTH_*",
         "SUPABASE_*",
