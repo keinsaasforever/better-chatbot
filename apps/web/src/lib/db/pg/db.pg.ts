@@ -20,6 +20,13 @@ export const pgClient =
       : 1,
     idle_timeout: 20,
     connect_timeout: 10,
+    // postgres.js prints every server notice as a full object. Migrations
+    // raise dozens of harmless NOTICEs (identifier truncation, "already
+    // exists, skipping"); keep warnings, as one line each.
+    onnotice: (notice) => {
+      if (notice.severity === "NOTICE") return;
+      console.warn(`[postgres] ${notice.severity}: ${notice.message}`);
+    },
   });
 
 globalThis._pgClient = pgClient;
