@@ -41,11 +41,16 @@
     "failedToGenerateInput": "Failed to generate input",
     "createWithExample": "Create With Example",
     "resultsFound": "{count} results found",
-    "youAreAnExpertIn": "You are an expert in {role}",
     "sharedBy": "Shared by {userName}",
-    "changeVisibility": "Change visibility"
+    "changeVisibility": "Change visibility",
+    "copy": "Copy",
+    "deleteMessage": "Delete message"
   },
-  "Error": {},
+  "Error": {
+    "title": "Something went wrong on this page.",
+    "description": "The page hit an unexpected error. Your chat is saved — try again.",
+    "retry": "Try again"
+  },
   "Info": {
     "mcpAddingDisabled": "MCP server addition has been disabled by the administrator."
   },
@@ -206,10 +211,61 @@
       "emailAlreadyExists": "Email already exists",
       "nameRequired": "Name is required",
       "passwordRequired": "Password is required",
-      "createAccount": "Create account"
+      "createAccount": "Create account",
+      "accountCreated": "Account created"
     },
     "Intro": {
       "description": "Welcome to keinsaas navigator. Sign in to experience a new way of working."
+    },
+    "Desktop": {
+      "continueInBrowser": "Continue in your browser",
+      "continueInBrowserDescription": "We opened your browser to finish signing in. This window will update as soon as you are done.",
+      "openBrowserAgain": "Open browser again",
+      "back": "Back",
+      "handoffFailed": "Sign-in could not be completed in the app. Please try again.",
+      "handoffExpired": "The sign-in link expired. Please start again from the app.",
+      "handoffTitle": "Return to Keinsaas Navigator",
+      "handoffDescription": "You are signed in. Return to the app to continue. You can close this tab afterwards.",
+      "returnToApp": "Open Keinsaas Navigator",
+      "handoffHint": "Nothing happened? Use the button above, or restart sign-in from the app.",
+      "invalidLinkTitle": "This sign-in link is not valid",
+      "invalidLinkDescription": "Start sign-in again from the Keinsaas Navigator app."
+    },
+    "Captcha": {
+      "failed": "Human verification could not load. Your request may be rejected — try reloading the page."
+    }
+  },
+  "Invitation": {
+    "joinedTitle": "Welcome aboard!",
+    "joinedDescription": "Setting up your workspace, one moment…",
+    "failedTitle": "Something went wrong",
+    "failedFallback": "We could not add you to this workspace. Nothing was changed — please try again.",
+    "tryAgain": "Try again",
+    "continueToWorkspace": "Continue to your workspace",
+    "pending": {
+      "title": "You've been invited!",
+      "descriptionWithInviter": "<em>{inviter}</em> has invited you to join <em>{organization}</em>.",
+      "description": "You've been invited to join <em>{organization}</em>.",
+      "accept": "Accept & join {organization}",
+      "joining": "Joining…",
+      "decline": "Decline"
+    },
+    "alreadyMember": {
+      "title": "You're already a member",
+      "description": "This invitation to <em>{organization}</em> has already been accepted.",
+      "continue": "Continue to {organization}"
+    },
+    "wrongAccount": {
+      "title": "This invitation is for another account",
+      "description": "It was sent to <em>{email}</em>. Sign in with that address to accept it.",
+      "switchAccount": "Sign out and switch account"
+    },
+    "unavailable": {
+      "title": "Invitation unavailable",
+      "expired": "This invitation to {organization} has expired. Ask for a new one.",
+      "declined": "You declined this invitation to {organization}. Ask for a new one if that was a mistake.",
+      "revoked": "This invitation to {organization} was withdrawn.",
+      "notFound": "This invitation link is no longer valid."
     }
   },
   "Chat": {
@@ -223,6 +279,52 @@
     "imageSizeMustBeLessThan10MB": "Image size must be less than 10MB",
     "failedToUploadImage": "Failed to upload image",
     "imageUploadFailedUsingBase64": "Image upload failed. Using base64 encoding as fallback.",
+    "imageModelAuto": "Auto",
+    "imageModelAutoHint": "Picks the right model for edits or new images",
+    "attachmentOpenImage": "Open image",
+    "attachmentDownload": "Download",
+    "MaskEditor": {
+      "title": "Mark the area to change",
+      "hint": "Paint over the part of the photo the model may change. Everything else stays exactly as it is.",
+      "canvasLabel": "Mask painting area",
+      "brushSize": "Brush size",
+      "undo": "Undo",
+      "clear": "Clear",
+      "apply": "Apply mask",
+      "applying": "Saving mask...",
+      "open": "Mask a region",
+      "edit": "Edit mask",
+      "remove": "Remove mask",
+      "badge": "Masked",
+      "uploadFailed": "The mask could not be saved. Please try again."
+    },
+    "KnowledgeBase": {
+      "menuLabel": "Knowledge base",
+      "addDocuments": "Add documents",
+      "attachHint": "Attach one so the model can search it in this chat.",
+      "knowledgeBases": "Knowledge bases",
+      "empty": "No knowledge bases yet.",
+      "chipDescription": "Searched for context in this chat",
+      "createTitle": "New knowledge base",
+      "uploadTitle": "Add documents",
+      "dialogDescription": "Documents in a knowledge base are searched for relevant context whenever it is attached to a chat or bound to an agent.",
+      "targetLabel": "Knowledge base",
+      "createNew": "+ Create new knowledge base",
+      "nameLabel": "Name",
+      "namePlaceholder": "e.g. German building law",
+      "filesLabel": "Files",
+      "filesOptional": "Optional. You can add documents later.",
+      "upload": "Upload",
+      "submitting": "Uploading...",
+      "errorNoName": "Name the new knowledge base.",
+      "errorNoFile": "Choose at least one file to upload.",
+      "errorCreate": "Could not create the knowledge base. Please try again.",
+      "errorUpload": "Upload failed. Please try again.",
+      "createSuccess": "\"{name}\" created and added to this chat.",
+      "uploadSuccess": "{count, plural, one {# file} other {# files}} uploaded. Processing into \"{name}\".",
+      "errorAttach": "Could not save this chat's knowledge bases. Please try again.",
+      "errorTooMany": "You can search up to {count} knowledge bases in one chat."
+    },
     "Greeting": {
       "goodMorning": "Good morning, {name}",
       "goodAfternoon": "Good afternoon, {name}",
@@ -248,7 +350,26 @@
     "stopGenerating": "Stop generating",
     "voiceDictation": "Voice dictation",
     "stopDictation": "Stop dictation",
+    "sendMessage": "Send message",
     "Tool": {
+      "generatedFiles": "Generated files",
+      "download": "Download",
+      "downloadFile": "Download {filename}",
+      "fileUnavailable": "File unavailable",
+      "codeGenerating": "Generating code...",
+      "codeWorking": "Working",
+      "codeCompleted": "Completed",
+      "codeError": "Error",
+      "run": "Run",
+      "copy": "Copy",
+      "openInNewTab": "Open in new tab",
+      "pdfDocument": "PDF document",
+      "pdfLoading": "Loading PDF...",
+      "pdfLoadingFull": "Loading full document...",
+      "pdfLoadFailed": "Failed to load PDF document",
+      "pdfPreviewOnly": "Preview available. The full document failed to load.",
+      "pdfPreviewAlt": "{title} preview",
+      "pdfPages": "{count, plural, one {# page} other {# pages}}",
       "toolCalls": "Tool calls",
       "toolCallCount": "{count, plural, one {# tool call} other {# tool calls}}",
       "webSearching": "Searching the Web...",
@@ -258,6 +379,7 @@
       "autoToolModeDescription": "Decides when to use tools and skills without asking you",
       "manualToolModeDescription": "Asks your permission before using any tools",
       "noneToolModeDescription": "Do not use tools. @mention is still available.",
+      "planToolModeDescription": "Researches first with parallel agents, then presents a step-by-step plan as an artifact. Nothing is executed or changed — use this to review an approach before any work starts.",
       "toolsSetup": "Tools Setup",
       "preset": "Preset",
       "toolPresets": "Tool Presets",
@@ -276,13 +398,15 @@
         "http": "HTTP Request",
         "code": "Code Execution",
         "document": "Document Analysis",
-        "tabular": "Tabular Review"
+        "tabular": "Tabular Review",
+        "browserAutomation": "Browser Automation"
       }
     },
     "VoiceChat": {
       "title": "Voice Chat Mode",
       "compactDisplayMode": "Compact display mode",
       "conversationDisplayMode": "Conversation display mode",
+      "openInChat": "Open in chat",
       "pleaseCloseTheVoiceChatAndTryAgain": "Please close the voice chat and try again.",
       "startConversation": "Start conversation",
       "closeMic": "Close Mic",
@@ -293,6 +417,12 @@
       "yourMicIsOff": "Your mic is off.",
       "preparing": "Preparing...",
       "startVoiceChat": "Start voice chat?",
+      "Browser": {
+        "title": "Browser",
+        "hide": "Hide",
+        "watchOnly": "View only — the assistant is driving",
+        "steps": "Step {count}"
+      },
       "Devices": {
         "menuLabel": "Voice devices",
         "title": "Voice devices",
@@ -341,6 +471,45 @@
         "historyIgnored": "Ignored",
         "historyStored": "Stored",
         "historyActionsCount": "{count} actions"
+      },
+      "stopAnswer": "Stop answer",
+      "Settings": {
+        "title": "Voice settings",
+        "reset": "Reset",
+        "voice": "Voice",
+        "voiceNextSession": "The new voice applies from the next conversation.",
+        "speed": "Speaking speed",
+        "speedValue": "{value, number}×",
+        "speedHint": "Playback speed of the answer. A change during an answer applies to the next one.",
+        "interruptions": "Allow interruptions",
+        "interruptionsOnHint": "Speak over the answer to interrupt it. On loudspeakers the assistant can hear itself; headphones work best.",
+        "interruptionsOffHint": "The mic pauses while the assistant speaks. Safest on loudspeakers.",
+        "turnDetection": "End-of-turn detection",
+        "turnSemantic": "Semantic (understands when you are done)",
+        "turnServer": "Silence (pause-based)",
+        "eagerness": "Response timing",
+        "eagernessOption": {
+          "low": "Patient (more time to think)",
+          "medium": "Balanced",
+          "high": "Quick",
+          "auto": "Automatic"
+        },
+        "silenceDuration": "Pause before answering",
+        "threshold": "Speech sensitivity threshold",
+        "thresholdValue": "{value, number}",
+        "prefixPadding": "Audio kept before speech",
+        "milliseconds": "{value, number} ms",
+        "noiseReduction": "Noise reduction",
+        "noiseOption": {
+          "near_field": "Headset or close mic",
+          "far_field": "Laptop or room mic",
+          "off": "Off"
+        },
+        "statusPending": "Applies after the current answer.",
+        "statusConfirmed": "Confirmed by the server.",
+        "statusMismatch": "Not confirmed by the server: {fields}",
+        "statusUnverifiable": "The server did not report back these settings; they cannot be checked.",
+        "statusWaiting": "Waiting for the server to confirm…"
       }
     },
     "Thread": {
@@ -426,7 +595,113 @@
         "saved": "Notification settings saved",
         "saveFailed": "Failed to save notification settings"
       }
-    }
+    },
+    "connectionInterrupted": "The connection was interrupted before the response finished.",
+    "recoveringAnswer": "Checking whether the answer finished…",
+    "answerStillRunning": "The answer is still being generated on the server. It will appear here when it is ready, even if you close the app.",
+    "creditsExhausted": "You've used all the credits included in your plan. Upgrade to keep going.",
+    "creditsExhaustedHasPro": "You've used all the credits included in your plan. Purchase more credits to keep going.",
+    "Artifact": {
+      "fileReady": "Click to view",
+      "download": "Download",
+      "previewUnavailable": "This file type can't be previewed here.",
+      "sheetLoading": "Reading the workbook…",
+      "sheetLoadFailed": "This workbook could not be read.",
+      "sheetTooLarge": "This workbook is too large to preview.",
+      "sheetEmpty": "This sheet is empty.",
+      "sheetTruncated": "Showing {rows} of {totalRows} rows and {columns} of {totalColumns} columns.",
+      "attachmentOpen": "Click to view",
+      "attachmentDownload": "Click to download",
+      "attachmentSharedNotice": "Only the owner of this chat can open it",
+      "openAttachment": "Open attachment",
+      "documentLoading": "Reading the document…",
+      "documentLoadFailed": "This document could not be read.",
+      "documentTooLarge": "This document is too large to preview.",
+      "slidesEmpty": "No slides could be read from this file.",
+      "slidesPartial": "Text only. Charts, SmartArt, embedded files and speaker notes are not shown.",
+      "slideHidden": "Hidden",
+      "textTruncated": "Only the beginning of this file is shown.",
+      "textDecodeWarning": "Some bytes were not valid UTF-8 and were replaced.",
+      "pdfOpenInViewer": "Open PDF",
+      "pdfIosHint": "Safari shows PDFs in its own viewer. Open it there, then use Share → Save to Files to keep a copy."
+    },
+    "Browser": {
+      "statusStarting": "Starting browser…",
+      "statusRunning": "Working in the browser…",
+      "statusDone": "Click to view",
+      "statusFailed": "Browser failed — click to view",
+      "statusBlocked": "Needs a person — click to view",
+      "statusAwaitingUser": "Waiting for you — open to continue",
+      "sessionEnded": "This browser session has ended. The view below is no longer live.",
+      "blockedTitle": "Stopped — this page needs a person",
+      "blockedFallbackReason": "The page asked for something no automation can supply.",
+      "blockedHint": "The browser was closed. To get past a check like this, connect the site in organization settings and sign in once by hand.",
+      "couldNotStartTitle": "Browser could not start",
+      "unknownError": "Unknown error.",
+      "handoffTimedOutTitle": "Browser handoff timed out",
+      "handoffTimedOutBody": "Nobody continued the run, so the browser was released. Ask the chat to start the task again.",
+      "awaitingUserTitle": "Your turn — the agent is waiting",
+      "awaitingUserFallbackRequest": "Complete what the page is asking for, below."
+    },
+    "CreateAgent": {
+      "title": "Create agent",
+      "nameLabel": "Name",
+      "descriptionLabel": "Description",
+      "promptLabel": "Instructions",
+      "toolsLabel": "Tools",
+      "filesLabel": "Files",
+      "scheduleLabel": "Schedule",
+      "noSchedule": "No schedule",
+      "addSchedule": "Add schedule",
+      "editSchedule": "Edit",
+      "create": "Create agent",
+      "creating": "Creating…",
+      "cancel": "Cancel",
+      "created": "\"{name}\" was created.",
+      "createdBadge": "Created",
+      "cancelledBadge": "Cancelled",
+      "createFailed": "The agent could not be created.",
+      "scheduleFailed": "The agent was created, but its schedule could not be saved.",
+      "noPermission": "You do not have permission to create agents.",
+      "nameAndPromptRequired": "A name and instructions are required."
+    },
+    "Hitl": {
+      "email": {
+        "title": "Email creator",
+        "to": "To",
+        "toPlaceholder": "recipient@example.com",
+        "subject": "Subject",
+        "subjectPlaceholder": "Subject line…",
+        "bodyPlaceholder": "Email body…",
+        "generating": "Generating email body…",
+        "preview": "Preview",
+        "edit": "Edit",
+        "reject": "Reject",
+        "approve": "Approve & send",
+        "approvedBadge": "Email approved",
+        "rejectedBadge": "Email rejected",
+        "invalidRecipient": "Enter a valid recipient address"
+      },
+      "plan": {
+        "title": "Plan approval required",
+        "taskPlaceholder": "Task description…",
+        "deleteTask": "Delete task",
+        "commentPlaceholder": "Comment on this plan, or describe a different approach…",
+        "commentLabel": "Comment on this plan",
+        "sendComment": "Send comment",
+        "reject": "Reject plan",
+        "approve": "Approve & continue"
+      },
+      "input": {
+        "title": "User input required",
+        "submitted": "Submitted",
+        "submit": "Submit",
+        "answerPlaceholder": "Type your answer…",
+        "otherPlaceholder": "Or type your own answer…",
+        "hint": "Pick an option or type your own answer."
+      }
+    },
+    "modelPriceTooltip": "{price} per 1M tokens (input / output)"
   },
   "Layout": {
     "workflow": "Workflow",
@@ -485,7 +760,34 @@
     "reportAnIssue": "Report an issue",
     "joinDiscord": "Join our Discord",
     "manageOrganization": "Manage",
-    "switchWorkspace": "Switch workspace"
+    "switchWorkspace": "Switch workspace",
+    "personalWorkspaceTag": "Personal",
+    "userSettings": "User Settings",
+    "profile": "Profile",
+    "usage": "Usage",
+    "inviteFriends": "Invite Friends, earn Credits",
+    "switchWorkspaceFailed": "Failed to switch workspace",
+    "workspaceMode": {
+      "work": "Work",
+      "cockpit": "Cockpit",
+      "label": "Workspace mode"
+    }
+  },
+  "ProblemReport": {
+    "title": "Report an issue",
+    "description": "Tell us what went wrong. Dictate it or type it, and attach screenshots if they help.",
+    "placeholder": "What happened? What did you expect instead?",
+    "dictate": "Dictate the problem",
+    "stopDictation": "Stop dictation",
+    "addScreenshot": "Add screenshot",
+    "pasteHint": "or paste an image",
+    "removeScreenshot": "Remove screenshot {name}",
+    "tooManyScreenshots": "You can attach at most {max} screenshots.",
+    "unsupportedFile": "{name} is not an image and was skipped.",
+    "screenshotTooLarge": "{name} is larger than 10 MB and was skipped.",
+    "cancel": "Cancel",
+    "submit": "Send report",
+    "submitFailed": "Could not send the report. Please try again."
   },
   "Billing": {
     "title": "Choose Your Plan",
@@ -494,9 +796,12 @@
     "orgOwnerCanManage": "As an owner or admin, you can manage payment and subscription below.",
     "orgContactAdmin": "Contact an organization owner or admin to change payment details or the plan.",
     "currentPlan": "Current Plan: {plan}",
+    "currentPlanBadge": "Current plan",
+    "purchasedBadge": "Purchased",
+    "packRemaining": "{remaining} credits left in total",
     "planFree": "Free",
     "planPro": "Pro",
-    "creditsUsedThisMonth": "{used} / {included} credits used this month",
+    "creditsUsedCycle": "{used} / {included} credits used this billing period",
     "billingManagedByOrgAdmin": "Billing is managed by an organization owner or admin.",
     "manageBilling": "Manage Billing",
     "memberAllowanceTitle": "Your monthly AI allowance",
@@ -507,7 +812,6 @@
     "memberAllowanceLoading": "Loading your allowance…",
     "free": {
       "description": "Perfect for getting started with AI-powered conversations",
-      "buttonWhenHasPro": "Back to manual work 🥲",
       "feature1Primary": "100,000 credits per month",
       "feature1Secondary": "Enough for ~200 conversations",
       "feature2Primary": "Web search",
@@ -549,6 +853,56 @@
       "feature2Secondary": "Custom configuration of MCP, Workflows and Agents",
       "feature3Primary": "Premium Support",
       "feature3Secondary": "We source the best integrations for your tasks & you will have a dedicated AI solutions engineers for your questions"
+    },
+    "usageLimit": {
+      "title": "Usage limit reached",
+      "titleWhenHasPro": "Out of credits",
+      "description": "You've used all {included, number} credits included in your plan.",
+      "upgradePrompt": "Upgrade to Pro to keep going.",
+      "purchasePrompt": "Purchase more credits to keep going.",
+      "currentUsage": "Current usage",
+      "currentUsageValue": "{used, number} / {included, number} credits",
+      "personalWorkspaceTitle": "This is your personal workspace",
+      "personalWorkspaceBody": "Personal workspaces have their own separate allowance. Credits bought for {workspace} are billed there, not here.",
+      "personalWorkspaceBodyMultiple": "Personal workspaces have their own separate allowance. Credits your team bought are billed to its workspace, not here.",
+      "upgrade": "Upgrade to Pro",
+      "switchToWorkspace": "Switch to {workspace}",
+      "dismiss": "Continue exploring"
+    },
+    "checkoutFailed": "Couldn't start checkout. Please try again.",
+    "checkout": {
+      "confirm": "Confirm",
+      "save": "Save",
+      "price": "Price",
+      "subscription": "Subscription",
+      "viewDetails": "View details",
+      "totalDueToday": "Total due today",
+      "plusUsagePrices": "+ usage prices",
+      "dueNextCycle": "Due next cycle ({date})",
+      "oneOffTitle": "Purchase {productName}",
+      "oneOffMessage": "By clicking confirm, you will purchase {productName} and your card will be charged immediately.",
+      "updateTitle": "Update plan",
+      "updateMessage": "Update your prepaid quantity. You'll be charged or credited the prorated difference based on your current billing cycle.",
+      "trialTitle": "Start trial for {productName}",
+      "trialMessage": "By clicking confirm, you will start a free trial of {productName} which ends on {date}.",
+      "scheduledTitle": "{productName} product already scheduled",
+      "scheduledMessage": "You are currently on product {currentProductName} and are scheduled to start {productName} on {date}.",
+      "activeTitle": "Product already active",
+      "activeMessage": "You are already subscribed to this product.",
+      "enableTitle": "Enable {productName}",
+      "enableMessage": "By clicking confirm, {productName} will be enabled immediately.",
+      "subscribeTitle": "Subscribe to {productName}",
+      "subscribeMessage": "By clicking confirm, you will be subscribed to {productName} and your card will be charged immediately.",
+      "renewTitle": "Renew",
+      "renewMessage": "By clicking confirm, you will renew your subscription to {productName}.",
+      "upgradeTitle": "Upgrade to {productName}",
+      "upgradeMessage": "By clicking confirm, you will upgrade to {productName} and your payment method will be charged immediately.",
+      "downgradeTitle": "Downgrade to {productName}",
+      "downgradeMessage": "By clicking confirm, your current subscription to {currentProductName} will be cancelled and a new subscription to {productName} will begin on {date}.",
+      "cancelTitle": "Cancel",
+      "cancelMessage": "By clicking confirm, your subscription to {currentProductName} will end on {date}.",
+      "defaultTitle": "Change subscription",
+      "defaultMessage": "You are about to change your subscription."
     }
   },
   "Archive": {
@@ -585,9 +939,6 @@
     "agentDescriptionLabel": "Add a brief description of what this agent does.",
     "agentDescriptionPlaceholder": "This is just a description of the agent, it's not critical.",
     "agentSettingsDescription": "From here, these are settings that can affect the agent.",
-    "thisAgentIs": "This agent is an expert in",
-    "expertIn": "",
-    "agentRolePlaceholder": "stock analysis",
     "agentInstructionsLabel": "Feel free to write the agent's role, personality, guidelines, knowledge, etc.",
     "agentInstructionsPlaceholder": "This agent helps with stock analysis. It uses web search tools to obtain stock information...",
     "agentToolsLabel": "Add tools that this agent can use.",
@@ -627,7 +978,15 @@
     "public": "Public",
     "privateDescription": "Only you can view, edit, and use this agent.",
     "readOnlyDescription": "Others can view and use as a tool, but only you can edit.",
-    "publicDescription": "Anyone can view, edit, and use this agent as a tool."
+    "publicDescription": "Anyone can view, edit, and use this agent as a tool.",
+    "scheduleBrowser": {
+      "enable": "Allow browser automation",
+      "enableDescription": "This run may drive a real browser with nobody watching. Browser time is billed by the second.",
+      "credentials": "Sites this run may sign in to",
+      "noCredentials": "No stored sign-ins yet. Add one in organization settings.",
+      "credentialsWarning": "The agent signs in on its own using these. It stops and reports a failure if a page needs a person."
+    },
+    "toolsNotAvailable": "Not attached — these tools aren't available in your workspace: {tools}"
   },
   "KeyboardShortcuts": {
     "title": "Keyboard Shortcuts",
@@ -791,7 +1150,8 @@
         "userDetailsCardTitle": "User Details",
         "usageStatistics": "Usage Statistics",
         "noAiActivityYet": "No AI Activity Yet",
-        "totalTokens": "Total Tokens",
+        "totalTokens": "Model tokens",
+        "totalTokensNote": "Raw tokens from your own chats, not billing credits.",
         "models": "Models",
         "messages": "Messages",
         "topModelsByTokenUsage": "Top Models by Token Usage",
@@ -799,7 +1159,7 @@
         "avgTokensPerMessage": "Avg Tokens/Message",
         "topModel": "Top Model",
         "summary": "Summary",
-        "tokensAcross": "{tokens} tokens across {count} model{count, plural, =1 {} other {s}} in {period}.",
+        "tokensAcross": "{tokens} tokens in {period}, across your top {count} model{count, plural, =1 {} other {s}}.",
         "mostActive": "Most active: {model} ({tokens} tokens).",
         "summaryPrefix": "📊 Summary: ",
         "uploadPhoto": "Upload Photo",
@@ -1005,6 +1365,850 @@
     "step1": "Visit Smithery.ai and browse available MCP servers",
     "step2": "Select a server and click to view its details",
     "step3": "Copy the server URL and paste it here",
-    "setupInSmithery": "Set up in Smithery"
+    "setupInSmithery": "Set up in Smithery",
+    "connectTools": "Connect Tools",
+    "searchApps": "Search 250+ apps…",
+    "connect": "Connect",
+    "disconnect": "Disconnect",
+    "loadMore": "Load more",
+    "loading": "Loading…",
+    "noToolsConnected": "No tools connected yet",
+    "noToolsConnectedHint": "Connect Gmail, GitHub, Slack and 250+ other apps. Your AI will use them automatically.",
+    "connectFirstTool": "Connect your first tool",
+    "connectedApps": "Connected Apps",
+    "addMore": "Add more",
+    "developerSection": "Developer Section",
+    "failedToLoadApps": "Failed to load apps",
+    "failedToConnectApp": "Failed to connect app",
+    "failedToDisconnect": "Failed to disconnect"
+  },
+  "Organization": {
+    "title": "Organizations",
+    "subtitle": "Manage your organizations and team members",
+    "newOrganization": "New Organization",
+    "personalWorkspace": "Personal Workspace",
+    "teamOrganization": "Team Organization",
+    "settings": "Settings",
+    "members": "Members",
+    "noOrganizationsTitle": "No organizations yet",
+    "noOrganizationsDescription": "Create your first organization to collaborate with others",
+    "createOrganization": "Create Organization",
+    "loading": "Loading…",
+    "noActiveOrganization": "No active organization",
+    "organizationSettings": "Organization Settings",
+    "roles": {
+      "owner": "Owner",
+      "admin": "Admin",
+      "member": "Member",
+      "memberDescription": "Can use organization resources",
+      "adminDescription": "Can invite members and manage settings"
+    },
+    "create": {
+      "title": "Create Organization",
+      "description": "Create a team organization to collaborate with others",
+      "nameLabel": "Organization Name",
+      "namePlaceholder": "Acme Corp",
+      "slugLabel": "URL Slug",
+      "slugPlaceholder": "acme-corp",
+      "slugHint": "Used in URLs and references. Must be unique.",
+      "submit": "Create Organization",
+      "submitting": "Creating...",
+      "cancel": "Cancel",
+      "success": "Organization \"{name}\" created",
+      "failed": "Failed to create organization",
+      "createdButSwitchFailed": "Organization created but failed to switch"
+    },
+    "detail": {
+      "backToOrganizations": "Organizations",
+      "back": "Back",
+      "settingsSuffix": "Settings",
+      "organizationDetails": "Organization Details",
+      "name": "Name",
+      "slug": "Slug",
+      "type": "Type",
+      "billingId": "Billing ID",
+      "membersDescription": "Manage who has access to this organization",
+      "manageMembers": "Manage Members",
+      "currentMembers": "Current Members",
+      "memberCount": "{count, plural, =1 {# member} other {# members}}",
+      "inviteMember": "Invite Member",
+      "inviteSomeone": "Invite someone to join {name}",
+      "inviteRestricted": "Only organization owners and admins can send invitations.",
+      "inviteRestrictedHint": "Ask an owner or admin to invite people, or request a role change in this organization."
+    },
+    "tabs": {
+      "members": "Members",
+      "invite": "Invite",
+      "usage": "Usage",
+      "aiPolicy": "AI policy",
+      "settings": "Settings"
+    },
+    "membersTab": {
+      "empty": "No members yet",
+      "roleUpdated": "Role updated",
+      "roleUpdateFailed": "Failed to update role",
+      "memberRemoved": "Member removed",
+      "memberRemoveFailed": "Failed to remove member"
+    },
+    "inviteTab": {
+      "restricted": "Only organization owners and admins can send invitations. Ask one of them to invite people or to promote your role.",
+      "emailNotConfigured": "Automatic invitation emails aren't set up on this deployment. Invitations still work — copy each link below and send it to the person yourself.",
+      "emailLabel": "Email address",
+      "emailPlaceholder": "colleague@example.com",
+      "roleLabel": "Role",
+      "importCsv": "Import CSV",
+      "csvFormatTitle": "CSV format",
+      "csvFormatFirstRow": "First row: <code>email,role</code> — or just one email address per line with no header.",
+      "csvFormatRole": "<code>role</code> is optional and must be <code>member</code> or <code>admin</code>; blank rows use the role selected below.",
+      "csvFormatLimit": "Up to {max} rows per file. You'll see a preview before anything is sent.",
+      "send": "Send invitation",
+      "sending": "Sending…",
+      "emailSent": "Invitation email sent to {email}",
+      "createdNoEmail": "Invitation created for {email}. Email delivery isn't configured — copy the link below and send it manually.",
+      "sendFailed": "Failed to send invitation",
+      "resent": "Invitation re-sent to {email}",
+      "refreshed": "Invitation refreshed for {email} — copy the link to share it",
+      "resendFailed": "Failed to resend invitation",
+      "canceled": "Invitation to {email} canceled",
+      "cancelFailed": "Failed to cancel invitation",
+      "linkCopied": "Invite link copied",
+      "linkCopyFailed": "Could not copy link",
+      "copyLink": "Copy link",
+      "copyInviteLink": "Copy invite link",
+      "resendEmail": "Resend email",
+      "refreshInvitation": "Refresh invitation",
+      "cancelInvitation": "Cancel invitation",
+      "pendingInvitations": "Pending invitations",
+      "csv": {
+        "fileTooLarge": "That file is too large (max {maxKb} KB).",
+        "noEmailsFound": "No email addresses found in that file.",
+        "unreadable": "Could not read that file.",
+        "previewTitle": "Import invitations",
+        "resultsTitle": "Import results",
+        "addressesFound": "{count, plural, =1 {# address} other {# addresses}} found",
+        "ready": "{count} ready",
+        "alreadyInvited": "{count} already invited",
+        "alreadyMembers": "{count} already members",
+        "problems": "{count, plural, =1 {# problem} other {# problems}}",
+        "truncated": "Only the first {max} rows will be imported. Split the file and import the rest afterwards.",
+        "statusReady": "Ready",
+        "statusAlreadyInvited": "Already invited",
+        "statusAlreadyMember": "Already a member",
+        "line": "Line {number}",
+        "emptyRow": "(empty)",
+        "issueInvalidEmail": "Invalid email",
+        "issueInvalidRole": "Invalid role",
+        "issueDuplicateInFile": "Duplicate in file",
+        "outcomeSent": "Invited",
+        "outcomeResent": "Re-sent",
+        "outcomeSkipped": "Skipped",
+        "outcomeFailed": "Failed",
+        "outcomeNotAttempted": "Not attempted",
+        "resendToggle": "Also re-send the {count, plural, =1 {# invitation} other {# invitations}} that are already pending",
+        "resendToggleHint": "This issues a new link, so any link you already shared for those people stops working.",
+        "noEmailDelivery": "Email delivery isn't configured — copy each invite link from the pending list below and send it yourself.",
+        "close": "Close",
+        "cancel": "Cancel",
+        "inviting": "Inviting {current} of {total}…",
+        "sendCount": "Send {count, plural, =1 {# invitation} other {# invitations}}",
+        "inviteFailed": "Failed to invite",
+        "rateLimited": "Rate limited — try again in a minute.",
+        "partialSuccess": "Invited {succeeded} · {failed} failed — see the list for details",
+        "allSucceeded": "Invited {count, plural, =1 {# person} other {# people}}"
+      }
+    },
+    "settingsTab": {
+      "nameLabel": "Organization name",
+      "save": "Save changes",
+      "saving": "Saving…",
+      "updated": "Organization updated",
+      "updateFailed": "Failed to update organization",
+      "dangerZone": "Danger zone",
+      "leave": "Leave organization",
+      "left": "You left the organization",
+      "leaveFailed": "Failed to leave organization"
+    },
+    "usageTab": {
+      "loading": "Loading usage data…",
+      "loadFailed": "Failed to load usage data",
+      "noData": "No usage data available"
+    },
+    "aiPolicyTab": {
+      "loading": "Loading AI policy…",
+      "loadFailed": "Failed to load AI policy",
+      "retry": "Retry",
+      "automaticRouting": "Automatic routing",
+      "automaticRoutingDescription": "Select the best available model from the fixed task-fit table.",
+      "availableModels": "Available models",
+      "availableModelsDescription": "Employees can only select enabled deployments.",
+      "retention": "{retention} retention",
+      "tools": "tools",
+      "vision": "vision",
+      "pricePerMillion": "${input} / ${output} per 1M input / output tokens",
+      "pricingRequired": "Pricing must be configured before this deployment can be used.",
+      "inputPriceLabel": "Input price per 1M for {model}",
+      "outputPriceLabel": "Output price per 1M for {model}",
+      "inputPricePlaceholder": "Input $ / 1M",
+      "outputPricePlaceholder": "Output $ / 1M",
+      "monthlyAllowance": "Employee monthly allowance",
+      "monthlyAllowanceDescription": "Monthly spending cap per member in euros (new members default to €15). Leave empty for no cap. This never changes which model automatic routing chooses.",
+      "monthlyAllowanceLabel": "Monthly allowance for {name}",
+      "noCap": "No cap",
+      "hardStop": "Hard stop",
+      "save": "Save AI policy",
+      "saving": "Saving…",
+      "saved": "AI policy saved",
+      "saveFailed": "Failed to save AI policy",
+      "browserAutomation": "Browser automation",
+      "browserAutomationDescription": "Let members run an AI agent in a real cloud browser. Billed per browser-second.",
+      "browserAutomationUnattended": "Unattended browser runs",
+      "browserAutomationUnattendedDescription": "Let scheduled agents drive a browser with nobody watching. They sign in with stored credentials and stop when a page needs a person."
+    },
+    "invitation": {
+      "welcomeTitle": "Welcome aboard!",
+      "welcomeDescription": "Setting up your workspace, one moment…",
+      "errorTitle": "Something went wrong",
+      "genericError": "We could not add you to this workspace. Nothing was changed — please try again.",
+      "tryAgain": "Try again",
+      "continueToWorkspace": "Continue to your workspace",
+      "pendingTitle": "You've been invited!",
+      "invitedBy": "<strong>{email}</strong> has invited you to join <strong>{organization}</strong>.",
+      "invitedAnonymous": "You've been invited to join <strong>{organization}</strong>.",
+      "accept": "Accept & join {organization}",
+      "joining": "Joining…",
+      "decline": "Decline",
+      "alreadyMemberTitle": "You're already a member",
+      "alreadyMemberDescription": "This invitation to <strong>{organization}</strong> has already been accepted.",
+      "continueTo": "Continue to {organization}",
+      "wrongAccountTitle": "This invitation is for another account",
+      "wrongAccountDescription": "It was sent to <strong>{email}</strong>. Sign in with that address to accept it.",
+      "switchAccount": "Sign out and switch account",
+      "unavailableTitle": "Invitation unavailable",
+      "expiredDescription": "This invitation to {organization} has expired. Ask for a new one.",
+      "declinedDescription": "You declined this invitation to {organization}. Ask for a new one if that was a mistake.",
+      "revokedDescription": "This invitation to {organization} was withdrawn.",
+      "notFoundDescription": "This invitation link is no longer valid."
+    },
+    "browserCredentials": {
+      "title": "Stored sign-ins",
+      "description": "Sites your agents may sign in to. Passwords are kept in secret storage and are never shown to the model.",
+      "add": "Add site",
+      "loading": "Loading stored sign-ins…",
+      "empty": "No sites yet.",
+      "secretStoreUnavailable": "Secret storage is not configured, so sign-ins cannot be saved.",
+      "signInStored": "Signs in as {username}",
+      "noSignInStored": "No password stored",
+      "sessionSaved": "Session saved {date}",
+      "noSessionSaved": "No saved session",
+      "connect": "Connect",
+      "reconnect": "Reconnect",
+      "delete": "Delete",
+      "deleted": "Sign-in removed.",
+      "deleteFailed": "Could not remove this sign-in.",
+      "addTitle": "Add a site",
+      "addDescription": "The password is stored in secret storage and can only be used on the domain you enter here.",
+      "aliasLabel": "Short name",
+      "aliasHelp": "How the agent refers to this site, e.g. emta. Lowercase letters, numbers, hyphens.",
+      "domainLabel": "Domain",
+      "domainHelp": "The credential works only on this domain. Nothing else can use it.",
+      "labelLabel": "Display name",
+      "usernameLabel": "Username or email",
+      "passwordLabel": "Password",
+      "cancel": "Cancel",
+      "save": "Save",
+      "saved": "Sign-in saved.",
+      "saveFailed": "Could not save this sign-in.",
+      "connectTitle": "Sign in to save the session",
+      "connectDescription": "Sign in below as you normally would, including any code or ID check. When you are done, choose Done and the session is saved for later runs.",
+      "connectStarting": "Opening a browser…",
+      "connectDone": "Done, save session",
+      "connectFailed": "Could not open a browser for this site.",
+      "sessionStored": "Session saved."
+    }
+  },
+  "Referral": {
+    "pageTitle": "Invite friends, earn credits",
+    "pageDescription": "Share your link. When someone you invited upgrades, you both get credits.",
+    "headline": "{credits} credits for both of you",
+    "explainer": "Share your invite link. When someone who signed up through it upgrades to a paid plan, you and they each get {credits} credits.",
+    "copy": "Copy",
+    "copied": "Copied",
+    "linkCopied": "Invite link copied",
+    "copyFailed": "Could not copy the link",
+    "loading": "Loading your invite link…",
+    "unavailable": "The referral program isn't set up yet. Once it is, your invite link will appear here.",
+    "statInvited": "Invited",
+    "statRewarded": "Upgraded",
+    "statCreditsEarned": "Credits earned",
+    "listTitle": "People you invited",
+    "listEmpty": "Nobody yet. Share your link to get started.",
+    "anonymousInvitee": "New member",
+    "statusRewarded": "+{credits} credits",
+    "statusPending": "Credits when they upgrade",
+    "redeemed": "Invite accepted — you'll both get credits when you upgrade.",
+    "redeemedByName": "{name} invited you — you'll both get credits when you upgrade.",
+    "billingTeaser": "Need more credits? <link>Invite a friend</link> and you both get some.",
+    "orgInviteTeaser": "Know another team that could use Navigator? <link>Refer them</link> and you both get credits."
+  },
+  "Usage": {
+    "title": "Usage",
+    "description": "Your credit usage this billing period.",
+    "descriptionForWorkspace": "Credit usage for {workspace} this billing period.",
+    "manageBilling": "Manage billing",
+    "planTitle": "{plan} plan",
+    "creditsUsed": "{used} of {included} credits used this billing period",
+    "creditsRemaining": "{remaining} credits remaining",
+    "creditsScopeNote": "Credits are shared across your workspace and cover every AI feature, not just chat. They are not the same as model tokens.",
+    "unavailable": "Usage data isn't available right now.",
+    "allowanceTitle": "Your monthly allowance",
+    "allowanceUsed": "{used} of {cap} used",
+    "allowanceUsedNoCap": "{used} used",
+    "allowanceRemaining": "{remaining} remaining",
+    "allowanceNote": "Your organization sets this allowance. Contact an admin to change it.",
+    "inviteHint": "Running low? <link>Invite a friend</link> to earn extra credits.",
+    "historyTitle": "Credit usage over time",
+    "breakdownTitle": "What credits went to",
+    "creditsAxis": "credits",
+    "scopePersonal": "Last 30 days",
+    "scopeWorkspace": "Last 30 days · all of {workspace}",
+    "featureTokens": "AI models",
+    "featureWebSearch": "Web search",
+    "featureVoice": "Voice transcription",
+    "featureDocuments": "Document parsing",
+    "featureCodeExecution": "Code execution",
+    "featureBrowserAutomation": "Browser automation"
+  },
+  "Projects": {
+    "statusTitle": "Status",
+    "todosTitle": "To-dos",
+    "health": {
+      "green": "On track",
+      "yellow": "At risk",
+      "red": "Off track",
+      "unknown": "No status yet"
+    },
+    "priority": {
+      "critical": "critical",
+      "high": "high",
+      "normal": "normal",
+      "low": "low"
+    },
+    "progress": "Progress",
+    "blockers": "Blockers",
+    "noStatus": "Connect a tool or add a document, then sync the project to get a status.",
+    "noTodos": "Nothing needs your attention right now.",
+    "updatedAt": "Updated {time}",
+    "connectorIssue": "{name} needs attention",
+    "reconnect": "Reconnect",
+    "markDone": "Mark as done",
+    "reopen": "Reopen",
+    "dismiss": "Dismiss",
+    "due": "Due {date}",
+    "from": "from {source}",
+    "todoUpdateFailed": "Could not update the to-do.",
+    "openCount": "{count, plural, =0 {none open} one {# open} other {# open}}",
+    "showDone": "Show recently done ({count})",
+    "hideDone": "Hide recently done",
+    "graph": {
+      "title": "Knowledge graph",
+      "empty": "Add a document, transcript or connected tool, then sync the project.",
+      "searchPlaceholder": "Find a node…",
+      "showAll": "Show all",
+      "truncated": "Showing the most connected pages.",
+      "focus": "Focus",
+      "selectNode": "Select a node to inspect facts, links and sources.",
+      "aliases": "Also known as",
+      "mergedFrom": "Merged from",
+      "links": "Links",
+      "backlinks": "Backlinks",
+      "facts": "Facts",
+      "kinds": {
+        "project": "Project",
+        "person": "People",
+        "organization": "Organizations",
+        "meeting": "Meetings",
+        "task": "Tasks",
+        "decision": "Decisions",
+        "document": "Documents",
+        "topic": "Topics",
+        "tool": "Tools",
+        "agent": "Agents",
+        "voice": "Voice"
+      }
+    },
+    "contradictions": {
+      "title": "Conflicting information",
+      "empty": "No conflicts found between your sources.",
+      "resolve": "Resolved",
+      "dismiss": "Dismiss",
+      "updateFailed": "Could not update the conflict."
+    },
+    "run": {
+      "stale": "The last sync didn't finish. Start it again.",
+      "failedGeneric": "The last sync failed. Try again or check the connected tools.",
+      "failed": {
+        "connection_not_active": "A connected tool needs to be reconnected before the project can sync.",
+        "credential_owner_removed": "The member who connected a tool is no longer in this project. Reconnect the tool.",
+        "no_read_actions": "A connected tool exposes no readable data. Remove it or reconnect it.",
+        "no_data_returned": "A connected tool returned no data. Check its settings and sync again.",
+        "budget_exhausted": "The sync took too long and was stopped. Try again.",
+        "generation_aborted": "The analysis timed out. Try again.",
+        "schema_constraint": "The sync hit a database schema mismatch. An administrator needs to apply the pending migrations.",
+        "db_timeout": "The database timed out during the sync. Try again."
+      }
+    }
+  },
+  "Desktop": {
+    "Updates": {
+      "availableTitle": "Update available",
+      "availableDescription": "Version {version} is downloading in the background.",
+      "legacyAvailableDescription": "Version {version} is ready to download.",
+      "updateNow": "Update now",
+      "downloadingTitle": "Downloading update {version}",
+      "downloadingDescription": "{percent}% downloaded. You will be asked to restart when it is ready.",
+      "readyTitle": "Update {version} is ready",
+      "readyDescription": "Restart now to apply it. Otherwise it installs the next time you quit the app.",
+      "restartNow": "Restart now",
+      "later": "Later",
+      "installingTitle": "Installing update",
+      "installingDescription": "Restarting the app…",
+      "failedTitle": "Update failed"
+    }
+  },
+  "Cockpit": {
+    "loading": "Warming up the instruments…",
+    "meta": {
+      "title": "Cockpit",
+      "description": "Flight deck for your business: marketing, product health, finance and updates in one view."
+    },
+    "header": {
+      "title": "Cockpit",
+      "utcLabel": "UTC",
+      "callsign": "KEINSAAS",
+      "flight": "KS001",
+      "range": "Last {days} days",
+      "internalTraffic": "This browser is marked as internal traffic"
+    },
+    "a11y": {
+      "windshield": "Windshield",
+      "glareshield": "Glareshield",
+      "channelShare": "Channel share"
+    },
+    "status": {
+      "live": "LIVE",
+      "inop": "INOP",
+      "noData": "NO DATA",
+      "updated": "Updated",
+      "notConnected": "Not connected",
+      "on": "ON",
+      "fault": "FAULT",
+      "off": "OFF",
+      "new": "NEW"
+    },
+    "fcu": {
+      "visits": "VISITS",
+      "leads": "LEADS",
+      "conversion": "CONV %",
+      "topChannel": "TOP CHNL",
+      "deploys": "DEPLOY",
+      "deploysOk": "{ok}/{total} OK",
+      "mrr": "MRR"
+    },
+    "overhead": {
+      "title": "Business systems",
+      "marketing": {
+        "label": "MARKETING",
+        "detail": "Visits · Leads · Channels"
+      },
+      "sales": {
+        "label": "SALES",
+        "detail": "Pipeline · Win rate"
+      },
+      "finance": {
+        "label": "FINANCE",
+        "detail": "MRR · Cash · Runway"
+      },
+      "product": {
+        "label": "PRODUCT",
+        "detail": "Incidents · Releases"
+      },
+      "customers": {
+        "label": "CUSTOMERS",
+        "detail": "Churn · Tickets · NPS"
+      },
+      "operations": {
+        "label": "OPS",
+        "detail": "Spend · Vendors"
+      },
+      "people": {
+        "label": "PEOPLE",
+        "detail": "Hiring · Capacity"
+      },
+      "legal": {
+        "label": "LEGAL",
+        "detail": "Contracts · Compliance"
+      },
+      "connect": {
+        "label": "CONNECT",
+        "detail": "Data sources · Keys"
+      }
+    },
+    "console": {
+      "title": "Marketing",
+      "openHint": "Open marketing console",
+      "close": "Close",
+      "visitsLabel": "Visits",
+      "leadsLabel": "Leads",
+      "total": "Total",
+      "empty": "No data in range yet",
+      "inopTitle": "Marketing data unavailable",
+      "tabs": {
+        "channel": "Channel",
+        "referrer": "Referrer",
+        "campaign": "Campaign",
+        "keyword": "Keyword",
+        "country": "Country",
+        "region": "Region",
+        "city": "City",
+        "page": "Page",
+        "entry": "Entry page",
+        "hostname": "Hostname",
+        "browser": "Browser",
+        "os": "OS",
+        "device": "Device"
+      }
+    },
+    "pfd": {
+      "title": "Marketing PFD",
+      "visits": "Visits",
+      "visitors": "Daily uniques",
+      "pageviews": "Pageviews",
+      "leads": "Leads",
+      "bookingClicks": "Booking clicks",
+      "vsPrevious": "vs prev. period",
+      "chartLegendVisits": "Visits",
+      "chartLegendLeads": "Leads"
+    },
+    "nd": {
+      "title": "Channel ND",
+      "caption": "Bearing = channel · range = share of visits",
+      "leadsSuffix": "leads"
+    },
+    "pages": {
+      "title": "Landing pages",
+      "campaignsTitle": "Campaigns",
+      "empty": "No pageviews in range"
+    },
+    "leadsDisplay": {
+      "title": "Lead log",
+      "empty": "No leads in range",
+      "formLabels": {
+        "research_demo": "Free sample",
+        "shop_leads_sample": "Shop leads sample"
+      }
+    },
+    "engines": {
+      "title": "Products",
+      "deploy": "Deploy",
+      "failed7d": "Failed 7d",
+      "incidents": "Incidents",
+      "errors24h": "Errors 24h",
+      "spend": "Spend MTD",
+      "margin": "Margin",
+      "openIncidents": "Open incidents",
+      "incidents24h": "New 24h",
+      "firingAlerts": "Alerts firing",
+      "superlog": "Superlog"
+    },
+    "finance": {
+      "title": "Finance",
+      "mrr": "MRR",
+      "cash": "Cash",
+      "payments30d": "Payments 30d",
+      "inflow30d": "Inflow 30d",
+      "outflow30d": "Outflow 30d",
+      "burn": "Burn / mo",
+      "runway": "Runway",
+      "runwayMonths": "{months} mo",
+      "failed7d": "Failed 7d",
+      "nextPayout": "Next payout",
+      "noPayout": "None scheduled",
+      "positiveFlow": "Cash-flow positive",
+      "otherCash": "Also {amounts}"
+    },
+    "mcdu": {
+      "todos": {
+        "title": "TODOS",
+        "line1": "Todo feed not connected",
+        "line2": "Planned: Todoist / board sync"
+      },
+      "updates": {
+        "title": "UPDATES"
+      }
+    },
+    "updates": {
+      "empty": "No updates yet",
+      "severity": {
+        "info": "Info",
+        "warn": "Warning",
+        "alert": "Alert"
+      }
+    },
+    "reasons": {
+      "notConnected": "Not connected",
+      "disabled": "Connection disabled",
+      "secretsUnavailable": "Encrypted connections are unavailable (APP_SECRETS_KEY not set)",
+      "unauthorized": "Credentials rejected: check the key in CONNECT",
+      "wrongKey": "Wrong key type: use a {detail} key",
+      "reauthorize": "Authorization expired: reauthorize in CONNECT",
+      "rateLimited": "Rate limited by the provider",
+      "timeout": "Provider did not answer in time",
+      "http": "Provider error (HTTP {detail})",
+      "unreachable": "Provider unreachable",
+      "invalidResponse": "Unexpected response from the provider",
+      "invalidConfig": "Connection settings are incomplete",
+      "noDeployments": "No production deployments",
+      "noProjects": "No projects configured",
+      "toolMissing": "MCP tool missing: {detail}",
+      "mcpServerMissing": "No usable MCP server: pick a connected one in CONNECT",
+      "mcpAuthorize": "The MCP server needs authorization: authorize it under MCP servers",
+      "queryFailed": "Query failed: {detail}",
+      "spendSource": "Cost source not connected",
+      "marginSource": "Revenue and cost sources not connected",
+      "serviceUnmatched": "No Superlog service matches this project"
+    },
+    "connect": {
+      "title": "Connections",
+      "subtitle": "Credentials are encrypted and shared with this workspace",
+      "openHint": "Open connections console",
+      "readOnly": "Only workspace owners and admins can change connections.",
+      "workspace": "Saved for workspace: {name}",
+      "personalWorkspace": "Personal",
+      "elsewhere": "No connections in this workspace. {count, plural, one {# connection is} other {# connections are}} saved in “{name}”. Switch to that workspace to use {count, plural, one {it} other {them}}.",
+      "configure": "Configure",
+      "connect": "Connect",
+      "ok": "OK",
+      "saved": "Saved, not checked yet",
+      "secretKept": "Saved. Leave blank to keep it.",
+      "mcpServerNone": "None",
+      "mcpServerNeedsAuth": "{name} (needs authorization)",
+      "mcpServersLink": "Manage MCP servers",
+      "testOk": "Connection works.",
+      "savedOk": "Saved.",
+      "failed": "Something went wrong. Try again.",
+      "remove": "Remove",
+      "test": "Test",
+      "save": "Save",
+      "providers": {
+        "website": {
+          "name": "Website analytics",
+          "help": "Reads the site_events table that your marketing site's collector writes to its Supabase project.",
+          "fields": {
+            "supabaseUrl": {
+              "label": "Supabase project URL",
+              "help": "The marketing site's project, e.g. https://xyz.supabase.co"
+            },
+            "supabaseSecretKey": {
+              "label": "Secret key",
+              "help": "Server secret key (sb_secret_… or service role). Only site_events is read."
+            },
+            "rangeDays": {
+              "label": "Range (days)",
+              "help": "Default 30."
+            }
+          }
+        },
+        "vercel": {
+          "name": "Vercel",
+          "help": "Production deployment state for up to six projects.",
+          "fields": {
+            "token": {
+              "label": "Access token",
+              "help": "Vercel → Account settings → Tokens. Read access is enough."
+            },
+            "teamId": {
+              "label": "Team ID",
+              "help": "Leave blank to detect the team from the token. Otherwise the team ID (team_…) or the slug from the Vercel URL."
+            },
+            "projects": {
+              "label": "Projects",
+              "help": "One per line: LABEL = prj_…, or just the project ID or name (up to six). The label names the engine and is matched against Superlog service names."
+            }
+          }
+        },
+        "stripe": {
+          "name": "Stripe",
+          "help": "Balance, MRR, payments, failed payments and the next payout. Use a restricted key, never the secret key.",
+          "fields": {
+            "restrictedKey": {
+              "label": "Restricted key",
+              "help": "rk_live_… or rk_test_… with read access to Balance, Subscriptions, Charges and Payouts."
+            }
+          }
+        },
+        "revolut": {
+          "name": "Revolut Business",
+          "help": "Balances, cash flow and recent transactions. In Revolut Business → APIs, upload the public certificate, set the redirect URI and enable access, then paste the authorization code here once.",
+          "fields": {
+            "clientId": {
+              "label": "Client ID"
+            },
+            "privateKeyPem": {
+              "label": "Private key (PEM)",
+              "help": "The key whose public certificate you uploaded to Revolut."
+            },
+            "authorizationCode": {
+              "label": "Authorization code",
+              "help": "After enabling access, Revolut redirects with ?code=…. Paste it and save: it is exchanged for a refresh token once and not stored."
+            },
+            "refreshToken": {
+              "label": "Refresh token",
+              "help": "Filled from the authorization code. Freelancer plans expire it after 90 days."
+            },
+            "issuer": {
+              "label": "Redirect URI domain",
+              "help": "Domain of the redirect URI set in Revolut (JWT issuer). Defaults to this app's domain."
+            },
+            "sandbox": {
+              "label": "Sandbox"
+            },
+            "largeTransactionThreshold": {
+              "label": "Alert threshold",
+              "help": "Transactions at or above this amount post an alert to UPDATES. Default 5000."
+            }
+          }
+        },
+        "superlog": {
+          "name": "Superlog",
+          "help": "Open incidents, firing alerts and error logs, read through Superlog's MCP server.",
+          "fields": {
+            "mcpUrl": {
+              "label": "MCP server URL",
+              "help": "Superlog's hosted MCP endpoint: https://api.superlog.sh/mcp"
+            },
+            "token": {
+              "label": "MCP token",
+              "help": "Personal access token (superlog_pat_…) from Superlog → Settings → MCP tokens. The ingest key (sl_public_…) does not work here."
+            }
+          }
+        },
+        "seo": {
+          "name": "SEO (OpenSEO / DataForSEO)",
+          "help": "Organic traffic, keyword rankings and referring domains through an SEO MCP server.",
+          "fields": {
+            "kind": {
+              "label": "Provider"
+            },
+            "domain": {
+              "label": "Domain",
+              "help": "Bare domain, e.g. keinsaas.com"
+            },
+            "mcpServerId": {
+              "label": "MCP server",
+              "help": "OpenSEO signs in with OAuth only: add https://app.openseo.so/mcp under MCP servers, authorize it, then pick it here."
+            },
+            "mcpUrl": {
+              "label": "MCP server URL",
+              "help": "DataForSEO without an MCP server only. Leave blank for the default endpoint."
+            },
+            "login": {
+              "label": "Login",
+              "help": "DataForSEO only."
+            },
+            "password": {
+              "label": "Password",
+              "help": "DataForSEO only."
+            },
+            "locationName": {
+              "label": "Search market",
+              "help": "e.g. Germany. Default United States."
+            },
+            "languageCode": {
+              "label": "Language code",
+              "help": "e.g. de. Default en."
+            }
+          }
+        }
+      }
+    },
+    "financeConsole": {
+      "title": "Finance",
+      "openHint": "Open finance console",
+      "balanceAvailable": "Available balance",
+      "balancePending": "Pending balance",
+      "activeSubscriptions": "Active subscriptions",
+      "failedPayments": "Failed payments (7 days)",
+      "noFailed": "No failed payments",
+      "balanceIn": "Balance {currency}",
+      "inflowIn": "Inflow 30d {currency}",
+      "outflowIn": "Outflow 30d {currency}",
+      "recent": "Latest transactions"
+    },
+    "productConsole": {
+      "title": "Product health",
+      "openHint": "Open product console",
+      "incidents": "Open incidents",
+      "noIncidents": "No open incidents",
+      "services": "Services",
+      "servicesLegend": "Open incidents · errors in the last 24 h",
+      "inopTitle": "Superlog data unavailable"
+    },
+    "seo": {
+      "tab": "SEO",
+      "organicTraffic": "Organic traffic (est.)",
+      "keywords": "Ranking keywords",
+      "referringDomains": "Referring domains",
+      "topKeywords": "Top keywords",
+      "position": "Pos.",
+      "volume": "Volume",
+      "inopTitle": "SEO data unavailable",
+      "noKeywords": "No keyword data"
+    },
+    "com": {
+      "label": "COM 1",
+      "detail": "PTT",
+      "action": "Talk to the cockpit copilot",
+      "state": {
+        "off": "Voice off",
+        "standby": "Standby",
+        "connecting": "Connecting",
+        "connected": "Connected",
+        "speaking": "Listening"
+      },
+      "orb": {
+        "label": "Voice copilot",
+        "hint": "Drag to move it, or use the arrow keys.",
+        "end": "End voice chat",
+        "state": {
+          "connecting": "Connecting",
+          "listening": "Listening",
+          "user": "You're speaking",
+          "assistant": "Copilot speaking"
+        }
+      }
+    }
+  },
+  "WorkflowGenerator": {
+    "sourceUrlLabel": "GitHub repo or link",
+    "sourceUrlPlaceholder": "https://github.com/owner/repo",
+    "sourceUrlHint": "We read the README, config and code and build the automation from it. Public repositories only.",
+    "sourceUrlInvalid": "Enter a GitHub repository URL or a link starting with https://",
+    "sourceErrors": {
+      "invalid_url": "That link can't be read. Use a GitHub repository URL or a link starting with https://",
+      "not_found": "Repository not found. Check the link. Only public repositories are supported.",
+      "rate_limited": "GitHub is limiting requests right now. Try again in a few minutes.",
+      "empty": "Nothing readable was found at that link.",
+      "fetch_failed": "Couldn't read that link. Try again."
+    },
+    "documentReadFailed": "Couldn't read that document. Try another file or paste the text.",
+    "documentNoText": "No text found in that document. Scanned PDFs are not supported; paste the text instead.",
+    "documentTooLarge": "That document is too large. The limit is 10 MB.",
+    "apiKeyLabel": "{tool} API key (stored as {envVar})",
+    "apiKeyPlaceholder": "Paste the API key",
+    "apiBaseUrl": "The workflow calls {baseUrl}",
+    "secretStoreUnavailable": "Secure key storage is not available right now, so the key was not saved. Try again later or contact support.",
+    "derivedFrom": "Pre-filled from {path}",
+    "openDashboard": "Open dashboard",
+    "openDashboardFailed": "Couldn't open the dashboard. Try again in a moment."
   }
 }

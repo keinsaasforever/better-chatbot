@@ -1,6 +1,6 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "installCommand": "cd ../.. && ELECTRON_SKIP_BINARY_DOWNLOAD=1 pnpm install --frozen-lockfile",
-  "buildCommand": "cd ../.. && pnpm turbo run build --filter=web...",
+  "buildCommand": "cd ../.. && pnpm tsx scripts/db-migrate-deploy.ts && pnpm turbo run build --filter=web...",
   "framework": "nextjs"
 }

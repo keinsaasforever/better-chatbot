@@ -255,6 +255,10 @@ export default function MentionInput({
       },
       editorProps: {
         attributes: {
+          // No font-size or height utility here on purpose: the editor inherits
+          // both from whatever wraps it, so each caller sizes its own surface
+          // (the chat composer pins 16px so iOS Safari does not zoom on focus,
+          // and a taller minimum on small screens).
           class:
             "w-full max-h-80 min-h-[2rem] break-words overflow-y-auto resize-none focus:outline-none px-2 py-1 prose prose-sm dark:prose-invert ",
         },
@@ -285,7 +289,12 @@ export default function MentionInput({
   // Memoize handlers
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
+      // On mobile Enter inserts a newline so users can write paragraphs; the
+      // send button is the only send path there. The "@"/"/" suggestion
+      // popovers consume Enter themselves (they own the focused input), so
+      // picking an item still works on mobile.
       const isSubmit =
+        !isMobile &&
         !open &&
         !openSecond &&
         e.key === "Enter" &&
@@ -296,9 +305,6 @@ export default function MentionInput({
       if (isSubmit) {
         e.preventDefault();
         onEnter?.();
-        if (isMobile) {
-          editor?.commands.blur();
-        }
       }
     },
     [editor, onEnter, open, openSecond, isMobile],

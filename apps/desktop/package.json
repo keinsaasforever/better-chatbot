@@ -9,6 +9,7 @@
     "dev": "concurrently -k \"cross-env SKIP_DB_MIGRATE=1 pnpm --filter web dev\" \"pnpm run dev:electron\"",
     "dev:electron": "pnpm run build && wait-on http://localhost:3000 && cross-env NODE_ENV=development electron .",
     "build": "node scripts/sync-icons.mjs && node scripts/build-main.mjs && tsc -p tsconfig.preload.json",
+    "test": "vitest run",
     "typecheck": "tsc --noEmit",
     "check-types": "tsc --noEmit",
     "dist": "pnpm run build && electron-builder --mac --publish never",
@@ -42,6 +43,7 @@
     "electron-builder": "^26.0.12",
     "esbuild": "^0.25.0",
     "typescript": "^5.9.3",
+    "vitest": "^3.2.4",
     "wait-on": "^8.0.5"
   }
 }

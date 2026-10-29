@@ -11,8 +11,13 @@ import { withAuth } from "auth/route-guard";
  * - Developer name
  * - Country (for flag display)
  * - Badge flags (hiddenGem, speed, thinking, etc.)
+ * - Catalog price per million input/output tokens
  *
- * Used by the enhanced model selector UI
+ * Used by the enhanced model selector UI.
+ *
+ * The prices here are the `models` catalog figures — the product-facing ones.
+ * `model_deployment` carries its own per-provider-path pricing for the
+ * deterministic router, which can differ and is not what the menu should quote.
  */
 export const GET = withAuth(async (_request, _session) => {
   try {
@@ -29,6 +34,8 @@ export const GET = withAuth(async (_request, _session) => {
         speed: ModelsTable.speed,
         thinking: ModelsTable.thinking,
         maxPerformance: ModelsTable.maxPerformance,
+        inputPriceUsd: ModelsTable.inputPriceUsd,
+        outputPriceUsd: ModelsTable.outputPriceUsd,
       })
       .from(ModelsTable)
       .where(eq(ModelsTable.text, true));

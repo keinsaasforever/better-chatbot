@@ -1,49 +1,28 @@
 import "server-only";
-import { desc, eq } from "drizzle-orm";
 import { pgDb } from "@/lib/db/pg/db.pg";
-import { ProjectStatusSnapshotTable } from "@/lib/db/pg/schema.pg";
-import type { ProjectBrainExtraction } from "./analyze-source";
 import {
-  TODOS_WIDGET_HTML,
-  STATUS_WIDGET_HTML,
-  buildTodosRenderData,
-  buildStatusRenderData,
-} from "./widget-templates";
+  ProjectBrainEventTable,
+  ProjectStatusSnapshotTable,
+} from "@/lib/db/pg/schema.pg";
+import { desc, eq } from "drizzle-orm";
 
 /**
- * Persist a new project status snapshot.
- *
- * The widget HTML is FIXED (see `widget-templates.ts`) — predefined colors,
- * sizes, and fonts — so the To-dos and Progress widgets always look the same.
- * Only the render-data JSON changes, derived deterministically from the brain
- * extraction. This avoids a second LLM call and keeps the widgets stable.
+ * Readers for the consolidated project status. The snapshot rows are written
+ * by `consolidate-project.ts` (one per ingest run); the voice app-control tool,
+ * chat retrieval and the Overview endpoint read the latest one.
  */
-export async function updateProjectStatusSnapshot(input: {
-  projectId: string;
-  userId: string;
-  extraction: ProjectBrainExtraction;
-}) {
-  const generatedAt = new Date();
 
-  const todosRenderData = buildTodosRenderData(input.extraction, generatedAt);
-  const statusRenderData = buildStatusRenderData(input.extraction, generatedAt);
-
-  const [snapshot] = await pgDb
-    .insert(ProjectStatusSnapshotTable)
-    .values({
-      projectId: input.projectId,
-      userId: input.userId,
-      todosHtml: TODOS_WIDGET_HTML,
-      statusHtml: STATUS_WIDGET_HTML,
-      todosRenderData,
-      statusRenderData,
-      summary: input.extraction.status.shortSummary || input.extraction.summary,
-      health: input.extraction.status.health,
-      generatedAt,
+/** Most recent brain timeline events — the "news" feed for a project. */
+export async function getRecentProjectEvents(projectId: string, limit = 8) {
+  return pgDb
+    .select({
+      eventDate: ProjectBrainEventTable.eventDate,
+      summary: ProjectBrainEventTable.summary,
     })
-    .returning();
-
-  return snapshot;
+    .from(ProjectBrainEventTable)
+    .where(eq(ProjectBrainEventTable.projectId, projectId))
+    .orderBy(desc(ProjectBrainEventTable.eventDate))
+    .limit(limit);
 }
 
 export async function getLatestProjectStatusSnapshot(projectId: string) {

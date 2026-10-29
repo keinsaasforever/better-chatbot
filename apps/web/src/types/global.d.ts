@@ -61,6 +61,10 @@ interface Window {
     audit?: {
       log: (event: unknown) => Promise<{ ok: boolean }>;
     };
+    billing?: {
+      /** Returns an unsubscribe function. */
+      onCheckoutClosed: (callback: () => void) => () => void;
+    };
     notifications?: {
       show: (payload: {
         kind: "complete" | "needs_approval" | "needs_input" | "error";
@@ -76,8 +80,29 @@ interface Window {
     updates?: {
       getState: () => Promise<DesktopUpdateState>;
       downloadAndInstall: () => Promise<void>;
+      /** Absent on desktop builds before 1.27.0, which download only on click. */
+      checkNow?: () => Promise<void>;
+      /** Absent on desktop builds before 1.27.0. */
+      restartAndInstall?: () => Promise<void>;
       onStateChange: (
         callback: (state: DesktopUpdateState) => void,
+      ) => () => void;
+    };
+    /**
+     * Optional: desktop builds older than the browser-based sign-in do not
+     * expose it, and fall back to the in-window flow.
+     */
+    auth?: {
+      startBrowserSignIn: (input: {
+        page: "sign-in" | "sign-up";
+        provider: string;
+        callbackUrl?: string;
+      }) => Promise<{ ok: boolean }>;
+      /** Returns an unsubscribe function. */
+      onBrowserSignInFailed: (
+        callback: (failure: {
+          reason: "expired" | "mismatch" | "verify_failed" | "network";
+        }) => void,
       ) => () => void;
     };
   };

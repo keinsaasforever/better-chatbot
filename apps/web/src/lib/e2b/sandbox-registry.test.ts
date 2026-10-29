@@ -1,11 +1,13 @@
-import { describe, expect, test } from "vitest";
+import { afterEach, describe, expect, test } from "vitest";
 import {
   ENABLED_PREVIEW_TEMPLATE_IDS,
   describeEnabledPreviewEntrypoints,
   describeEnabledPreviewPorts,
   describeEnabledPreviewTemplates,
   getEnabledPreviewTemplate,
+  getExecutionTemplateId,
   getSandboxTemplate,
+  hasPreinstalledDocumentLibraries,
 } from "./sandbox-registry";
 
 describe("sandbox template registry", () => {
@@ -21,6 +23,15 @@ describe("sandbox template registry", () => {
   test("rejects the execution-only interpreter as a preview", () => {
     expect(getSandboxTemplate("code-interpreter-v1")?.kind).toBe("execution");
     expect(getEnabledPreviewTemplate("code-interpreter-v1")).toBeUndefined();
+  });
+
+  test("enables the document template now that its image is built", () => {
+    // Enabled only after Actions → Build E2B template published it. An
+    // enabled-but-unbuilt id is not a validation error: it 404s on every
+    // execution at runtime, which is how it took production down once.
+    expect(getSandboxTemplate("navigator-python-docs")?.enabled).toBe(true);
+    // Still never a preview — it exposes no dev server to iframe.
+    expect(getEnabledPreviewTemplate("navigator-python-docs")).toBeUndefined();
   });
 
   test("keeps the custom template disabled for data-only rollback", () => {
@@ -81,5 +92,43 @@ describe("generated tool guidance", () => {
     expect(describeEnabledPreviewTemplates()).not.toContain(
       "navigator-remotion-nextjs",
     );
+  });
+});
+
+describe("execution template resolution", () => {
+  const original = process.env.E2B_EXECUTION_TEMPLATE;
+  afterEach(() => {
+    if (original === undefined) delete process.env.E2B_EXECUTION_TEMPLATE;
+    else process.env.E2B_EXECUTION_TEMPLATE = original;
+  });
+
+  test("defaults to the docs image now that it is built", () => {
+    delete process.env.E2B_EXECUTION_TEMPLATE;
+    expect(getExecutionTemplateId()).toBe("navigator-python-docs");
+    // Which is what lets create-pdf be offered at all, and what stops the
+    // Python tool telling the model to pip install what is already there.
+    expect(hasPreinstalledDocumentLibraries()).toBe(true);
+  });
+
+  test("honours the env override, the deploy-free rollback", () => {
+    process.env.E2B_EXECUTION_TEMPLATE = "navigator-python-docs";
+    expect(getExecutionTemplateId()).toBe("navigator-python-docs");
+    expect(hasPreinstalledDocumentLibraries()).toBe(true);
+
+    process.env.E2B_EXECUTION_TEMPLATE = "code-interpreter-v1";
+    expect(getExecutionTemplateId()).toBe("code-interpreter-v1");
+  });
+
+  test("ignores a blank override rather than asking for template ''", () => {
+    process.env.E2B_EXECUTION_TEMPLATE = "   ";
+    expect(getExecutionTemplateId()).toBe("navigator-python-docs");
+  });
+
+  // The rollback path, and the one that matters after an incident: naming the
+  // stock image beats editing the registry and waiting for a deploy.
+  test("the env override still rolls back to the stock interpreter", () => {
+    process.env.E2B_EXECUTION_TEMPLATE = "code-interpreter-v1";
+    expect(getExecutionTemplateId()).toBe("code-interpreter-v1");
+    expect(hasPreinstalledDocumentLibraries()).toBe(false);
   });
 });

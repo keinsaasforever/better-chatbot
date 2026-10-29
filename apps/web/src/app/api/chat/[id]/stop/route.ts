@@ -16,7 +16,7 @@ export async function POST(
 
   const sessionOrResponse = await resolveChatSession(request);
   if (sessionOrResponse instanceof Response) return sessionOrResponse;
-  const session = sessionOrResponse;
+  const { session } = sessionOrResponse;
 
   const thread = await chatRepository.selectThread(id);
   if (!thread || thread.userId !== session.user.id) {

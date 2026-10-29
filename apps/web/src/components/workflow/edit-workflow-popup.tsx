@@ -16,6 +16,7 @@ import { Label } from "ui/label";
 import { Button } from "ui/button";
 import { useTheme } from "next-themes";
 import { useObjectState } from "@/hooks/use-object-state";
+import { requireCredits } from "@/lib/billing/require-credits";
 import { useState } from "react";
 
 import {
@@ -110,6 +111,7 @@ export function EditWorkflowPopup({
   const [loading, setLoading] = useState(false);
 
   const handleSubmit = async () => {
+    if (!requireCredits()) return;
     setLoading(true);
     toast.promise(
       safe(() => zodSchema.parse(config))

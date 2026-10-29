@@ -128,63 +128,66 @@ export const UserMessagePart = memo(
             </Button>
           )}
         </div>
-        {isLast && (
-          <div className="flex w-full justify-end md:opacity-0 group-hover/message:opacity-100 transition-opacity duration-300">
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  data-testid="message-edit-button"
-                  variant="ghost"
-                  size="icon"
-                  className={cn("size-3! p-4!")}
-                  onClick={() => copy(part.text)}
-                >
-                  {copied ? <Check /> : <Copy />}
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent side="bottom">Copy</TooltipContent>
-            </Tooltip>
-            {!readonly && (
-              <>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      data-testid="message-edit-button"
-                      variant="ghost"
-                      size="icon"
-                      className="size-3! p-4!"
-                      onClick={() => setMode("edit")}
-                    >
-                      <Pencil />
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent side="bottom">Edit</TooltipContent>
-                </Tooltip>
+        {/* Copy is offered on every prompt in the thread. Edit and delete stay
+            on the newest one, since rewriting a message mid-thread would strip
+            everything the assistant said after it. */}
+        <div className="flex w-full justify-end md:opacity-0 group-hover/message:opacity-100 transition-opacity duration-300">
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                data-testid="message-copy-button"
+                variant="ghost"
+                size="icon"
+                className={cn("size-3! p-4!")}
+                onClick={() => copy(part.text)}
+              >
+                {copied ? <Check /> : <Copy />}
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom">{t("Common.copy")}</TooltipContent>
+          </Tooltip>
+          {isLast && !readonly && (
+            <>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    data-testid="message-edit-button"
+                    variant="ghost"
+                    size="icon"
+                    className="size-3! p-4!"
+                    onClick={() => setMode("edit")}
+                  >
+                    <Pencil />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom">
+                  {t("Common.edit")}
+                </TooltipContent>
+              </Tooltip>
 
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      disabled={isDeleting}
-                      onClick={deleteMessage}
-                      variant="ghost"
-                      size="icon"
-                      className="size-3! p-4! hover:text-destructive"
-                    >
-                      {isDeleting ? (
-                        <Loader className="animate-spin" />
-                      ) : (
-                        <Trash2 />
-                      )}
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent className="text-destructive" side="bottom">
-                    Delete Message
-                  </TooltipContent>
-                </Tooltip>
-              </>
-            )}
-          </div>
-        )}
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    disabled={isDeleting}
+                    onClick={deleteMessage}
+                    variant="ghost"
+                    size="icon"
+                    className="size-3! p-4! hover:text-destructive"
+                  >
+                    {isDeleting ? (
+                      <Loader className="animate-spin" />
+                    ) : (
+                      <Trash2 />
+                    )}
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent className="text-destructive" side="bottom">
+                  {t("Common.deleteMessage")}
+                </TooltipContent>
+              </Tooltip>
+            </>
+          )}
+        </div>
         <div ref={ref} className="min-w-0" />
       </div>
     );

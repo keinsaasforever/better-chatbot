@@ -114,8 +114,9 @@ export const GET = async () => {
 
   // The static catalog is the source of truth for what the product ships. Any
   // org-enabled deployment whose provider isn't in it is a retired/legacy row
-  // (e.g. the TensorX/Meta-Llama deployment left over from an earlier lineup)
-  // and must not leak back into the menu.
+  // left over from an earlier lineup and must not leak back into the menu.
+  // (Deployments for a provider that IS shipped are still matched per model
+  // name below, so a retired model under a live provider is dropped too.)
   const catalogProviders = new Set(filteredModels.map((p) => p.provider));
 
   if (session?.user?.id && activeOrganizationId) {

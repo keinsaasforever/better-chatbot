@@ -79,3 +79,38 @@ export const e2bSandboxVcpuSeconds = meter.createHistogram(
   "e2b.sandbox.vcpu_seconds",
   { description: "E2B vCPU-seconds consumed per execution interval." },
 );
+
+/**
+ * Navigator tool runs (`lib/navigator-tools`), from voice and MCP alike. Tool
+ * names are code-defined constants, so they are safe as a dimension.
+ */
+export const navigatorToolDuration = meter.createHistogram(
+  "navigator.tool.duration",
+  {
+    description: "Navigator tool run duration, by tool, caller and outcome.",
+    unit: "ms",
+  },
+);
+
+/**
+ * Voice tool calls end to end on the server, by executor kind. The tool name
+ * is only recorded for app tools: MCP and Composio names are user-defined.
+ */
+export const voiceToolDuration = meter.createHistogram("voice.tool.duration", {
+  description: "Voice tool call duration (voice.tool_ms), by kind and outcome.",
+  unit: "ms",
+});
+
+/**
+ * Cockpit provider runs (probe on save/test, feed refresh), by provider,
+ * operation and outcome. All three are code-defined enums; the outcome is
+ * `ok` or a reason code from `lib/cockpit/reasons.ts`, whose detail (an HTTP
+ * status, a tool name) stays on the `cockpit.provider.*` span.
+ */
+export const cockpitProviderRuns = meter.createCounter(
+  "cockpit.provider.runs",
+  {
+    description:
+      "Cockpit provider probes and feed refreshes, by provider, operation and outcome.",
+  },
+);

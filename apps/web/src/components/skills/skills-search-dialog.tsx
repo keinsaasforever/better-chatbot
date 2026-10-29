@@ -137,7 +137,6 @@ export function SkillsSearchDialog({
           const body = await res.json().catch(() => ({}));
           throw new Error(body.error ?? "Failed to save skill");
         }
-        toast.success(`Saved "${skill.name}"`);
         // Refresh every saved-skills list view.
         mutate(
           (key) => typeof key === "string" && key.startsWith("/api/skills?"),

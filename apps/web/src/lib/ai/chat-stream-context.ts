@@ -15,11 +15,15 @@ import {
  *    the reconnect GET can find the buffer) and a stop flag the detached /stop
  *    endpoint sets for the running function to poll.
  *
- * Everything is gated on REDIS_URL. Without it every helper is a no-op and the
- * chat route falls back to Phase 1 viewer-bound abort (no resume, no detached
- * stop) — safe, just featureless.
+ * Everything is gated on REDIS_URL (or KV_URL, the name the Vercel/Upstash
+ * integration provisions and the one `resumable-stream` itself falls back to).
+ * Without either every helper is a no-op and the chat route falls back to
+ * Phase 1 viewer-bound abort: a closed tab or a reload aborts the run and the
+ * partial is persisted as "cancelled", with no resume and no detached stop.
+ * That fallback is silent by design, so `getStreamContext` logs which mode an
+ * instance is in the first time it is asked.
  */
-const REDIS_URL = process.env.REDIS_URL;
+const REDIS_URL = process.env.REDIS_URL || process.env.KV_URL;
 
 // maxDuration on the chat route is 300s; 360s covers the longest run plus slack
 // before the pointer/flag self-expire. streamId buffers keep resumable-stream's
@@ -35,6 +39,13 @@ let keyClient: Redis | null | undefined;
 export function getStreamContext(): ResumableStreamContext | null {
   if (streamContext !== undefined) return streamContext;
   if (!REDIS_URL) {
+    // Once per instance. Without this line a production deployment that lost
+    // (or never had) its Redis URL is indistinguishable in the logs from one
+    // where resume works, and the only symptom is "This response was
+    // stopped" after a tab close.
+    logger.warn(
+      "resumable streams disabled: neither REDIS_URL nor KV_URL is set; runs are viewer-bound (tab close / reload cancels them)",
+    );
     streamContext = null;
     return streamContext;
   }
@@ -42,6 +53,9 @@ export function getStreamContext(): ResumableStreamContext | null {
     // resumable-stream/ioredis builds its own pub/sub clients from REDIS_URL.
     // `after` keeps the serverless function alive until the buffer is flushed.
     streamContext = createResumableStreamContext({ waitUntil: after });
+    logger.info(
+      "resumable streams enabled (Redis-backed resume + detached stop)",
+    );
   } catch (error) {
     logger.error(
       "Failed to create resumable stream context; resume disabled",

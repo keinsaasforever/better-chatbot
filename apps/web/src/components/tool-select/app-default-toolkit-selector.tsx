@@ -9,6 +9,7 @@ import {
   CodeIcon,
   GlobeIcon,
   HardDriveUploadIcon,
+  MonitorPlayIcon,
   Wrench,
 } from "lucide-react";
 import { useTranslations } from "next-intl";
@@ -61,6 +62,9 @@ export function AppDefaultToolKitSelector({
           break;
         case AppDefaultToolkit.Code:
           icon = CodeIcon;
+          break;
+        case AppDefaultToolkit.BrowserAutomation:
+          icon = MonitorPlayIcon;
           break;
       }
       return {

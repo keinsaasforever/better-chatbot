@@ -168,9 +168,13 @@ function getRolePermissions(role: string | undefined | null): BetterAuthRole {
 }
 
 /**
- * Check if role has specific permission for a resource
+ * Check if role has specific permission for a resource.
+ *
+ * Exported for callers that authenticate without a session cookie (Navigator
+ * API keys, the voice tool relay): they hold the user's role, not a request to
+ * read one from, so the session-reading helpers below cannot serve them.
  */
-function hasPermission(
+export function roleHasPermission(
   userRoleString: string | undefined | null,
   permission:
     | "use"
@@ -206,7 +210,7 @@ export async function canCreateAgent(): Promise<boolean> {
     const session = await getSession();
     if (!session?.user) return false;
 
-    return hasPermission(session.user.role, "create", "agent");
+    return roleHasPermission(session.user.role, "create", "agent");
   } catch (error) {
     console.error("Error checking agent create permission:", error);
     return false;
@@ -221,7 +225,7 @@ export async function canEditAgent(): Promise<boolean> {
     const session = await getSession();
     if (!session?.user) return false;
 
-    return hasPermission(session.user.role, "update", "agent");
+    return roleHasPermission(session.user.role, "update", "agent");
   } catch (error) {
     console.error("Error checking agent edit permission:", error);
     return false;
@@ -236,7 +240,7 @@ export async function canDeleteAgent(): Promise<boolean> {
     const session = await getSession();
     if (!session?.user) return false;
 
-    return hasPermission(session.user.role, "delete", "agent");
+    return roleHasPermission(session.user.role, "delete", "agent");
   } catch (error) {
     console.error("Error checking agent delete permission:", error);
     return false;
@@ -251,7 +255,7 @@ export async function canCreateWorkflow(): Promise<boolean> {
     const session = await getSession();
     if (!session?.user) return false;
 
-    return hasPermission(session.user.role, "create", "workflow");
+    return roleHasPermission(session.user.role, "create", "workflow");
   } catch (error) {
     console.error("Error checking workflow create permission:", error);
     return false;
@@ -266,7 +270,7 @@ export async function canEditWorkflow(): Promise<boolean> {
     const session = await getSession();
     if (!session?.user) return false;
 
-    return hasPermission(session.user.role, "update", "workflow");
+    return roleHasPermission(session.user.role, "update", "workflow");
   } catch (error) {
     console.error("Error checking workflow edit permission:", error);
     return false;
@@ -281,7 +285,7 @@ export async function canDeleteWorkflow(): Promise<boolean> {
     const session = await getSession();
     if (!session?.user) return false;
 
-    return hasPermission(session.user.role, "delete", "workflow");
+    return roleHasPermission(session.user.role, "delete", "workflow");
   } catch (error) {
     console.error("Error checking workflow delete permission:", error);
     return false;
@@ -296,7 +300,7 @@ export async function canCreateMCP(): Promise<boolean> {
     const session = await getSession();
     if (!session?.user) return false;
 
-    return hasPermission(session.user.role, "create", "mcp");
+    return roleHasPermission(session.user.role, "create", "mcp");
   } catch (error) {
     console.error("Error checking MCP create permission:", error);
     return false;
@@ -311,7 +315,7 @@ export async function canEditMCP(): Promise<boolean> {
     const session = await getSession();
     if (!session?.user) return false;
 
-    return hasPermission(session.user.role, "update", "mcp");
+    return roleHasPermission(session.user.role, "update", "mcp");
   } catch (error) {
     console.error("Error checking MCP edit permission:", error);
     return false;
@@ -326,7 +330,7 @@ export async function canChangeVisibilityMCP(): Promise<boolean> {
     const session = await getSession();
     if (!session?.user) return false;
 
-    return hasPermission(session.user.role, "share", "mcp");
+    return roleHasPermission(session.user.role, "share", "mcp");
   } catch (error) {
     console.error("Error checking MCP visibility change permission:", error);
     return false;
@@ -341,7 +345,7 @@ export async function canDeleteMCP(): Promise<boolean> {
     const session = await getSession();
     if (!session?.user) return false;
 
-    return hasPermission(session.user.role, "delete", "mcp");
+    return roleHasPermission(session.user.role, "delete", "mcp");
   } catch (error) {
     console.error("Error checking MCP delete permission:", error);
     return false;

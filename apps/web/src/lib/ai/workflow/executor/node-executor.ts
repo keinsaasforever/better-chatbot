@@ -21,7 +21,7 @@ import { jsonSchemaToZod } from "lib/json-schema-to-zod";
 import { toAny } from "lib/utils";
 import { AppError } from "lib/errors";
 import { DefaultToolName } from "lib/ai/tools";
-import { BASE_URL } from "lib/const";
+import { createEphemeralMCPClient } from "lib/ai/mcp/ephemeral-client";
 import {
   exaSearchToolForWorkflow,
   exaContentsToolForWorkflow,
@@ -242,22 +242,29 @@ export const toolNodeExecutor: NodeExecutor<ToolNodeData> = async ({
 
   // Execute the tool based on its type
   if (node.tool.type == "mcp-tool") {
-    // Use RPC endpoint for stateless tool execution
-    const response = await fetch(`${BASE_URL}/api/mcp/rpc/tool-call`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        mcpServerId: node.tool.serverId,
-        toolName: node.tool.id,
-        params: result.input.parameter,
-      }),
-    });
-
-    if (!response.ok) {
-      throw new Error(`MCP tool call failed: ${await response.text()}`);
+    // Call the MCP server in-process as the workflow's caller. The old HTTP
+    // hop to /api/mcp/rpc/tool-call carried no session and was always 401.
+    const caller = state.caller;
+    if (!caller) {
+      throw new Error("MCP tool call failed: workflow has no caller identity");
     }
-
-    const toolResult = (await response.json()) as any;
+    const client = await createEphemeralMCPClient(
+      node.tool.serverId,
+      caller.userId,
+      { organizationId: caller.organizationId },
+    );
+    if (!client) {
+      throw new Error("MCP tool call failed: server not found or disabled");
+    }
+    let toolResult: any;
+    try {
+      toolResult = await client.callTool(
+        node.tool.id,
+        result.input.parameter || {},
+      );
+    } finally {
+      await client.disconnect();
+    }
     if (toolResult.isError) {
       throw new Error(
         toolResult.error?.message ||

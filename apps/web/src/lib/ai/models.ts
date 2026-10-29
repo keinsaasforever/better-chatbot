@@ -26,6 +26,7 @@ import {
   XAI_FILE_MIME_TYPES,
 } from "./file-support";
 import { getTensorXModel } from "./providers/tensorx";
+import { isAiGatewayConfigured } from "./speech/voice-realtime-config";
 
 const ollama = createOllama({
   baseURL: process.env.OLLAMA_BASE_URL || "http://localhost:11434/api",
@@ -35,11 +36,47 @@ const groq = createGroq({
   apiKey: process.env.GROQ_API_KEY,
 });
 
+/**
+ * TensorX deployments (EU, zero inference-content retention).
+ *
+ * Keys are the menu names, values the TensorX provider model ids. Unlike the
+ * AI Gateway entries these must never reach the AI SDK as bare strings: a
+ * string is resolved by the globally registered gateway provider, which would
+ * silently move the request off the audited zero-retention TensorX path. Both
+ * `getModel` and `getModelInstance` go through `resolveTensorXModel` instead.
+ *
+ * The values double as the capability keys below — `moonshotai/kimi-k3` is the
+ * same id the gateway entry uses, so image/file support registered there
+ * applies here too.
+ */
+const tensorxProviderModelIds: Record<string, string> = {
+  "kimi-k3": "moonshotai/kimi-k3",
+  "qwen3.8-2.4t-a95b": "qwen/qwen3.8-2.4t-a95b",
+  "minimax-m2": "minimax/minimax-m2",
+};
+
+const resolveTensorXModel = (modelName: string): LanguageModel => {
+  const providerModelId = tensorxProviderModelIds[modelName];
+  if (!providerModelId) {
+    throw new Error(`Unknown TensorX model "${modelName}"`);
+  }
+  return getTensorXModel(providerModelId);
+};
+
 const staticModels = {
-  // Navigator (Moonshot AI Kimi K2.5 via AI Gateway) - Primary model
+  // Navigator (Z.ai GLM 5.3 Flash via AI Gateway) - Primary model.
+  //
+  // Was `moonshotai/kimi-k2.5`, which announce-and-stopped: it called one tool,
+  // wrote "Now let me fetch…", and finished the turn on `finishReason: "stop"`
+  // with nine steps of budget left, ignoring the three separate rules against
+  // that in `lib/ai/prompts.ts`. Back-to-back turns on the same prompt and the
+  // same MCP server chained correctly on kimi-k3 (4 steps) and claude-sonnet-5
+  // (3 steps), so the loop was never the problem — the model was.
   Navigator: {
-    "Base model": "moonshotai/kimi-k2.5",
+    "Base model": "zai/glm-5.3-flash",
   },
+  // Direct TensorX path (see `resolveTensorXModel`) — not an AI Gateway group.
+  TensorX: tensorxProviderModelIds,
   anthropic: {
     "claude-sonnet-5": "anthropic/claude-sonnet-5",
     "claude-opus-4.8": "anthropic/claude-opus-4.8",
@@ -140,8 +177,9 @@ const staticSupportImageInputModelIds = new Set([
   staticModels.openai["gpt-5.6-sol"],
   staticModels.openai["gpt-5.6-terra"],
   staticModels.openai["gpt-5.6-luna"],
-  // Moonshot AI models
+  // Navigator's base model (Z.ai GLM)
   staticModels.Navigator["Base model"],
+  // Moonshot AI models
   staticModels.moonshotai["kimi-k2.6"],
   staticModels.moonshotai["kimi-k3"],
   // xAI models
@@ -149,6 +187,9 @@ const staticSupportImageInputModelIds = new Set([
   staticModels.xai["grok-4.3"],
   // Alibaba models (Qwen 3.7 Plus supports vision input)
   staticModels.alibaba["qwen3.7-plus"],
+  // TensorX serves the same Kimi K3 weights under the same provider model id,
+  // so this entry (and the file support registered below) covers both paths.
+  staticModels.TensorX["kimi-k3"],
 ]);
 
 const staticFilePartSupportByModel = new Map<
@@ -203,11 +244,13 @@ registerFileSupport(
 registerFileSupport(staticModels.xai["grok-4.5"], XAI_FILE_MIME_TYPES);
 registerFileSupport(staticModels.xai["grok-4.3"], XAI_FILE_MIME_TYPES);
 
-// Moonshot AI file support
+// Navigator base model file support
 registerFileSupport(
   staticModels.Navigator["Base model"],
   DEFAULT_FILE_PART_MIME_TYPES,
 );
+
+// Moonshot AI file support
 registerFileSupport(
   staticModels.moonshotai["kimi-k2.6"],
   DEFAULT_FILE_PART_MIME_TYPES,
@@ -257,6 +300,28 @@ export const getFilePartSupportedMimeTypes = (model: LanguageModel) => {
 };
 
 /**
+ * Whether the model that will actually run this turn accepts image input.
+ *
+ * Decides whether an attached PDF is rendered to page images for the model
+ * (see `lib/ai/ingest/pdf-rasterize.ts`).
+ *
+ * Resolution goes through `getModel`, so an absent or unknown id reports the
+ * capability of the fallback model it will be served by, not `false`. Asking
+ * about the requested id instead would skip rendering on exactly the turns
+ * that silently run on the vision-capable fallback.
+ *
+ * A model supplied as an SDK instance (Local Models, Ollama, Groq) is treated
+ * as text-only: there is no id to check, and the cost of guessing wrong is a
+ * rejected request rather than a slightly worse answer.
+ */
+export const supportsImageInput = (model?: ChatModel): boolean => {
+  const resolved = customModelProvider.getModel(model);
+  return (
+    typeof resolved === "string" && !isImageInputUnsupportedModel(resolved)
+  );
+};
+
+/**
  * AI Gateway ID for workflow video → process text (upload / screen recording).
  * Matches `staticModels.google["gemini-3.1-pro-preview"]`; override with
  * `NAVIGATOR_SCREEN_VIDEO_MODEL` in the analyze-video route.
@@ -267,7 +332,7 @@ export const defaultNavigatorScreenVideoModelId =
 /**
  * Model used by the project-brain pipeline: the tool-sync agent that pulls data
  * from connected tools and the extraction step that generates the To-dos /
- * Progress widget data. Kimi K2.5 (the Navigator base model).
+ * Progress widget data. Runs on the Navigator base model.
  */
 export const projectBrainModelId = staticModels.Navigator["Base model"];
 
@@ -288,6 +353,10 @@ export const customModelProvider = {
   })),
   getModel: (model?: ChatModel): LanguageModel | string => {
     if (!model) return fallbackModel;
+    // Returning the raw catalog value here would hand the gateway provider a
+    // TensorX model id. Resolve the direct client instead so zero-retention
+    // traffic stays on the configured TensorX endpoint (see getModelInstance).
+    if (model.provider === "TensorX") return resolveTensorXModel(model.model);
     const resolved = allModels[model.provider]?.[model.model];
     if (!resolved) {
       // Falling back is deliberate (never fail a chat over a stale model id),
@@ -318,8 +387,12 @@ function checkProviderAPIKey(provider: keyof typeof staticModels) {
     case "zai":
     case "alibaba":
     case "cohere":
-      // AI Gateway providers - use AI_GATEWAY_API_KEY
-      key = process.env.AI_GATEWAY_API_KEY;
+      // AI Gateway providers - use AI_GATEWAY_API_KEY, or the deployment's
+      // OIDC token on Vercel
+      return isAiGatewayConfigured();
+    case "TensorX":
+      // Direct provider — never the gateway key.
+      key = process.env.TENSORX_API_KEY;
       break;
     case "groq":
       key = process.env.GROQ_API_KEY;
@@ -414,7 +487,7 @@ export async function getModelInstance(
   // TensorX is deliberately direct rather than routed through AI Gateway so
   // its audited retention path remains the configured TensorX endpoint.
   if (modelData.provider === "TensorX") {
-    return getTensorXModel(modelData.model);
+    return resolveTensorXModel(modelData.model);
   }
 
   // SPECIAL CASE: Local Models provider (doesn't exist in allModels)

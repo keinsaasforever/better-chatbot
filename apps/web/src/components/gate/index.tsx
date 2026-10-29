@@ -15,6 +15,8 @@
 export { CloudPopups } from "./popups";
 export {
   BillingMenuItem,
+  ReferralEnabledProvider,
   WorkspaceMenuSection,
   useLocalModelsCheckout,
+  useReferralEnabled,
 } from "./impl";

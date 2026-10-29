@@ -1,23 +1,85 @@
 import "server-only";
 
 import { createHash } from "node:crypto";
-import { and, asc, desc, eq, inArray, ne } from "drizzle-orm";
 import { pgDb } from "@/lib/db/pg/db.pg";
 import {
   ProjectBrainAliasTable,
   ProjectBrainFactTable,
   ProjectBrainLinkEvidenceTable,
-  ProjectBrainLinkTable,
   ProjectBrainPageTable,
   ProjectBrainPageVersionTable,
   ProjectBrainRawSourceTable,
   ProjectTable,
 } from "@/lib/db/pg/schema.pg";
+import { pgArray } from "@/lib/db/pg/sql-array";
+import { and, asc, desc, eq, inArray, ne, sql } from "drizzle-orm";
+import { type AliasCandidate, matchAlias } from "./alias-match";
 import type { ProjectBrainExtraction } from "./extraction-schema";
+import { upsertLinkWithEvidence } from "./link-evidence";
+import { type MentionAlias, findMentions } from "./mention-links";
 import { pageSlug } from "./slug";
+import { replaceProjectBrainTimeline } from "./timeline-events";
 
 function normalizeAlias(value: string) {
   return value.trim().toLocaleLowerCase().replace(/\s+/g, " ");
+}
+
+/**
+ * Second chance after the exact alias lookup missed: people and organizations
+ * whose aliases are trigram-close, or whose email / domain matches, resolve to
+ * the existing page (see alias-match.ts for the rules). Ambiguity yields no
+ * match and a new page; the nightly dedupe reviews those with a model.
+ */
+async function resolveFuzzyPage(
+  tx: any,
+  input: {
+    projectId: string;
+    entity: ProjectBrainExtraction["entities"][number];
+  },
+  normalizedAliases: string[],
+): Promise<string | undefined> {
+  const type = input.entity.type;
+  if (type !== "person" && type !== "organization") return undefined;
+
+  const metadata = input.entity.metadata ?? {};
+  const email = typeof metadata.email === "string" ? metadata.email : null;
+  const domain =
+    typeof metadata.domain === "string"
+      ? metadata.domain
+      : typeof metadata.website === "string"
+        ? metadata.website
+        : null;
+
+  const rows = (await tx.execute(sql`
+    SELECT a.page_id AS "pageId",
+           a.normalized_alias AS "normalizedAlias",
+           p.frontmatter->>'email' AS email,
+           COALESCE(p.frontmatter->>'domain', p.frontmatter->>'website') AS domain
+    FROM project_brain_alias a
+    JOIN project_brain_page p ON p.id = a.page_id
+    WHERE a.project_id = ${input.projectId}
+      AND a.entity_type = ${type}
+      AND p.archived_at IS NULL
+      AND (
+        ${email ? sql`lower(p.frontmatter->>'email') = ${email.toLowerCase()} OR` : sql``}
+        EXISTS (
+          SELECT 1 FROM unnest(${pgArray(normalizedAliases, "text")}) AS q(alias)
+          WHERE similarity(a.normalized_alias, q.alias) > 0.3
+        )
+      )
+    LIMIT 25
+  `)) as AliasCandidate[];
+
+  return matchAlias(
+    {
+      entityType: type,
+      title: input.entity.title,
+      aliases: input.entity.aliases,
+      email,
+      domain,
+    },
+    rows,
+  )?.pageId;
 }
 
 async function resolveOrCreatePage(
@@ -53,6 +115,9 @@ async function resolveOrCreatePage(
   }
 
   let pageId: string | undefined = pageIds[0];
+  if (!pageId) {
+    pageId = await resolveFuzzyPage(tx, input, normalizedAliases);
+  }
   if (!pageId) {
     const [page] = await tx
       .insert(ProjectBrainPageTable)
@@ -110,14 +175,11 @@ export async function persistProjectBrainExtraction(input: {
   extraction: ProjectBrainExtraction;
   persistKnowledge: boolean;
 }) {
-  if (!input.persistKnowledge) {
-    return { entities: 0, facts: 0, relations: 0, pageIds: [] as string[] };
-  }
-
   const [context] = await pgDb
     .select({
       ownerUserId: ProjectTable.ownerUserId,
       observedAt: ProjectBrainRawSourceTable.observedAt,
+      rawSourceType: ProjectBrainRawSourceTable.sourceType,
     })
     .from(ProjectBrainRawSourceTable)
     .innerJoin(
@@ -134,6 +196,28 @@ export async function persistProjectBrainExtraction(input: {
 
   if (!context) {
     throw new Error("Project brain source not found.");
+  }
+
+  const timelineInput = {
+    projectId: input.projectId,
+    userId: context.ownerUserId,
+    sourceScope: input.sourceScope,
+    rawSourceType: context.rawSourceType,
+    observedAt: context.observedAt,
+    timeline: input.extraction.timeline,
+  };
+
+  // Memory off: keep the timeline (it feeds the voice "recent events" tool and
+  // the consolidated status) but write no pages, facts or links.
+  if (!input.persistKnowledge) {
+    await replaceProjectBrainTimeline(pgDb, timelineInput);
+    return {
+      entities: 0,
+      facts: 0,
+      relations: 0,
+      mentionLinks: 0,
+      pageIds: [] as string[],
+    };
   }
 
   return pgDb.transaction(async (tx) => {
@@ -222,31 +306,6 @@ export async function persistProjectBrainExtraction(input: {
         throw new Error("Relation references an unresolved entity.");
       }
 
-      const [link] = await tx
-        .insert(ProjectBrainLinkTable)
-        .values({
-          projectId: input.projectId,
-          fromPageId,
-          toPageId,
-          linkType: relation.type,
-          context: relation.context,
-          confidence: String(relation.confidence),
-          source: "classifier",
-        })
-        .onConflictDoUpdate({
-          target: [
-            ProjectBrainLinkTable.projectId,
-            ProjectBrainLinkTable.fromPageId,
-            ProjectBrainLinkTable.toPageId,
-            ProjectBrainLinkTable.linkType,
-          ],
-          set: {
-            context: relation.context,
-            confidence: String(relation.confidence),
-          },
-        })
-        .returning();
-
       const evidenceKey = createHash("sha256")
         .update(
           [
@@ -258,36 +317,22 @@ export async function persistProjectBrainExtraction(input: {
         )
         .digest("hex");
 
-      await tx
-        .insert(ProjectBrainLinkEvidenceTable)
-        .values({
-          projectId: input.projectId,
-          linkId: link.id,
-          sourceId: input.sourceId,
-          runId: input.runId,
-          sourceScope: input.sourceScope,
-          evidenceKey,
-          context: relation.context,
-          status: "current",
-          confidence: String(relation.confidence),
-          observedAt: relation.observedAt
-            ? new Date(relation.observedAt)
-            : context.observedAt,
-        })
-        .onConflictDoUpdate({
-          target: [
-            ProjectBrainLinkEvidenceTable.linkId,
-            ProjectBrainLinkEvidenceTable.sourceScope,
-            ProjectBrainLinkEvidenceTable.evidenceKey,
-          ],
-          set: {
-            sourceId: input.sourceId,
-            runId: input.runId,
-            status: "current",
-            confidence: String(relation.confidence),
-            observedAt: context.observedAt,
-          },
-        });
+      await upsertLinkWithEvidence(tx, {
+        projectId: input.projectId,
+        fromPageId,
+        toPageId,
+        linkType: relation.type,
+        context: relation.context,
+        confidence: relation.confidence,
+        source: "classifier",
+        sourceId: input.sourceId,
+        runId: input.runId,
+        sourceScope: input.sourceScope,
+        evidenceKey,
+        observedAt: relation.observedAt
+          ? new Date(relation.observedAt)
+          : context.observedAt,
+      });
     }
 
     const retracted = await tx
@@ -318,6 +363,19 @@ export async function persistProjectBrainExtraction(input: {
           ne(ProjectBrainLinkEvidenceTable.runId, input.runId),
         ),
       );
+
+    // Every alias of the project, for deterministic "mentions" edges below.
+    const projectAliases = (await tx
+      .select({
+        pageId: ProjectBrainAliasTable.pageId,
+        normalizedAlias: ProjectBrainAliasTable.normalizedAlias,
+      })
+      .from(ProjectBrainAliasTable)
+      .where(
+        eq(ProjectBrainAliasTable.projectId, input.projectId),
+      )) as MentionAlias[];
+
+    let mentionLinks = 0;
 
     for (const pageId of touchedPageIds) {
       const facts = await tx
@@ -357,7 +415,46 @@ export async function persistProjectBrainExtraction(input: {
         sourceId: input.sourceId,
         compiledTruth,
       });
+
+      // gbrain-style self-wiring: a page that names another page of this
+      // project gets a `mentions` edge, without any model call.
+      const [page] = await tx
+        .select({
+          title: ProjectBrainPageTable.title,
+          summary: ProjectBrainPageTable.summary,
+        })
+        .from(ProjectBrainPageTable)
+        .where(eq(ProjectBrainPageTable.id, pageId))
+        .limit(1);
+      const mentioned = findMentions({
+        text: [page?.title, page?.summary, compiledTruth]
+          .filter(Boolean)
+          .join("\n"),
+        aliases: projectAliases,
+        selfPageId: pageId,
+      });
+      for (const toPageId of mentioned) {
+        await upsertLinkWithEvidence(tx, {
+          projectId: input.projectId,
+          fromPageId: pageId,
+          toPageId,
+          linkType: "mentions",
+          confidence: 0.8,
+          source: "markdown",
+          sourceId: input.sourceId,
+          runId: input.runId,
+          sourceScope: input.sourceScope,
+          evidenceKey: `mention:${toPageId}`,
+          observedAt: context.observedAt,
+        });
+        mentionLinks++;
+      }
     }
+
+    await replaceProjectBrainTimeline(tx, {
+      ...timelineInput,
+      pageIdByEntityId: pageByEntityId,
+    });
 
     return {
       entities: input.extraction.entities.length,
@@ -366,6 +463,7 @@ export async function persistProjectBrainExtraction(input: {
         0,
       ),
       relations: input.extraction.relations.length,
+      mentionLinks,
       pageIds: [...touchedPageIds],
     };
   });

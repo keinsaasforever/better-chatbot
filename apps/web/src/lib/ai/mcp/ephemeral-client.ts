@@ -25,6 +25,7 @@ import { pgDb } from "lib/db/pg/db.pg";
 import { McpOAuthSessionTable, McpServerTable } from "lib/db/pg/schema.pg";
 import globalLogger from "logger";
 import { isMaybeRemoteConfig, isMaybeStdioConfig } from "./is-mcp-config";
+import { isMcpServerInScope } from "./mcp-server-scope";
 import { PgOAuthClientProvider } from "./pg-oauth-provider";
 
 export { MCP_INTROSPECT_TIMEOUT, McpDeviceExecutionRequiredError };
@@ -223,18 +224,20 @@ export class EphemeralMCPClient {
 export async function createEphemeralMCPClient(
   mcpServerId: string,
   userId: string,
+  opts?: { organizationId?: string | null },
 ): Promise<EphemeralMCPClient | null> {
   try {
-    // 1. Load server config from DB
+    // 1. Load server config from DB. Access follows the repository rule
+    // (owner, or org-shared "public" within the caller's active org); callers
+    // that don't pass an organizationId keep the previous owner-only behavior.
     const server = await pgDb.query.McpServerTable.findFirst({
       where: and(
         eq(McpServerTable.id, mcpServerId),
-        eq(McpServerTable.userId, userId),
         eq(McpServerTable.enabled, true),
       ),
     });
 
-    if (!server) {
+    if (!server || !isMcpServerInScope(server, userId, opts?.organizationId)) {
       logger.warn(`MCP server ${mcpServerId} not found for user ${userId}`);
       return null;
     }

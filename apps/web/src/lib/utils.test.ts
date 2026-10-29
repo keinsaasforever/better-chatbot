@@ -1,5 +1,11 @@
 import { describe, expect, test, vi } from "vitest";
-import { groupBy, errorToString, objectFlow, parseEnvBoolean } from "./utils";
+import {
+  groupBy,
+  errorToString,
+  errorMessageFromPayload,
+  objectFlow,
+  parseEnvBoolean,
+} from "./utils";
 
 describe("groupBy", () => {
   test("group by function key", () => {
@@ -210,5 +216,46 @@ describe("parseEnvBoolean", () => {
   test("should handle mixed case variations", () => {
     expect(parseEnvBoolean("tRuE")).toBe(true);
     expect(parseEnvBoolean("fAlSe")).toBe(false);
+  });
+});
+
+describe("errorMessageFromPayload", () => {
+  test("reads the nested shape every project route answers with", () => {
+    // toProjectErrorResponse returns { error: { code, message } }. Passing that
+    // object to new Error() stringified it, so failing project routes rendered
+    // the literal text "[object Object]".
+    expect(
+      errorMessageFromPayload({
+        error: { code: "connector_requires_auth", message: "Reconnect first." },
+      }),
+    ).toBe("Reconnect first.");
+  });
+
+  test("still reads the flat shapes", () => {
+    expect(errorMessageFromPayload({ message: "Boom" })).toBe("Boom");
+    expect(errorMessageFromPayload({ error: "Boom" })).toBe("Boom");
+  });
+
+  test("prefers message over error when both are present", () => {
+    expect(errorMessageFromPayload({ message: "outer", error: "inner" })).toBe(
+      "outer",
+    );
+  });
+
+  test("falls back to detail, which upstream APIs use", () => {
+    expect(errorMessageFromPayload({ detail: "Invalid API key" })).toBe(
+      "Invalid API key",
+    );
+  });
+
+  test("returns undefined when there is nothing readable", () => {
+    expect(errorMessageFromPayload({})).toBeUndefined();
+    expect(errorMessageFromPayload(null)).toBeUndefined();
+    expect(errorMessageFromPayload({ error: {} })).toBeUndefined();
+    expect(errorMessageFromPayload({ error: { code: "x" } })).toBeUndefined();
+    // Never yields the string that made this bug invisible.
+    expect(errorMessageFromPayload({ error: { a: 1 } })).not.toBe(
+      "[object Object]",
+    );
   });
 });

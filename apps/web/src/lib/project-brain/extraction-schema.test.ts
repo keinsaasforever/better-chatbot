@@ -1,9 +1,6 @@
 import { zodSchema } from "ai";
 import { describe, expect, it } from "vitest";
-import {
-  ProjectBrainExtractionSchema,
-  ProjectWidgetSpecSchema,
-} from "./extraction-schema";
+import { ProjectBrainExtractionSchema } from "./extraction-schema";
 
 const meetingEntity = {
   id: "meeting-apr-7",
@@ -30,21 +27,6 @@ const meetingToPerson = {
   confidence: 0.9,
 };
 
-const tableWidget = {
-  kind: "table",
-  slot: "agenda",
-  title: "Upcoming Events",
-  columns: [{ key: "title", label: "Title", type: "text" }],
-  rows: [{ title: "Standup" }],
-};
-
-const metricWidget = {
-  kind: "metric",
-  slot: "summary",
-  title: "Stats",
-  items: [{ label: "Events", value: 5 }],
-};
-
 /** The schema defaults every field, so only the parts under test need spelling out. */
 function parse(input: Record<string, unknown>) {
   return ProjectBrainExtractionSchema.parse(input);
@@ -56,12 +38,21 @@ describe("ProjectBrainExtractionSchema", () => {
       summary: "test",
       entities: [meetingEntity, personEntity],
       relations: [meetingToPerson],
-      widgets: [tableWidget, metricWidget],
+      todos: [
+        {
+          title: "Send the deck",
+          status: "open",
+          priority: "high",
+          dueAt: "2026-09-10T12:00:00.000Z",
+          sourceUrl: "https://todoist.com/app/task/123",
+        },
+      ],
     });
 
     expect(result.entities).toHaveLength(2);
     expect(result.relations).toHaveLength(1);
-    expect(result.widgets).toHaveLength(2);
+    expect(result.todos).toHaveLength(1);
+    expect(result.todos[0].sourceUrl).toBe("https://todoist.com/app/task/123");
   });
 
   it("returns empty defaults for a bare object", () => {
@@ -71,55 +62,48 @@ describe("ProjectBrainExtractionSchema", () => {
     expect(result.relations).toEqual([]);
     expect(result.timeline).toEqual([]);
     expect(result.todos).toEqual([]);
-    expect(result.widgets).toEqual([]);
+    expect(result.status.health).toBe("unknown");
+  });
+
+  it("does not accept the retired widgets field", () => {
+    const result = parse({
+      widgets: [{ kind: "table", slot: "agenda", title: "x" }],
+    });
+
+    expect("widgets" in result).toBe(false);
   });
 });
 
-// The incident: the model emitted widgets with kind "list"/"calendar" and a
-// "metric" with no `items`, which rejected the entire extraction and failed the
-// run with AI_NoObjectGeneratedError.
-describe("ProjectBrainExtractionSchema — widget resilience", () => {
-  it("drops widgets with an unknown kind and keeps the valid ones", () => {
+describe("ProjectBrainExtractionSchema — todo resilience", () => {
+  it("drops todos without a title and keeps the rest", () => {
     const result = parse({
-      widgets: [
-        { kind: "list", slot: "items", title: "List", items: [] },
-        { kind: "calendar", slot: "cal", title: "Cal" },
-        metricWidget,
+      todos: [
+        { status: "open", priority: "high" },
+        { title: "Valid", status: "open", priority: "low" },
       ],
     });
 
-    expect(result.widgets).toHaveLength(1);
-    expect(result.widgets[0].kind).toBe("metric");
+    expect(result.todos).toHaveLength(1);
+    expect(result.todos[0].title).toBe("Valid");
   });
 
-  it("drops a metric widget that is missing its items array", () => {
+  it("falls back to open/normal for unknown status or priority", () => {
     const result = parse({
-      widgets: [
-        { kind: "metric", slot: "bad", title: "No items" },
-        tableWidget,
-      ],
+      todos: [{ title: "Odd", status: "someday", priority: "urgent" }],
     });
 
-    expect(result.widgets).toHaveLength(1);
-    expect(result.widgets[0].kind).toBe("table");
+    expect(result.todos[0]).toMatchObject({
+      status: "open",
+      priority: "normal",
+    });
   });
 
-  it("applies the 6-widget cap after filtering, not before", () => {
-    const invalid = Array.from({ length: 8 }, (_, index) => ({
-      kind: "list",
-      slot: `bad_${index}`,
-      title: "Nope",
-    }));
+  it("drops a todo whose sourceUrl is not a URL", () => {
+    const result = parse({
+      todos: [{ title: "Bad link", sourceUrl: "not a url" }],
+    });
 
-    const result = parse({ widgets: [...invalid, tableWidget] });
-
-    expect(result.widgets).toHaveLength(1);
-  });
-
-  it("still rejects an unknown kind at the widget-spec level", () => {
-    expect(() =>
-      ProjectWidgetSpecSchema.parse({ kind: "list", slot: "x", title: "X" }),
-    ).toThrow();
+    expect(result.todos).toHaveLength(0);
   });
 });
 
@@ -160,6 +144,19 @@ describe("ProjectBrainExtractionSchema — entity and relation resilience", () =
     expect(result.relations).toHaveLength(0);
   });
 
+  it("normalises relation types onto the edge vocabulary", () => {
+    const result = parse({
+      entities: [meetingEntity, personEntity],
+      relations: [meetingToPerson, { ...meetingToPerson, type: "sings_with" }],
+    });
+
+    // "attended-by" is a synonym; the unknown type collapses to related_to.
+    expect(result.relations.map((relation) => relation.type)).toEqual([
+      "attended",
+      "related_to",
+    ]);
+  });
+
   it("drops self-referential relations", () => {
     const result = parse({
       entities: [meetingEntity],
@@ -192,28 +189,28 @@ describe("ProjectBrainExtractionSchema — entity and relation resilience", () =
 
 // The resilient arrays are built with z.preprocess, which in zod v4 is a
 // ZodPipe(ZodTransform, inner). If the AI SDK ever rendered the *input* side of
-// that pipe, the widget union would collapse to `{}` and the model would lose
-// the only description of what a widget looks like — quietly making the original
-// incident worse. Assert through the same conversion generateObject performs.
+// that pipe, the item shapes would collapse to `{}` and the model would lose
+// the only description of what a todo or entity looks like. Assert through the
+// same conversion generateObject performs.
 describe("JSON Schema handed to the model", () => {
   const json = JSON.stringify(
     zodSchema(ProjectBrainExtractionSchema).jsonSchema,
   );
 
-  it("still describes both widget kinds", () => {
-    expect(json).toContain('"table"');
-    expect(json).toContain('"metric"');
+  it("describes the todo and status shapes", () => {
+    expect(json).toContain('"todos"');
+    expect(json).toContain('"sourceUrl"');
+    expect(json).toContain('"dueAt"');
+    expect(json).toContain('"health"');
   });
 
-  it("still describes the fields each widget kind requires", () => {
-    expect(json).toContain('"columns"');
-    expect(json).toContain('"rows"');
-    expect(json).toContain('"items"');
-  });
-
-  it("still describes the entity and relation shapes", () => {
+  it("describes the entity and relation shapes", () => {
     expect(json).toContain('"entities"');
     expect(json).toContain('"relations"');
     expect(json).toContain('"fromEntityId"');
+  });
+
+  it("no longer describes widgets", () => {
+    expect(json).not.toContain('"widgets"');
   });
 });

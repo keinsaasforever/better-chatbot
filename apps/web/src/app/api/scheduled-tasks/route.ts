@@ -2,13 +2,15 @@ import { NextResponse } from "next/server";
 import { withAuth } from "auth/route-guard";
 import { pgDb } from "@/lib/db/pg/db.pg";
 import { ScheduledTaskTable, AgentTable } from "@/lib/db/pg/schema.pg";
-import { eq, and, asc } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { agentRepository } from "@/lib/db/repository";
 import {
   ScheduledTaskCreateSchema,
   computeNextRunAt,
   isValidCron,
 } from "@/lib/scheduled-tasks/schedule-validation";
+import { sanitizeCredentialAliases } from "@/lib/scheduled-tasks/browser-grants";
+import { listScheduledTasksForUser } from "@/lib/scheduled-tasks/list-tasks";
 
 /**
  * GET /api/scheduled-tasks
@@ -16,59 +18,11 @@ import {
  */
 export const GET = withAuth(async (request, session) => {
   try {
-    // Optional ?agentId= filter. Previously this query took `(_request, session)`
-    // and ignored the caller's agentId entirely, so an agent's edit page (which
-    // requests ?agentId=<id> and then reads tasks[0]) could be handed a
-    // DIFFERENT agent's schedule. Filter on it, and order deterministically so
-    // "first" is stable.
+    // Optional ?agentId= filter; see listScheduledTasksForUser for why it
+    // matters.
     const agentId = new URL(request.url).searchParams.get("agentId");
-
-    const tasks = await pgDb
-      .select({
-        id: ScheduledTaskTable.id,
-        userId: ScheduledTaskTable.userId,
-        taskType: ScheduledTaskTable.taskType,
-        agentId: ScheduledTaskTable.agentId,
-        key: ScheduledTaskTable.key,
-        name: ScheduledTaskTable.name,
-        description: ScheduledTaskTable.description,
-        cronExpression: ScheduledTaskTable.cronExpression,
-        timezone: ScheduledTaskTable.timezone,
-        inputPrompt: ScheduledTaskTable.inputPrompt,
-        enabled: ScheduledTaskTable.enabled,
-        lastRunAt: ScheduledTaskTable.lastRunAt,
-        lastRunStatus: ScheduledTaskTable.lastRunStatus,
-        lastRunError: ScheduledTaskTable.lastRunError,
-        lastChatThreadId: ScheduledTaskTable.lastChatThreadId,
-        runCount: ScheduledTaskTable.runCount,
-        successCount: ScheduledTaskTable.successCount,
-        failureCount: ScheduledTaskTable.failureCount,
-        createdAt: ScheduledTaskTable.createdAt,
-        updatedAt: ScheduledTaskTable.updatedAt,
-        agentName: AgentTable.name,
-      })
-      .from(ScheduledTaskTable)
-      .leftJoin(AgentTable, eq(ScheduledTaskTable.agentId, AgentTable.id))
-      .where(
-        agentId
-          ? and(
-              eq(ScheduledTaskTable.userId, session.user.id),
-              eq(ScheduledTaskTable.agentId, agentId),
-            )
-          : eq(ScheduledTaskTable.userId, session.user.id),
-      )
-      .orderBy(asc(ScheduledTaskTable.createdAt), asc(ScheduledTaskTable.id));
-
-    // Computed server-side so clients never need cron math.
-    const now = new Date();
-    const tasksWithNextRun = tasks.map((task) => ({
-      ...task,
-      nextRunAt: task.enabled
-        ? computeNextRunAt(task.cronExpression, task.timezone, now)
-        : null,
-    }));
-
-    return NextResponse.json({ tasks: tasksWithNextRun });
+    const tasks = await listScheduledTasksForUser(session.user.id, { agentId });
+    return NextResponse.json({ tasks });
   } catch (error) {
     console.error("Error fetching scheduled tasks:", error);
     return NextResponse.json(
@@ -100,6 +54,8 @@ export const POST = withAuth(async (request, session) => {
       cronExpression,
       timezone,
       inputPrompt,
+      browserAutomationEnabled,
+      browserCredentialAliases,
       enabled,
     } = parsed.data;
 
@@ -130,6 +86,13 @@ export const POST = withAuth(async (request, session) => {
       );
     }
 
+    // Aliases name a capability, so they are checked against the org rather
+    // than taken from the client.
+    const grantedAliases = await sanitizeCredentialAliases({
+      organizationId: activeOrganizationId,
+      aliases: browserCredentialAliases,
+    });
+
     const [agentRow] = await pgDb
       .select({ name: AgentTable.name })
       .from(AgentTable)
@@ -150,6 +113,8 @@ export const POST = withAuth(async (request, session) => {
         cronExpression,
         timezone,
         inputPrompt: inputPrompt || null,
+        browserAutomationEnabled: browserAutomationEnabled ?? false,
+        browserCredentialAliases: grantedAliases,
         enabled,
         nextRunAt: computeNextRunAt(cronExpression, timezone),
       })
@@ -161,6 +126,12 @@ export const POST = withAuth(async (request, session) => {
           cronExpression,
           timezone,
           inputPrompt: inputPrompt || null,
+          ...(browserAutomationEnabled === undefined
+            ? {}
+            : { browserAutomationEnabled }),
+          ...(grantedAliases === null
+            ? {}
+            : { browserCredentialAliases: grantedAliases }),
           enabled,
           nextRunAt: computeNextRunAt(cronExpression, timezone),
           updatedAt: new Date(),

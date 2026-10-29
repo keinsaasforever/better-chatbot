@@ -1,10 +1,11 @@
 "use client";
 
-import useSWR from "swr";
-import Link from "next/link";
-import { MessageSquare, ChevronRight } from "lucide-react";
 import { fetcher } from "@/lib/utils";
 import { cn } from "@/lib/utils";
+import { ChevronRight, MessageSquare } from "lucide-react";
+import { useTranslations } from "next-intl";
+import Link from "next/link";
+import useSWR from "swr";
 
 export function ProjectOldChats({
   projectId,
@@ -14,6 +15,7 @@ export function ProjectOldChats({
   selectedThreadId?: string | null;
   onSelectThread?: (threadId: string) => void;
 }) {
+  const t = useTranslations("Layout");
   const { data: threads = [] } = useSWR<
     Array<{
       id: string;
@@ -45,7 +47,7 @@ export function ProjectOldChats({
               )}
             >
               <span className="min-w-0 flex-1 truncate">
-                {thread.title || "New Chat"}
+                {thread.title || t("newChat")}
               </span>
               {thread.lastMessageAt || thread.createdAt ? (
                 <span className="shrink-0 text-xs text-muted-foreground">

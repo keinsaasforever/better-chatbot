@@ -1,9 +1,11 @@
 "use client";
 
-import dynamic from "next/dynamic";
-import { useEffect, useState } from "react";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import useSWR from "swr";
+import { useProjectOverview } from "@/hooks/queries/use-project-overview";
+import {
+  isProjectRunActive,
+  isProjectRunStale,
+} from "@/lib/project-brain/run-status";
+import { fetcher } from "@/lib/utils";
 import {
   Brain,
   LayoutDashboard,
@@ -11,22 +13,23 @@ import {
   Settings,
   Share2,
 } from "lucide-react";
+import { useTranslations } from "next-intl";
+import dynamic from "next/dynamic";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
-import { fetcher } from "@/lib/utils";
+import useSWR from "swr";
 import { Button } from "ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "ui/tabs";
 import { ProjectAccessAvatars } from "./project-access-avatars";
 import { ProjectBrainTab } from "./project-brain-tab";
 import { ProjectChatWrapper } from "./project-chat-wrapper";
-import { ProjectNativeWidget } from "./project-native-widget";
+import type { ProjectDocumentForGrid } from "./project-documents-grid";
 import { ProjectOldChats } from "./project-old-chats";
 import { ProjectOnboardingDrawer } from "./project-onboarding-drawer";
 import { ProjectSettingsDialog } from "./project-settings-dialog";
-import {
-  isProjectRunActive,
-  isProjectRunStale,
-} from "@/lib/project-brain/run-status";
-import type { ProjectDocumentForGrid } from "./project-documents-grid";
+import { ProjectStatusCard } from "./project-status-card";
+import { ProjectTodosCard } from "./project-todos-card";
 
 const ProjectKnowledgeGraph = dynamic(
   () =>
@@ -54,6 +57,7 @@ export function ProjectWorkspace({
   project,
   initialDocuments,
 }: ProjectWorkspaceProps) {
+  const tRun = useTranslations("Projects.run");
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -63,9 +67,12 @@ export function ProjectWorkspace({
   const [threadId, setThreadId] = useState<string | null>(null);
   const [onboardOpen, setOnboardOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const { data: widgetsData, mutate: mutateWidgets } = useSWR<{
-    widgets: any[];
-  }>(`/api/projects/${project.id}/widgets`, fetcher);
+  const {
+    data: overview,
+    isLoading: overviewLoading,
+    mutate: mutateOverview,
+    setTodoStatus,
+  } = useProjectOverview(project.id);
   const [isSyncing, setIsSyncing] = useState(false);
   const { data: latestRun, mutate: mutateLatestRun } = useSWR<any>(
     `/api/projects/${project.id}/runs/latest`,
@@ -81,6 +88,13 @@ export function ProjectWorkspace({
   // disable this button forever, so clicking it did nothing at all.
   const runActive = isProjectRunActive(latestRun);
   const runStuck = isProjectRunStale(latestRun);
+
+  // A run that just finished has rewritten the status and to-dos.
+  const wasActive = useRef(false);
+  useEffect(() => {
+    if (wasActive.current && !runActive) void mutateOverview();
+    wasActive.current = runActive;
+  }, [runActive, mutateOverview]);
 
   useEffect(() => {
     if (searchParams.get("onboard") !== "1") return;
@@ -108,8 +122,9 @@ export function ProjectWorkspace({
         tools: Array<{ id: string; displayName: string; status: string }>;
       };
       const tools = brain.tools.filter((tool) => tool.status === "connected");
-      if (!tools.length)
-        return toast.message("Attach a connector before syncing.");
+      if (!tools.length) {
+        return toast.error("Attach a connector before syncing.");
+      }
       // Sync every attached connector, not just the first one.
       const results = await Promise.allSettled(
         tools.map(async (tool) => {
@@ -134,12 +149,7 @@ export function ProjectWorkspace({
       if (failed === results.length) {
         throw new Error("Could not start any sync.");
       }
-      toast.success(
-        failed
-          ? `Project update started (${failed} connector${failed > 1 ? "s" : ""} failed).`
-          : "Project update started.",
-      );
-      void mutateWidgets();
+      void mutateOverview();
     } catch (error) {
       toast.error(
         error instanceof Error ? error.message : "Could not start sync.",
@@ -160,10 +170,20 @@ export function ProjectWorkspace({
             {project.goal ?? project.description}
           </p>
           {(runStuck || latestRun?.status === "failed") && (
-            <p className="mt-1 text-xs text-muted-foreground">
+            <p
+              className="mt-1 text-xs text-muted-foreground"
+              // The short cause helps an editor debug; viewers get the text only.
+              title={
+                project.role !== "viewer" && latestRun?.errorMessage
+                  ? String(latestRun.errorMessage)
+                  : undefined
+              }
+            >
               {runStuck
-                ? "The last sync didn't finish. Start it again."
-                : (latestRun?.errorMessage ?? "The last sync failed.")}
+                ? tRun("stale")
+                : tRun.has(`failed.${latestRun?.errorCode}`)
+                  ? tRun(`failed.${latestRun?.errorCode}`)
+                  : tRun("failedGeneric")}
             </p>
           )}
         </div>
@@ -215,9 +235,19 @@ export function ProjectWorkspace({
         </TabsList>
         <TabsContent value="overview" className="space-y-5">
           <div className="grid gap-4 md:grid-cols-2">
-            {widgetsData?.widgets.map((widget) => (
-              <ProjectNativeWidget key={widget.id} widget={widget} />
-            ))}
+            <ProjectStatusCard
+              projectId={project.id}
+              status={overview?.status}
+              connectorIssues={overview?.connectorIssues}
+              isLoading={overviewLoading}
+            />
+            <ProjectTodosCard
+              todos={overview?.todos}
+              recentlyDone={overview?.recentlyDone}
+              isLoading={overviewLoading}
+              canEdit={project.role !== "viewer"}
+              onSetStatus={setTodoStatus}
+            />
           </div>
           <section className="rounded-xl border bg-card p-4">
             <ProjectChatWrapper

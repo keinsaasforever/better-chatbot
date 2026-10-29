@@ -46,6 +46,11 @@ export interface UploadUrl {
   fields?: Record<string, string>;
 }
 
+export interface SignedUrlOptions {
+  /** `true` keeps the object's name; a string sets the download filename. */
+  download?: string | boolean;
+}
+
 export interface FileStorage {
   /** Upload file content directly from the server (e.g. AI generated image). */
   upload(
@@ -78,5 +83,14 @@ export interface FileStorage {
   getDownloadUrl?(key: string): Promise<string | null>;
 
   /** Generate a short-lived signed URL for private bucket access. */
-  getSignedUrl?(key: string, expiresIn?: number): Promise<string | null>;
+  /**
+   * Short-lived URL for a private object. `download` asks the storage CDN to
+   * answer with an attachment disposition (and that filename), so a click
+   * saves the file instead of rendering it.
+   */
+  getSignedUrl?(
+    key: string,
+    expiresIn?: number,
+    options?: SignedUrlOptions,
+  ): Promise<string | null>;
 }

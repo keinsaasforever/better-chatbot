@@ -55,7 +55,6 @@ export function UserDetailFormCard({
     const result = await updateUserDetailsAction(prevState, formData);
     if (result?.success && result.user) {
       const updatedUser = result.user;
-      toast.success(t("updateSuccess"));
       setCurrentUser(updatedUser);
       onUserDetailsUpdate?.(updatedUser);
     } else {

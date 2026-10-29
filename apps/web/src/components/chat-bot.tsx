@@ -1,12 +1,14 @@
 "use client";
 
 import { appStore } from "@/app/store";
+import type { ThreadImageMask } from "@/app/store";
 import { useAgentAlertNotifications } from "@/hooks/use-agent-alert-notifications";
 import { useChatCore } from "@/hooks/use-chat-core";
 import { useGlobalShortcut } from "@/hooks/use-global-shortcut";
 import { useScrollAnchor } from "@/hooks/use-scroll-anchor";
 import { useStableThreadId } from "@/hooks/use-stable-thread-id";
 import { analytics } from "@/lib/analytics/posthog";
+import { requireCredits } from "@/lib/billing/require-credits";
 import { recordBootEvent } from "@/lib/boot-diagnostics/client";
 import clsx from "clsx";
 import { cn, createDebounce, generateUUID, truncateString } from "lib/utils";
@@ -17,8 +19,11 @@ import { ChatMessageList } from "./chat-message-list";
 import { ErrorMessage } from "./message";
 import PromptInput from "./prompt-input";
 import { ScrollToBottomButton } from "./scroll-to-bottom-button";
+import { WorkspaceModeToggle } from "./workspace-mode-toggle";
 
 import { useShallow } from "zustand/shallow";
+
+import type { AgentKnowledgeBaseBinding } from "app-types/agent";
 
 import type { UseChatHelpers } from "@ai-sdk/react";
 import {
@@ -38,17 +43,25 @@ import { useGenerateThreadTitle } from "@/hooks/queries/use-generate-thread-titl
 import { useFileDragOverlay } from "@/hooks/use-file-drag-overlay";
 import { useToRef } from "@/hooks/use-latest";
 import { useMounted } from "@/hooks/use-mounted";
+import { type RecoveryState, useRunRecovery } from "@/hooks/use-run-recovery";
 import { useThreadFileUploader } from "@/hooks/use-thread-file-uploader";
+import {
+  hasDefaultToolMention,
+  hasMcpMention,
+} from "@/lib/chat/mention-tool-scope";
 import {
   buildAnsweredInChatOutput,
   extractSendMessageText,
   findPendingToolCall,
 } from "@/lib/chat/pending-tool-call";
+import { latestAgentIdFromMessages } from "@/lib/chat/latest-agent-id";
 import { isProjectDraftThreadId } from "@/lib/chat/project-draft-thread";
+import { isInterruptedAssistantTail } from "@/lib/chat/resumable-message";
 import { extractTitleSeedFromSendMessage } from "@/lib/chat/thread-title";
 import {
   ChatApiSchemaRequestBody,
   ChatAttachment,
+  ChatMention,
   ChatMetadata,
   ChatModel,
 } from "app-types/chat";
@@ -61,7 +74,7 @@ import { Shortcuts, isShortcutEvent } from "lib/keyboard-shortcuts";
 import { FilePlus, Loader } from "lucide-react";
 import { useTranslations } from "next-intl";
 import dynamic from "next/dynamic";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { mutate } from "swr";
 import { safe } from "ts-safe";
 import { Button } from "ui/button";
@@ -110,6 +123,8 @@ type Props = {
   initialThread?: {
     title?: string;
     projectId?: string;
+    /** Knowledge sources stored on the thread, restored into the composer. */
+    knowledgeBases?: AgentKnowledgeBaseBinding[];
   };
 };
 
@@ -121,12 +136,33 @@ const Particles = dynamic(() => import("ui/particles"), {
   ssr: false,
 });
 
-/** Matches the composer wrapper's `bottom-14` offset (3.5rem). */
-const COMPOSER_GAP_PX = 56;
+/**
+ * Breathing room kept between the newest content and the composer.
+ *
+ * The composer wrapper is anchored to the bottom edge and carries its own
+ * padding, so its measured height already covers the fade above it — this is
+ * only the extra gap the tail reserve leaves on top.
+ */
+const COMPOSER_GAP_PX = 8;
 
 const firstTimeStorage = getStorageManager("IS_FIRST");
 const isFirstTime = firstTimeStorage.get() ?? true;
 firstTimeStorage.set(false);
+
+/**
+ * Hands the composer's brush mask to exactly one request. Returns undefined
+ * when there is none, so the request body stays byte-identical to before for
+ * every turn without a mask.
+ */
+function takeThreadImageMask(threadId: string): ThreadImageMask | undefined {
+  const mask = appStore.getState().threadImageMask[threadId];
+  if (!mask) return undefined;
+  appStore.getState().mutate((prev) => {
+    const { [threadId]: _consumed, ...rest } = prev.threadImageMask;
+    return { threadImageMask: rest };
+  });
+  return mask;
+}
 
 export default function ChatBot({
   threadId: threadIdProp,
@@ -173,6 +209,7 @@ export default function ChatBot({
     model,
     autoRouting,
     toolChoice,
+    planMode,
     allowedAppDefaultToolkit,
     allowedMcpServers,
     threadMentions,
@@ -188,6 +225,7 @@ export default function ChatBot({
       state.chatModel,
       state.autoRouting,
       state.toolChoice,
+      state.planMode,
       state.allowedAppDefaultToolkit,
       state.allowedMcpServers,
       state.threadMentions,
@@ -343,9 +381,16 @@ export default function ChatBot({
           ...lastMessage,
           parts: lastMessage.parts.filter((p: any) => p?.type !== "source-url"),
         } as typeof lastMessage;
-        const hasFilePart = lastMessage.parts?.some(
-          (p) => (p as any)?.type === "file",
-        );
+
+        // A mention pins tools within its own namespace and leaves the others
+        // alone — see `lib/chat/mention-tool-scope`. A file attachment pins
+        // nothing: it used to empty the toolkit list alongside mentions, which
+        // silently stripped web search, the code tools and browser automation
+        // from any message carrying a file — the same failure mode the
+        // mention-scope fix removed for agent turns.
+        const activeMentions = latestRef.current.mentions;
+        const pinsDefaultTools = hasDefaultToolMention(activeMentions);
+        const pinsMcpTools = hasMcpMention(activeMentions);
 
         const requestBody: ChatApiSchemaRequestBody = {
           ...body,
@@ -354,21 +399,25 @@ export default function ChatBot({
             (body as { model: ChatModel })?.model ?? latestRef.current.model,
           autoRouting: latestRef.current.autoRouting,
           toolChoice: latestRef.current.toolChoice,
-          allowedAppDefaultToolkit:
-            latestRef.current.mentions?.length || hasFilePart
-              ? []
-              : resolveAllowedAppDefaultToolkits({
-                  allowedAppDefaultToolkit:
-                    latestRef.current.allowedAppDefaultToolkit,
-                  projectId: latestRef.current.projectInfo?.id,
-                }),
-          allowedMcpServers: latestRef.current.mentions?.length
+          planMode: latestRef.current.planMode,
+          allowedAppDefaultToolkit: pinsDefaultTools
+            ? []
+            : resolveAllowedAppDefaultToolkits({
+                allowedAppDefaultToolkit:
+                  latestRef.current.allowedAppDefaultToolkit,
+                projectId: latestRef.current.projectInfo?.id,
+              }),
+          allowedMcpServers: pinsMcpTools
             ? {}
             : latestRef.current.allowedMcpServers,
           mentions: latestRef.current.mentions,
           message: sanitizedLastMessage,
           imageTool: {
             model: latestRef.current.threadImageToolModel[threadId],
+            // Read straight from the store: the composer sets it in the same
+            // tick it sends, before any re-render could refresh latestRef.
+            // Consumed once so a tool-result continuation cannot resend it.
+            mask: takeThreadImageMask(threadId),
           },
           attachments,
         };
@@ -382,6 +431,18 @@ export default function ChatBot({
 
   useAgentAlertNotifications({ threadId, messages, status });
 
+  // Live chat state for the listeners below, which run outside React's render
+  // and must not close over a stale status.
+  const chatStateRef = useToRef({ status, error });
+
+  // Wall clock of the last streamed update. A frozen tab receives no chunks
+  // *and* runs no JS, so a large gap once it is visible again means the
+  // connection died rather than the answer being slow.
+  const lastStreamActivityRef = useRef(Date.now());
+  useEffect(() => {
+    lastStreamActivityRef.current = Date.now();
+  }, [messages, status]);
+
   // Single owner of stream resumption (GET /api/chat/{id}/stream, the
   // transport's default reconnect URL; 204s when there is nothing to resume).
   // Deliberately NOT useChat's `resume` option: its effect only re-fires when
@@ -392,6 +453,71 @@ export default function ChatBot({
   // every thread switch re-checks; the ref skips duplicate fires for the same
   // thread on the same Chat instance (dev StrictMode re-runs the effect).
   const resumedThreadRef = useRef<string | null>(null);
+  // Same no-concurrency-guard hazard as above, now for the foreground/retry
+  // paths: only one drain may be in flight. `resumeStream()` settles when the
+  // resumed stream ends, so this stays set for the whole replay.
+  const resumeInFlightRef = useRef(false);
+
+  /**
+   * Drain this thread's server-side buffer, if there is one. Resolves true
+   * when a resume was started (or one is already running), false when there
+   * is nothing to resume — the caller then falls back to regenerating.
+   *
+   * The endpoint is probed before `resumeStream()` because it answers 204 for
+   * "nothing to resume" (no REDIS_URL, expired buffer, run already finished)
+   * and useChat cannot report that back: it would still flip status to
+   * "submitted" and clear `error`, wiping the error card for no reason. With
+   * Redis unconfigured every call therefore ends here, leaving state untouched.
+   *
+   * The probe is a HEAD: a GET returns `resumeExistingStream()`, which attaches
+   * a real consumer to the live buffer, so probing with one handed the run a
+   * reader and then cancelled it.
+   */
+  const attemptResume = useCallback(async () => {
+    if (resumeInFlightRef.current) return true;
+    resumeInFlightRef.current = true;
+    try {
+      const probe = await fetch(`/api/chat/${threadId}/stream`, {
+        method: "HEAD",
+      });
+      if (probe.status !== 200) return false;
+      resumedThreadRef.current = threadId;
+      // The buffer replays from the first chunk, so a partial assistant
+      // message has to go or the answer renders twice — but only a partial
+      // one. See `lib/chat/resumable-message`: dropping any trailing
+      // assistant message deleted complete answers.
+      setMessages((prev: UIMessage[]) =>
+        isInterruptedAssistantTail(prev) ? prev.slice(0, -1) : prev,
+      );
+      await resumeStream();
+      return true;
+    } catch (error) {
+      console.error("Failed to resume chat stream:", error);
+      return false;
+    } finally {
+      resumeInFlightRef.current = false;
+    }
+  }, [threadId, resumeStream, setMessages]);
+
+  // When there is nothing to resume (the server already finished, or is
+  // between clearing its pointer and writing the answer), fall back to the
+  // persisted thread tail — see `hooks/use-run-recovery`.
+  const messagesRef = useToRef(messages);
+  const { recoverRun, handleRetry, recoveryState } = useRunRecovery({
+    threadId,
+    enabled: !isDraftThread,
+    error,
+    messagesRef,
+    chatStateRef,
+    lastStreamActivityRef,
+    attemptResume,
+    stop,
+    setMessages,
+    clearError,
+    sendMessage,
+    regenerate,
+  });
+
   useEffect(() => {
     if (resumedThreadRef.current === threadId) return;
     resumedThreadRef.current = threadId;
@@ -399,7 +525,7 @@ export default function ChatBot({
       (initialMessages.at(-1)?.metadata as ChatMetadata | undefined)
         ?.runStatus === "running"
     ) {
-      void resumeStream();
+      void recoverRun();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [threadId]);
@@ -429,6 +555,8 @@ export default function ChatBot({
     UseChatHelpers<UIMessage>["sendMessage"]
   >(
     async (message, options) => {
+      if (!requireCredits()) return;
+
       // A tool call waiting on the UI (plan approval, requested input, manual
       // confirmation) blocks the run: the model cannot take another turn until
       // it has an output. Typing an answer instead of using the card is a
@@ -558,6 +686,7 @@ export default function ChatBot({
 
   const latestRef = useToRef({
     toolChoice,
+    planMode,
     model,
     autoRouting,
     allowedAppDefaultToolkit,
@@ -717,6 +846,78 @@ export default function ChatBot({
     threadId,
   ]);
 
+  // Restore the thread's agent when it is opened fresh. The selection lives in
+  // client state, so a thread reached from a scheduled run's notification (or
+  // any reload) would otherwise show no agent and quietly send the next message
+  // to the plain assistant. Message metadata is the only server-side record.
+  useEffect(() => {
+    if (!threadId || pendingThreadMention) return;
+    const existing = appStore.getState().threadMentions[threadId];
+    if (existing?.some((mention) => mention.type === "agent")) return;
+
+    const agentId = latestAgentIdFromMessages(initialMessages);
+    if (!agentId) return;
+    const agent = appStore
+      .getState()
+      .agentList.find((candidate) => candidate.id === agentId);
+    // The agent may have been deleted, or be one this user can no longer see;
+    // leaving the composer empty is the correct outcome then.
+    if (!agent) return;
+
+    appStoreMutate((prev) => ({
+      threadMentions: {
+        ...prev.threadMentions,
+        [threadId]: [
+          ...(prev.threadMentions[threadId] ?? []).filter(
+            (mention) => mention.type !== "agent",
+          ),
+          {
+            type: "agent",
+            name: agent.name,
+            icon: agent.icon,
+            description: agent.description,
+            agentId: agent.id,
+          },
+        ],
+      },
+    }));
+  }, [threadId, pendingThreadMention, initialMessages, appStoreMutate]);
+
+  // The composer's knowledge-base chips are mentions, but the durable record
+  // is the thread's own column: restore it once per thread so a reload keeps
+  // searching what the user attached. Only chips the thread no longer carries
+  // are dropped; everything else the user picked this session stays.
+  const hydratedKnowledgeThreadId = useRef<string | null>(null);
+  useEffect(() => {
+    if (!threadId || hydratedKnowledgeThreadId.current === threadId) return;
+    hydratedKnowledgeThreadId.current = threadId;
+    const bindings = initialThread?.knowledgeBases ?? [];
+    if (!bindings.length) return;
+    appStoreMutate((prev) => {
+      const current = prev.threadMentions[threadId] ?? [];
+      const known = new Set(
+        current
+          .filter((m) => m.type === "knowledgeBase")
+          .map((m) => m.knowledgeBaseId),
+      );
+      const restored: ChatMention[] = bindings
+        .filter((binding) => !known.has(binding.id))
+        .map((binding) => ({
+          type: "knowledgeBase",
+          name: binding.name ?? "",
+          knowledgeBaseId: binding.id,
+          sourceType: binding.type,
+        }));
+      if (!restored.length) return prev;
+      return {
+        threadMentions: {
+          ...prev.threadMentions,
+          [threadId]: [...current, ...restored],
+        },
+      };
+    });
+  }, [threadId, initialThread?.knowledgeBases, appStoreMutate]);
+
   useEffect(() => {
     if (pendingThreadMention && threadId) {
       appStoreMutate((prev) => ({
@@ -748,7 +949,6 @@ export default function ChatBot({
         ?.at(-1)?.text;
       if (!lastMessageText) return;
       navigator.clipboard.writeText(lastMessageText);
-      toast.success("Last message copied to clipboard");
     }
     if (isDeleteThread) {
       setIsDeleteThreadPopupOpen(true);
@@ -776,10 +976,8 @@ export default function ChatBot({
         isPendingToolCall={isPendingToolCall}
         space={space}
         error={error}
-        onRetry={() => {
-          clearError();
-          void regenerate();
-        }}
+        onRetry={handleRetry}
+        recoveryState={recoveryState}
         containerRef={containerRef}
         handleScroll={handleScroll}
         isAtBottom={isAtBottom}
@@ -821,6 +1019,7 @@ function ChatBotInner({
   space,
   error,
   onRetry,
+  recoveryState,
   containerRef,
   handleScroll,
   isAtBottom,
@@ -853,10 +1052,11 @@ function ChatBotInner({
   space: any;
   error: any;
   onRetry: () => void;
+  recoveryState: RecoveryState;
   containerRef: React.RefObject<HTMLDivElement | null>;
   handleScroll: () => void;
   isAtBottom: boolean;
-  scrollToBottom: () => void;
+  scrollToBottom: (behavior?: ScrollBehavior) => void;
   input: string;
   threadId: string;
   sendMessage: any;
@@ -873,6 +1073,8 @@ function ChatBotInner({
   setIsDeleteThreadPopupOpen: (v: boolean) => void;
 }) {
   const { isOpen: isPanelOpen } = useArtifactPanel();
+  // The Work | Cockpit toggle belongs to the home screen's empty chat only.
+  const isHomeScreen = usePathname() === "/";
 
   const composerRef = useRef<HTMLDivElement>(null);
   // Size the trailing filler to the room actually left below the newest prompt.
@@ -907,7 +1109,14 @@ function ChatBotInner({
     };
     measure();
     window.addEventListener("resize", measure);
-    return () => window.removeEventListener("resize", measure);
+    // iOS fires no `resize` when the keyboard opens — only the visual viewport
+    // changes, and `ViewportSync` resizes the shell off that. Without this the
+    // reserve would keep the pre-keyboard height and hide the newest prompt.
+    window.visualViewport?.addEventListener("resize", measure);
+    return () => {
+      window.removeEventListener("resize", measure);
+      window.visualViewport?.removeEventListener("resize", measure);
+    };
     // Deliberately keyed on message *count* and the think/space phase, not on
     // `messages` itself: the latter changes on every streamed token, and
     // measuring forces a layout, which would violate the O(tail block)
@@ -915,6 +1124,35 @@ function ChatBotInner({
     // `tailReserve` is read to subtract the current filler, not to re-trigger.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [messages.length, space, status, containerRef]);
+
+  // Opening the keyboard shortens the scroll region; re-pin the bottom so the
+  // newest message rides above the composer instead of ending up behind it.
+  // Gated on the composer holding focus: iOS also resizes the visual viewport
+  // while its URL bar collapses mid-scroll, and re-pinning on that would yank
+  // the conversation back down the moment someone scrolls up.
+  const isAtBottomRef = useToRef(isAtBottom);
+  useEffect(() => {
+    const viewport = window.visualViewport;
+    if (!viewport) return;
+    const repin = () => {
+      if (!isAtBottomRef.current) return;
+      if (!composerRef.current?.contains(document.activeElement)) return;
+      scrollToBottom("instant");
+    };
+    viewport.addEventListener("resize", repin);
+    return () => viewport.removeEventListener("resize", repin);
+  }, [isAtBottomRef, scrollToBottom]);
+
+  // Dragging the conversation dismisses the keyboard, the way every phone
+  // messenger behaves. Bound to the drag rather than to `scroll` on purpose:
+  // streaming scrolls the list on its own, and blurring on that would fight
+  // anyone typing a follow-up while an answer comes in.
+  const dismissKeyboardOnDrag = useCallback(() => {
+    const focused = document.activeElement;
+    if (!(focused instanceof HTMLElement)) return;
+    if (!composerRef.current?.contains(focused)) return;
+    focused.blur();
+  }, []);
 
   const [hasMoreOlder, setHasMoreOlder] = useState(initialHasMore);
   const [isLoadingOlder, setIsLoadingOlder] = useState(false);
@@ -958,6 +1196,19 @@ function ChatBotInner({
   // reuses regenerate via onRetry.
   const terminalRunStatus: string | undefined =
     messages.at(-1)?.metadata?.runStatus;
+
+  // Latest assistant usage feeds the composer's context-window meter. Usage
+  // metadata arrives with the stream's finish part and rides along on
+  // persisted messages, so this covers live chats and reloads alike.
+  const latestContextUsage = useMemo(() => {
+    for (let i = messages.length - 1; i >= 0; i--) {
+      const m = messages[i];
+      if (m.role === "assistant" && m.metadata?.usage) {
+        return { usage: m.metadata.usage, model: m.metadata.chatModel };
+      }
+    }
+    return undefined;
+  }, [messages]);
   const terminalNoticeText =
     !error && !isLoading
       ? terminalRunStatus === "failed"
@@ -1001,7 +1252,17 @@ function ChatBotInner({
           )}
           {emptyMessage ? (
             embedded ? null : (
-              <ChatGreeting />
+              <>
+                {/* Work | Cockpit switch: home screen only, never in a thread.
+                    Pinned to the top of the chat area, right under the app
+                    header, so it does not sit on top of the greeting. */}
+                {isHomeScreen && (
+                  <div className="absolute inset-x-0 top-2 z-10 flex justify-center px-4">
+                    <WorkspaceModeToggle />
+                  </div>
+                )}
+                <ChatGreeting />
+              </>
             )
           ) : (
             <>
@@ -1022,6 +1283,7 @@ function ChatBotInner({
                 )}
                 ref={containerRef}
                 onScroll={handleScroll}
+                onTouchMove={dismissKeyboardOnDrag}
               >
                 <ChatMessageList
                   messages={messages}
@@ -1053,7 +1315,13 @@ function ChatBotInner({
                   </div>
                 )}
 
-                {error && <ErrorMessage error={error} onRetry={onRetry} />}
+                {error && (
+                  <ErrorMessage
+                    error={error}
+                    onRetry={onRetry}
+                    recovery={recoveryState}
+                  />
+                )}
                 {!error && terminalNoticeText && (
                   <ErrorMessage
                     error={new Error(terminalNoticeText)}
@@ -1080,7 +1348,16 @@ function ChatBotInner({
           <div
             ref={composerRef}
             className={clsx(
-              messages.length && !embedded && "absolute bottom-14",
+              // Anchored to the bottom edge rather than floating 3.5rem above
+              // it: that gap left a strip where messages scrolled past in the
+              // open, which on a phone reads as the conversation sliding out
+              // from under a white box. The gradient fades the list out behind
+              // the composer instead of cutting it off. `pointer-events-none`
+              // keeps the transparent part of that fade from swallowing taps —
+              // the two children opt back in.
+              messages.length &&
+                !embedded &&
+                "absolute inset-x-0 bottom-0 pt-6 pb-4 pointer-events-none bg-gradient-to-t from-background via-background to-transparent",
               embedded && "mt-auto flex-shrink-0 w-full",
               "w-full z-10",
             )}
@@ -1092,27 +1369,32 @@ function ChatBotInner({
               )}
             >
               <ScrollToBottomButton
+                className="pointer-events-auto"
                 show={!isAtBottom && messages.length > 0}
                 onClick={() => scrollToBottom()}
               />
             </div>
 
-            <PromptInput
-              input={input}
-              threadId={threadId}
-              sendMessage={sendMessage}
-              setInput={setInput}
-              // Deliberately not blocked by `isPendingToolCall`: a waiting
-              // approval/input card must not lock the composer — sending
-              // settles that call with the typed answer (see handleSendMessage).
-              isLoading={isLoading}
-              onStop={stop}
-              onFocus={isFirstTime ? undefined : handleFocus}
-              projectInfo={projectInfo}
-              showProjectContextBadge={showProjectContextBadge}
-              autoFocusInput={autoFocusInput}
-              embedded={embedded}
-            />
+            <div className="pointer-events-auto">
+              <PromptInput
+                input={input}
+                threadId={threadId}
+                sendMessage={sendMessage}
+                setInput={setInput}
+                // Deliberately not blocked by `isPendingToolCall`: a waiting
+                // approval/input card must not lock the composer — sending
+                // settles that call with the typed answer (see handleSendMessage).
+                isLoading={isLoading}
+                onStop={stop}
+                onFocus={isFirstTime ? undefined : handleFocus}
+                projectInfo={projectInfo}
+                showProjectContextBadge={showProjectContextBadge}
+                autoFocusInput={autoFocusInput}
+                embedded={embedded}
+                contextUsage={latestContextUsage?.usage}
+                contextUsageModel={latestContextUsage?.model}
+              />
+            </div>
           </div>
           <DeleteThreadPopup
             threadId={threadId}
@@ -1147,8 +1429,6 @@ function DeleteThreadPopup({
     safe(() => deleteThreadAction(threadId))
       .watch(() => setIsDeleting(false))
       .ifOk(() => {
-        toast.success(t("Chat.Thread.threadDeleted"));
-
         // Track thread deletion
         analytics.chatThreadDeleted({
           threadId,

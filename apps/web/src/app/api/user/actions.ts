@@ -17,7 +17,7 @@ import {
 import { getUser, getUserAccounts, updateUserDetails } from "lib/user/server";
 import { getTranslations } from "next-intl/server";
 import { logger } from "better-auth";
-import { generateImageWithGemini } from "lib/ai/image/generate-image";
+import { generateImageWithModel } from "lib/ai/image/generate-image";
 
 export const updateUserImageAction = validatedActionWithUserManagePermission(
   UpdateUserDetailsSchema.pick({ userId: true, image: true }),
@@ -262,8 +262,8 @@ User's request:
 
 Generate a profile picture that fulfills the user's request while maintaining the professional portrait quality requirements above.`;
 
-    // Use Google Gemini via AI Gateway
-    const response = await generateImageWithGemini({
+    // Use the default image model (Gemini) via AI Gateway
+    const response = await generateImageWithModel({
       prompt: enhancedPrompt,
     });
 

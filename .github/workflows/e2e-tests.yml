@@ -11,7 +11,7 @@ on:
 
 jobs:
   e2e:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
 
     env:
@@ -99,6 +99,11 @@ jobs:
         run: pnpm test:e2e:seed
 
       - name: Build application
+        # `next build` peaks close to V8's default ~2 GB old-space limit on the
+        # runner and has died with "JavaScript heap out of memory" (run 433).
+        # The ubuntu-latest runner has 16 GB, so give the build room.
+        env:
+          NODE_OPTIONS: --max-old-space-size=4096
         run: pnpm build:local
 
       - name: Run E2E tests

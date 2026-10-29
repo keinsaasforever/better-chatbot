@@ -1,25 +1,24 @@
 import "server-only";
 
-import { and, eq } from "drizzle-orm";
 import { pgDb } from "@/lib/db/pg/db.pg";
 import {
   ProjectBrainPageTable,
   ProjectBrainRawSourceTable,
-  ProjectWidgetTable,
 } from "@/lib/db/pg/schema.pg";
+import { and, eq } from "drizzle-orm";
 import { replaceProjectBrainChunks } from "./chunk";
-import type { ProjectBrainExtraction } from "./extraction-schema";
-import { buildWidgetRows } from "./widget-rows";
 
+/**
+ * Re-embed the compiled truth of every page a run touched so chat retrieval
+ * sees the new facts. Status and to-dos are produced by the project-level
+ * consolidation step, not here.
+ */
 export async function materializeProjectBrainRun(input: {
   projectId: string;
   runId: string;
   sourceId: string;
   sourceScope: string;
   pageIds: string[];
-  widgets: ProjectBrainExtraction["widgets"];
-  todos?: ProjectBrainExtraction["todos"];
-  status?: ProjectBrainExtraction["status"];
 }) {
   const warnings: string[] = [];
   let chunks = 0;
@@ -36,11 +35,7 @@ export async function materializeProjectBrainRun(input: {
     .limit(1);
 
   if (!source) {
-    return {
-      chunks,
-      widgets: 0,
-      warnings: ["source_not_found"],
-    };
+    return { chunks, warnings: ["source_not_found"] };
   }
 
   for (const pageId of input.pageIds) {
@@ -79,47 +74,5 @@ export async function materializeProjectBrainRun(input: {
     }
   }
 
-  const widgetRows = buildWidgetRows(input);
-
-  let widgets = 0;
-  for (const [position, widget] of widgetRows.entries()) {
-    try {
-      await pgDb
-        .insert(ProjectWidgetTable)
-        .values({
-          projectId: input.projectId,
-          userId: source.sourceUserId,
-          sourceScope: input.sourceScope,
-          sourceRunId: input.runId,
-          kind: widget.kind,
-          title: widget.title,
-          renderData: widget.renderData,
-          slot: widget.slot,
-          position,
-          generatedAt: new Date(),
-          staleAt: null,
-        })
-        .onConflictDoUpdate({
-          target: [
-            ProjectWidgetTable.projectId,
-            ProjectWidgetTable.sourceScope,
-            ProjectWidgetTable.slot,
-          ],
-          set: {
-            sourceRunId: input.runId,
-            kind: widget.kind,
-            title: widget.title,
-            renderData: widget.renderData,
-            position,
-            generatedAt: new Date(),
-            staleAt: null,
-          },
-        });
-      widgets++;
-    } catch (error) {
-      warnings.push(error instanceof Error ? error.message : String(error));
-    }
-  }
-
-  return { chunks, widgets, warnings };
+  return { chunks, warnings };
 }

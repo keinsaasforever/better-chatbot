@@ -1,6 +1,7 @@
 "use client";
 
 import { ToolUIPart } from "ai";
+import type { ArtifactFile } from "lib/code-runner/artifact-media";
 import type { SandboxDeploymentState } from "lib/e2b/sandbox-contract";
 import React, {
   createContext,
@@ -10,14 +11,42 @@ import React, {
   useState,
 } from "react";
 
-export type ArtifactType = "sandbox" | "document-edit" | "tabular";
+export type ArtifactType =
+  | "sandbox"
+  | "document-edit"
+  | "tabular"
+  | "plan"
+  | "browser"
+  | "file";
 
 export interface ArtifactEntry {
   toolCallId: string;
   type: ArtifactType;
-  part: ToolUIPart;
+  /**
+   * The tool call this entry came from. Absent for a file the user uploaded:
+   * no tool produced it, and every panel branch that reads the part already
+   * treats it as optional.
+   */
+  part?: ToolUIPart;
   /** Calls addToolResult to unblock the AI stream (sandbox only). */
   onResult?: (result: unknown) => Promise<void> | void;
+  /** Required when `type` is "file": which file this entry shows. */
+  file?: ArtifactFile;
+}
+
+/**
+ * Identity of an open panel entry.
+ *
+ * One tool call can produce several files, so `toolCallId` alone is not unique
+ * for file entries — a chip row would otherwise highlight every file in the
+ * run as soon as one of them was opened.
+ */
+export function artifactEntryKey(
+  entry: Pick<ArtifactEntry, "toolCallId" | "file">,
+): string {
+  return entry.file
+    ? `${entry.toolCallId}:${entry.file.filename}`
+    : entry.toolCallId;
 }
 
 interface ArtifactPanelCtx {
@@ -107,3 +136,5 @@ export function ArtifactPanelProvider({
 export function useArtifactPanel() {
   return useContext(ArtifactPanelContext);
 }
+
+export type { ArtifactFile };

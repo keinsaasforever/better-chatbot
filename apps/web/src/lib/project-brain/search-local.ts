@@ -1,13 +1,14 @@
 import "server-only";
-import { sql } from "drizzle-orm";
+import { embedRagText } from "@/lib/ai/rag/embed-rag";
 import { pgDb } from "@/lib/db/pg/db.pg";
 import {
-  ProjectBrainPageTable,
   ProjectBrainEventTable,
   ProjectBrainLinkTable,
+  ProjectBrainPageTable,
 } from "@/lib/db/pg/schema.pg";
-import { and, eq, ilike, or, inArray, desc } from "drizzle-orm";
-import { embedRagText } from "@/lib/ai/rag/embed-rag";
+import { pgArray } from "@/lib/db/pg/sql-array";
+import { sql } from "drizzle-orm";
+import { and, desc, eq, ilike, inArray, or } from "drizzle-orm";
 
 export async function searchProjectBrainPages(input: {
   projectId: string;
@@ -140,6 +141,37 @@ export async function searchProjectBrainEvents(input: {
     .limit(input.limit ?? 10);
 }
 
+export type ProjectBrainChunkHit = {
+  id: string;
+  page_id: string | null;
+  content: string;
+  chunk_type: string;
+  metadata: Record<string, unknown>;
+  score: number;
+};
+
+/**
+ * Compiled-truth chunks of specific pages, for the adjacency boost: when a
+ * hub page is a strong hit, its neighbours' truth is pulled in as well.
+ */
+export async function loadCompiledTruthChunksForPages(input: {
+  projectId: string;
+  pageIds: string[];
+  limit?: number;
+}): Promise<ProjectBrainChunkHit[]> {
+  if (!input.pageIds.length) return [];
+  const rows: any = await pgDb.execute(sql`
+    SELECT id, page_id, content, chunk_type, metadata, 0::float AS score
+    FROM project_brain_content_chunk
+    WHERE project_id = ${input.projectId}
+      AND chunk_type = 'compiled_truth'
+      AND page_id = ANY(${pgArray(input.pageIds, "uuid")})
+    ORDER BY chunk_index
+    LIMIT ${input.limit ?? 4}
+  `);
+  return rows as ProjectBrainChunkHit[];
+}
+
 export async function searchProjectBrainChunks(input: {
   projectId: string;
   query: string;
@@ -151,6 +183,7 @@ export async function searchProjectBrainChunks(input: {
   const rows: any = await pgDb.execute(sql`
     SELECT
       id,
+      page_id,
       content,
       chunk_type,
       metadata,
@@ -162,13 +195,7 @@ export async function searchProjectBrainChunks(input: {
     LIMIT ${input.limit ?? 8}
   `);
 
-  return rows as Array<{
-    id: string;
-    content: string;
-    chunk_type: string;
-    metadata: Record<string, unknown>;
-    score: number;
-  }>;
+  return rows as ProjectBrainChunkHit[];
 }
 
 export async function keywordSearchProjectBrainChunks(input: {
@@ -179,6 +206,7 @@ export async function keywordSearchProjectBrainChunks(input: {
   const rows: any = await pgDb.execute(sql`
     SELECT
       id,
+      page_id,
       content,
       chunk_type,
       metadata,
@@ -190,11 +218,5 @@ export async function keywordSearchProjectBrainChunks(input: {
     LIMIT ${input.limit ?? 8}
   `);
 
-  return rows as Array<{
-    id: string;
-    content: string;
-    chunk_type: string;
-    metadata: Record<string, unknown>;
-    score: number;
-  }>;
+  return rows as ProjectBrainChunkHit[];
 }

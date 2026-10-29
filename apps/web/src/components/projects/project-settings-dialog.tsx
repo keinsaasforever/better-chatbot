@@ -71,7 +71,6 @@ export function ProjectSettingsDialog({
         );
       }
 
-      toast.success("Project settings saved.");
       onOpenChange(false);
       router.refresh();
     } catch (error) {

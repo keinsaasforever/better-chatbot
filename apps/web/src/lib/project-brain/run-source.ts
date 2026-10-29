@@ -1,10 +1,8 @@
 import "server-only";
 
 import { createHash } from "node:crypto";
-import { and, asc, eq } from "drizzle-orm";
-import { generateText, stepCountIs, type Tool } from "ai";
-import { projectBrainModelId } from "@/lib/ai/models";
 import { getMCPClientsManager } from "@/lib/ai/mcp/mcp-manager";
+import { projectBrainModelId } from "@/lib/ai/models";
 import { composio } from "@/lib/composio/client";
 import { pgDb } from "@/lib/db/pg/db.pg";
 import {
@@ -16,10 +14,13 @@ import {
   ProjectTable,
   VoiceSessionTable,
 } from "@/lib/db/pg/schema.pg";
+import { type Tool, generateText, stepCountIs } from "ai";
+import { and, asc, eq } from "drizzle-orm";
+import { aiTelemetry } from "lib/ai/telemetry";
 import { buildGatherSystemPrompt } from "./prompts";
 import { createProjectBrainRawSource } from "./raw-source";
 import { buildToolCatalog } from "./tool-catalog";
-import { aiTelemetry } from "lib/ai/telemetry";
+import { classifyToolResult } from "./tool-result";
 
 export class ProjectSourceError extends Error {
   constructor(
@@ -111,17 +112,51 @@ async function gatherWithTools(input: {
     prompt: `Load relevant current data from ${input.connectorName}.`,
   });
 
-  const toolResults = (result.steps ?? []).flatMap((step) =>
+  const allResults = (result.steps ?? []).flatMap((step) =>
     (step.toolResults ?? []).map((toolResult) => ({
       toolName: toolResult.toolName,
       result: "output" in toolResult ? toolResult.output : toolResult,
     })),
   );
 
-  if (toolResults.length === 0) {
+  if (allResults.length === 0) {
     throw new ProjectSourceError(
       "no_data_returned",
       "The connector completed without calling a read action.",
+    );
+  }
+
+  // Connector errors arrive as ordinary tool results. Keep them out of the
+  // source text, otherwise the extraction step reads "HTTP 403" as project
+  // state. When nothing succeeded the run must fail like a dead connector so
+  // the Brain tab prompts a reconnect instead of rendering the error.
+  const failed: Array<{
+    toolName: string;
+    message: string;
+    authLike: boolean;
+  }> = [];
+  const toolResults = allResults.filter((item) => {
+    const verdict = classifyToolResult(item.result);
+    if (verdict.ok) return true;
+    failed.push({
+      toolName: item.toolName,
+      message: verdict.message,
+      authLike: verdict.authLike,
+    });
+    return false;
+  });
+
+  if (toolResults.length === 0) {
+    const authFailure = failed.find((item) => item.authLike);
+    if (authFailure) {
+      throw new ProjectSourceError(
+        "connection_not_active",
+        `The connector rejected the request: ${authFailure.message.slice(0, 300)}`,
+      );
+    }
+    throw new ProjectSourceError(
+      "no_data_returned",
+      `Every read action failed: ${failed[0]?.message.slice(0, 300) ?? "unknown error"}`,
     );
   }
 
@@ -136,6 +171,7 @@ async function gatherWithTools(input: {
     rawPayload: {
       toolNames: toolResults.map((item) => item.toolName),
       toolCallCount: toolResults.length,
+      failedToolNames: failed.map((item) => item.toolName),
       truncated: rawText.length > boundedRawText.length,
       rawText: boundedRawText,
       toolCatalog: buildToolCatalog(input.tools),

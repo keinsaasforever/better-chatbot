@@ -58,7 +58,6 @@ export const WorkflowPanel = memo(
       const { nodes: arrangedNodes } = arrangeNodes(nodes, edges);
 
       setNodes(arrangedNodes);
-      toast.success(t("Workflow.nodesArranged"));
     }, [getNodes, getEdges, setNodes, t]);
     const updateVisibility = useCallback(
       (visibility: DBWorkflow["visibility"]) => {

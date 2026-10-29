@@ -221,7 +221,6 @@ export function VoiceDeviceSettingsDialog({
       }
       setRegistrationId(payload.registrationId);
       setSetupStep("waiting");
-      toast.success(t("deviceClaimed"));
     } catch (error: any) {
       toast.error(error.message || t("claimFailed"));
     } finally {
@@ -241,7 +240,6 @@ export function VoiceDeviceSettingsDialog({
       if (!response.ok) {
         throw new Error(payload.error || "Failed to revoke device");
       }
-      toast.success(t("revoked"));
       await loadDevices();
     } catch (error: any) {
       toast.error(error.message || t("revokeFailed"));

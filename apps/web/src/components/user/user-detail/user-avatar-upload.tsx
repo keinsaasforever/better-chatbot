@@ -77,7 +77,6 @@ export function UserAvatarUpload({
     const result = await upload(file);
     if (result) {
       onImageUpdate(result.url);
-      toast.success(t("profilePhotoUpdatedSuccessfully"));
     } else {
       // Reset preview on failure
       setPreviewUrl(null);

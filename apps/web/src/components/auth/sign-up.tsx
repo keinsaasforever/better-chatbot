@@ -18,6 +18,8 @@ import { useTranslations } from "next-intl";
 import Link from "next/link";
 import { startTransition } from "react";
 import { toast } from "sonner";
+import { useDesktopBrowserSignIn } from "@/hooks/use-desktop-browser-sign-in";
+import { DesktopSignInPending } from "./desktop-sign-in-pending";
 import SocialProviders from "./social-providers";
 
 export default function SignUpPage({
@@ -32,7 +34,14 @@ export default function SignUpPage({
   callbackUrl?: string;
 }) {
   const t = useTranslations();
+  // Inside the desktop app a provider sign-up has to run in the system
+  // browser; providers refuse OAuth in embedded web views.
+  const desktop = useDesktopBrowserSignIn({ page: "sign-up", callbackUrl });
   const handleSocialSignIn = (provider: SocialAuthenticationProvider) => {
+    if (desktop.available) {
+      void desktop.start(provider);
+      return;
+    }
     startTransition(async () => {
       try {
         await authClient.signIn.social(
@@ -60,6 +69,14 @@ export default function SignUpPage({
       }
     });
   };
+  if (desktop.pending) {
+    return (
+      <DesktopSignInPending
+        onReopen={desktop.reopen}
+        onCancel={desktop.cancel}
+      />
+    );
+  }
   return (
     <Card className="w-full md:max-w-md bg-background border-none mx-auto shadow-none">
       <CardHeader>

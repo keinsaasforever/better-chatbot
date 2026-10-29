@@ -138,7 +138,7 @@ export function McpServerSelector() {
               ) : null}
             </DropdownMenuSubTrigger>
             <DropdownMenuPortal>
-              <DropdownMenuSubContent className="w-80 relative">
+              <DropdownMenuSubContent className="w-[var(--radix-popper-available-width)] relative md:w-80">
                 <McpServerToolSelector
                   tools={server.tools}
                   isAuthorizing={server.status === "authorizing"}

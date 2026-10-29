@@ -11,19 +11,33 @@ export type ComposioToolkit = {
   connectedAccountId?: string;
 };
 
-export function useComposioConnections(
-  search?: string,
-  options?: SWRConfiguration,
-) {
-  const key = search?.trim()
-    ? `/api/connections?search=${encodeURIComponent(search.trim())}`
-    : "/api/connections";
+type Options = SWRConfiguration & {
+  /**
+   * Fetch only the toolkits this user has connected. Callers that render just
+   * the connected apps want this: the default walks the whole ~250-toolkit
+   * catalog server-side, which costs several sequential round trips to
+   * Composio and ships a payload the caller throws away.
+   */
+  connectedOnly?: boolean;
+};
 
-  return useSWR<{ toolkits: ComposioToolkit[] }>(key, fetcher, {
-    revalidateOnFocus: false,
-    errorRetryCount: 0,
-    dedupingInterval: 5000,
-    onError: handleErrorWithToast,
-    ...options,
-  });
+export function useComposioConnections(search?: string, options?: Options) {
+  const { connectedOnly, ...swrOptions } = options ?? {};
+
+  const params = new URLSearchParams();
+  if (search?.trim()) params.set("search", search.trim());
+  if (connectedOnly) params.set("connectedOnly", "true");
+  const query = params.toString();
+
+  return useSWR<{ toolkits: ComposioToolkit[] }>(
+    query ? `/api/connections?${query}` : "/api/connections",
+    fetcher,
+    {
+      revalidateOnFocus: false,
+      errorRetryCount: 0,
+      dedupingInterval: 5000,
+      onError: handleErrorWithToast,
+      ...swrOptions,
+    },
+  );
 }

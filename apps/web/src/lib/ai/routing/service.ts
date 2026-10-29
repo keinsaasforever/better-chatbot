@@ -28,6 +28,8 @@ type PolicyContext = {
   organizationId?: string;
   memberId?: string;
   automaticRoutingEnabled: boolean;
+  browserAutomationEnabled: boolean;
+  browserAutomationUnattendedEnabled: boolean;
   policy: OrganizationRoutingPolicy;
 };
 
@@ -90,6 +92,100 @@ export function invalidateRoutingCache(organizationId: string): void {
  * waiting to be migrated. Drizzle wraps the underlying Postgres error, so walk
  * the cause chain instead of depending on one wrapper shape.
  */
+/**
+ * Why browser automation is unavailable, when it is.
+ *
+ * An admin who has already switched the policy on needs to be able to tell
+ * "your org said no" from "we could not ask" — collapsing both into `false`
+ * sent one debugging session chasing a toggle that was already correct.
+ */
+export type BrowserAutomationGate =
+  | { enabled: true }
+  | {
+      enabled: false;
+      reason:
+        | "no-organization"
+        | "policy-off"
+        | "unattended-policy-off"
+        | "policy-unavailable";
+      detail?: string;
+    };
+
+/**
+ * Whether this organization has opted into Kernel browser automation, and if
+ * not, why.
+ *
+ * Reads through the same 30s TTL policy cache as routing, so gating the chat
+ * tool costs no extra query on the request path. Still fails closed on any
+ * routing error — including a schema that predates the column — because the
+ * safe default for "drive a real browser" is off; the reason is reported
+ * rather than swallowed.
+ */
+export async function resolveBrowserAutomationGate(input: {
+  organizationId?: string | null;
+  userId: string;
+}): Promise<BrowserAutomationGate> {
+  if (!input.organizationId) {
+    return { enabled: false, reason: "no-organization" };
+  }
+  try {
+    const context = await getPolicyContext(input);
+    return context.browserAutomationEnabled
+      ? { enabled: true }
+      : { enabled: false, reason: "policy-off" };
+  } catch (error) {
+    return {
+      enabled: false,
+      reason: "policy-unavailable",
+      detail: error instanceof Error ? error.message : String(error),
+    };
+  }
+}
+
+/** Boolean form of {@link resolveBrowserAutomationGate}. */
+export async function isBrowserAutomationEnabled(input: {
+  organizationId?: string | null;
+  userId: string;
+}): Promise<boolean> {
+  return (await resolveBrowserAutomationGate(input)).enabled;
+}
+
+/**
+ * Whether this organization allows browser automation on runs with nobody
+ * watching (scheduled agents), and if not, why.
+ *
+ * Deliberately a second gate rather than a wider reading of the first: an
+ * unattended run signs itself in, cannot be rescued when a site misbehaves,
+ * and bills browser-seconds while no one is looking at the result. An org that
+ * is happy with the watched version has not thereby agreed to that one.
+ *
+ * Implies the base gate — an org that has not enabled browser automation at
+ * all cannot enable it only for robots — so callers check this one alone.
+ */
+export async function resolveUnattendedBrowserGate(input: {
+  organizationId?: string | null;
+  userId: string;
+}): Promise<BrowserAutomationGate> {
+  if (!input.organizationId) {
+    return { enabled: false, reason: "no-organization" };
+  }
+  try {
+    const context = await getPolicyContext(input);
+    if (!context.browserAutomationEnabled) {
+      return { enabled: false, reason: "policy-off" };
+    }
+    return context.browserAutomationUnattendedEnabled
+      ? { enabled: true }
+      : { enabled: false, reason: "unattended-policy-off" };
+  } catch (error) {
+    return {
+      enabled: false,
+      reason: "policy-unavailable",
+      detail: error instanceof Error ? error.message : String(error),
+    };
+  }
+}
+
 export function isRoutingSchemaUnavailableError(error: unknown): boolean {
   let current = error;
   const visited = new Set<unknown>();
@@ -111,7 +207,14 @@ async function getPolicyContext(input: {
   userId: string;
 }): Promise<PolicyContext> {
   if (!input.organizationId) {
-    return { automaticRoutingEnabled: true, policy: {} };
+    // No active org fails closed for browser automation, the same way org
+    // scoping elsewhere does: an unscoped session gets the safe default.
+    return {
+      automaticRoutingEnabled: true,
+      browserAutomationEnabled: false,
+      browserAutomationUnattendedEnabled: false,
+      policy: {},
+    };
   }
 
   const cacheKey = `${input.organizationId}:${input.userId}`;
@@ -151,6 +254,9 @@ async function getPolicyContext(input: {
     organizationId: input.organizationId,
     memberId: member.id,
     automaticRoutingEnabled: policyRow?.automaticRoutingEnabled ?? true,
+    browserAutomationEnabled: policyRow?.browserAutomationEnabled ?? false,
+    browserAutomationUnattendedEnabled:
+      policyRow?.browserAutomationUnattendedEnabled ?? false,
     policy: {
       allowedRegions: policyRow?.allowedRegions,
       maxInputPriceMicrosPerMillion: policyRow?.maxInputPriceMicrosPerMillion,
@@ -309,10 +415,20 @@ function withAccessPolicy(
   };
 }
 
+/**
+ * Routes one turn of automatic ("Auto") model selection.
+ *
+ * `previousChatModel` keeps a thread on the model it started on: pass the
+ * model the thread's last turn ran on and routing re-uses it whenever it is
+ * still eligible, instead of re-deciding from signals that shift with every
+ * message. Omitting it restores the per-message behaviour, which discards the
+ * thread's prompt cache on every change of mind.
+ */
 export async function resolveAutomaticRoute(input: {
   organizationId?: string | null;
   userId: string;
   signals: RouteSignals;
+  previousChatModel?: ChatModel | null;
 }): Promise<
   DeterministicRoute & { memberId?: string; organizationId?: string }
 > {
@@ -330,6 +446,7 @@ export async function resolveAutomaticRoute(input: {
     candidates,
     signals: input.signals,
     policy: withAccessPolicy(context.policy, candidates),
+    pinnedChatModel: input.previousChatModel,
   });
 
   // `reasonCode` and `taskKey` are the two things you need to explain "why did

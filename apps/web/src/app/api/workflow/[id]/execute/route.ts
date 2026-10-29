@@ -34,6 +34,10 @@ export const POST = withAuth(
       edges: workflow.edges,
       nodes: workflow.nodes,
       logger: wfLogger,
+      caller: {
+        userId: session.user.id,
+        organizationId: activeOrganizationId,
+      },
     });
 
     const encoder = new TextEncoder();

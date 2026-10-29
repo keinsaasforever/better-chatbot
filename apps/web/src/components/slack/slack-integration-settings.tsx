@@ -105,8 +105,6 @@ export default function SlackIntegrationSettings() {
           toast.warning(
             `Slack connected, but trigger setup failed: ${data.triggerError}`,
           );
-        } else {
-          toast.success("Slack connected");
         }
         await refreshStatus();
         await loadChannels();
@@ -147,7 +145,6 @@ export default function SlackIntegrationSettings() {
       if (!res.ok) throw new Error((await res.json()).error);
       setChannels(null);
       await refreshStatus();
-      toast.success("Slack disconnected");
     } catch (error: any) {
       toast.error(error?.message || "Failed to disconnect Slack");
     }
@@ -181,7 +178,6 @@ export default function SlackIntegrationSettings() {
       });
       if (!res.ok) throw new Error((await res.json()).error);
       await refreshStatus();
-      toast.success("Slack channels saved");
     } catch (error: any) {
       toast.error(error?.message || "Failed to save channels");
     } finally {

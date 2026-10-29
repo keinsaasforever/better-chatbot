@@ -1,5 +1,6 @@
 import { DEFAULT_USER_ROLE, USER_ROLES } from "app-types/roles";
 // Base auth instance without "server-only" - can be used in seed scripts
+import { apiKey } from "@better-auth/api-key";
 import { type BetterAuthOptions, betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { APIError } from "better-auth/api";
@@ -7,11 +8,15 @@ import { nextCookies } from "better-auth/next-js";
 import {
   admin as adminPlugin,
   organization as organizationPlugin,
+  oneTimeToken,
 } from "better-auth/plugins";
-import { eq, inArray, sql } from "drizzle-orm";
+import { buildCaptchaPlugins } from "./captcha-plugin";
+import { signUpPasswordPolicy } from "./signup-password-policy";
+import { eq, sql } from "drizzle-orm";
 import { pgDb } from "lib/db/pg/db.pg";
 import {
   AccountTable,
+  ApiKeyTable,
   InvitationTable,
   MemberAiPolicyTable,
   MemberTable,
@@ -21,6 +26,10 @@ import {
   VerificationTable,
 } from "lib/db/pg/schema.pg";
 import { userRepository } from "lib/db/repository";
+import { isPersonalOrg } from "lib/organization/billing-identity";
+import { resolveDefaultActiveOrganizationId } from "lib/organization/default-org";
+import { promoteSharedPersonalOrganization } from "lib/organization/promote-shared-org";
+import { adoptTeamWorkspaceInSessions } from "lib/organization/stale-active-workspace";
 import {
   defaultMemberCapMicros,
   isPersonalOrgMetadata,
@@ -67,37 +76,6 @@ function buildBetterAuthTrustedOrigins(): string[] {
   return [...origins];
 }
 
-async function resolveDefaultActiveOrganizationId(
-  userId: string,
-): Promise<string | undefined> {
-  const memberships = await pgDb
-    .select()
-    .from(MemberTable)
-    .where(eq(MemberTable.userId, userId));
-
-  if (memberships.length === 0) return undefined;
-
-  const orgIds = memberships.map((m) => m.organizationId);
-  const organizations = await pgDb
-    .select()
-    .from(OrganizationTable)
-    .where(inArray(OrganizationTable.id, orgIds))
-    .limit(10);
-  const orgById = new Map(organizations.map((o) => [o.id, o]));
-
-  // Prefer an org the user was invited into (they hold a non-owner role there)
-  // over their own personal workspace, which they always own. This keeps an
-  // invited employee defaulted into the employer's org across sessions instead
-  // of snapping back to their personal workspace.
-  const invited = memberships.find(
-    (m) => m.role !== "owner" && orgById.has(m.organizationId),
-  );
-  if (invited) return invited.organizationId;
-
-  const personal = organizations.find((o) => isPersonalOrgMetadata(o.metadata));
-  return personal?.id ?? organizations[0]?.id;
-}
-
 /**
  * The org (if any) this user already belongs to as a real *team* membership,
  * ignoring personal "Workspace" orgs and an optionally-excluded org id. Used to
@@ -131,7 +109,7 @@ async function findOtherTeamOrganization(
   for (const row of rows) {
     if (row.id === excludeOrganizationId) continue;
     // Explicitly-flagged (or legacy-prefixed) personal workspaces never count.
-    if (isPersonalOrgMetadata(row.metadata) || row.id.startsWith("personal-")) {
+    if (isPersonalOrg({ id: row.id, metadata: row.metadata })) {
       continue;
     }
     // A user invited into a real org holds a non-owner role there → it counts.
@@ -186,11 +164,95 @@ async function seedDefaultMemberCap(member: {
     .onConflictDoNothing();
 }
 
+/**
+ * Create a user's personal workspace.
+ *
+ * Called at sign-up, and again at sign-in for anyone who ended up without one —
+ * creation is best-effort there and its failure was swallowed, which left the
+ * account with no membership at all. That is not a cosmetic gap: billing
+ * resolves the Autumn customer from membership, so a user with no workspace
+ * bills to a bare user id and can never share an organization's credits.
+ */
+async function createPersonalOrganization(user: {
+  id: string;
+  name?: string | null;
+  email: string;
+}): Promise<void> {
+  const label = user.name || user.email.split("@")[0];
+  const safeName = label
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, "-")
+    .replace(/-+/g, "-")
+    .slice(0, 30);
+
+  logger.info(`Creating personal organization for user ${user.email}`);
+
+  await auth.api.createOrganization({
+    body: {
+      name: `${label}'s Workspace`,
+      slug: `${safeName}-${user.id.slice(0, 8)}`,
+      userId: user.id,
+      metadata: { personal: true, userId: user.id } as Record<string, any>,
+    },
+  });
+}
+
+/**
+ * Shared tail of both "a member joined" hooks. Promotion runs first so the cap
+ * seeding and the session move below both see the organization's real type.
+ */
+async function onMemberJoined(member: {
+  id: string;
+  role: string;
+  organizationId: string;
+  userId: string;
+}): Promise<void> {
+  try {
+    await promoteSharedPersonalOrganization(member.organizationId);
+  } catch (error) {
+    logger.error("Failed to clear the personal-workspace flag:", error);
+  }
+
+  try {
+    await seedDefaultMemberCap(member);
+  } catch (error) {
+    logger.error("Failed to seed default member AI cap:", error);
+  }
+
+  // A session created before this membership keeps the workspace it was
+  // stamped with at sign-in, and billing follows that workspace — so without
+  // this the new member spends their own credits, not the organization's.
+  try {
+    await adoptTeamWorkspaceInSessions({
+      userId: member.userId,
+      organizationId: member.organizationId,
+    });
+  } catch (error) {
+    logger.error(
+      "Failed to move the member's sessions to the team workspace:",
+      error,
+    );
+  }
+}
+
 const trustedOrigins = buildBetterAuthTrustedOrigins();
+
+/**
+ * Cloudflare Turnstile, off unless a secret is configured. Every public
+ * sign-up/sign-in path has to reach Better Auth over the HTTP handler to be
+ * covered — see `./captcha-plugin`.
+ *
+ * Registered at the `betterAuth()` call rather than inside `options.plugins`:
+ * spreading a conditional array into that literal costs Better Auth the
+ * positional inference it derives `auth`'s session/user shape from, and
+ * `session.activeOrganizationId` and `user.role` silently vanish app-wide.
+ */
+const captchaPlugins = buildCaptchaPlugins(process.env.TURNSTILE_SECRET_KEY);
 
 const options = {
   secret: process.env.BETTER_AUTH_SECRET!,
   ...(trustedOrigins.length > 0 ? { trustedOrigins } : {}),
+  hooks: { before: signUpPasswordPolicy },
   plugins: [
     adminPlugin({
       defaultRole: DEFAULT_USER_ROLE,
@@ -267,20 +329,38 @@ const options = {
         },
         // Give every newly-joined member their default monthly AI allowance.
         afterAcceptInvitation: async ({ member }) => {
-          try {
-            await seedDefaultMemberCap(member);
-          } catch (error) {
-            logger.error("Failed to seed default member AI cap:", error);
-          }
+          await onMemberJoined(member);
         },
         afterAddMember: async ({ member }) => {
-          try {
-            await seedDefaultMemberCap(member);
-          } catch (error) {
-            logger.error("Failed to seed default member AI cap:", error);
-          }
+          await onMemberJoined(member);
         },
       },
+    }),
+    // Hands a browser sign-in to the desktop app (/desktop/auth/complete →
+    // keinsaas:// → main-process verify). Server-minted only, hashed at rest,
+    // single use; see lib/auth/desktop-handoff.ts.
+    oneTimeToken({
+      expiresIn: 5,
+      storeToken: "hashed",
+      disableClientRequest: true,
+    }),
+    // Bearer keys for the Navigator MCP server (/api/navigator-mcp). Hashed at
+    // rest, shown once. A key never stands in for a session elsewhere in the
+    // app (`enableSessionForAPIKeys` stays off): the MCP route verifies it and
+    // re-checks the org membership in `metadata.organizationId` itself, see
+    // lib/navigator-tools/api-keys.ts.
+    apiKey({
+      defaultPrefix: "nav_",
+      enableMetadata: true,
+      requireName: true,
+      maximumNameLength: 64,
+      enableSessionForAPIKeys: false,
+      // The plugin default (10 per day) would break the first chat: an MCP
+      // client sends several requests per tool call. Its window restarts only
+      // after a quiet gap of `timeWindow`, so this allows bursts of 60 calls
+      // and then a ten-second pause, rather than a fixed per-minute quota.
+      rateLimit: { enabled: true, timeWindow: 10 * 1000, maxRequests: 60 },
+      keyExpiration: { defaultExpiresIn: null, maxExpiresIn: 365 },
     }),
     nextCookies(),
   ],
@@ -303,6 +383,7 @@ const options = {
       organization: OrganizationTable,
       member: MemberTable,
       invitation: InvitationTable,
+      apikey: ApiKeyTable,
     },
   }),
   databaseHooks: {
@@ -330,10 +411,35 @@ const options = {
           if (session.activeOrganizationId) return;
 
           try {
-            const activeOrgId = await resolveDefaultActiveOrganizationId(
+            let activeOrgId = await resolveDefaultActiveOrganizationId(
               session.userId,
             );
-            if (!activeOrgId) return;
+
+            // No membership at all means sign-up's personal-workspace creation
+            // never landed — it races the signup session and its failure is
+            // swallowed. Repair it here rather than leaving the account
+            // workspace-less (and billing to a bare user id) for good.
+            if (!activeOrgId) {
+              const [user] = await pgDb
+                .select({
+                  id: UserTable.id,
+                  name: UserTable.name,
+                  email: UserTable.email,
+                })
+                .from(UserTable)
+                .where(eq(UserTable.id, session.userId))
+                .limit(1);
+              if (!user) return;
+
+              logger.warn(
+                `User ${session.userId} signed in with no organization - creating their personal workspace`,
+              );
+              await createPersonalOrganization(user);
+              activeOrgId = await resolveDefaultActiveOrganizationId(
+                session.userId,
+              );
+              if (!activeOrgId) return;
+            }
 
             await pgDb
               .update(SessionTable)
@@ -379,28 +485,7 @@ const options = {
           // guard counts *team* orgs only and always skips personal ones
           // (see findOtherTeamOrganization).
           try {
-            const safeName = (user.name || user.email.split("@")[0])
-              .toLowerCase()
-              .replace(/[^a-z0-9]/g, "-")
-              .replace(/-+/g, "-")
-              .slice(0, 30);
-            const slug = `${safeName}-${user.id.slice(0, 8)}`;
-
-            logger.info(
-              `Creating personal organization for user ${user.email}`,
-            );
-
-            await auth.api.createOrganization({
-              body: {
-                name: `${user.name || user.email.split("@")[0]}'s Workspace`,
-                slug,
-                userId: user.id,
-                metadata: { personal: true, userId: user.id } as Record<
-                  string,
-                  any
-                >,
-              },
-            });
+            await createPersonalOrganization(user);
 
             logger.info(`Personal organization created for user ${user.id}`);
           } catch (error) {
@@ -499,7 +584,14 @@ const options = {
 
 export const auth = betterAuth({
   ...options,
-  plugins: [...(options.plugins ?? [])],
+  // The cast keeps the inferred plugin list identical to `options.plugins`.
+  // It is accurate rather than convenient: the captcha plugin is pure
+  // `onRequest` middleware and contributes no endpoints, schema or `$Infer`
+  // types, so nothing about `auth`'s shape depends on it being listed.
+  plugins: [
+    ...(options.plugins ?? []),
+    ...captchaPlugins,
+  ] as typeof options.plugins,
 });
 
 // Request-memoized: the layout, page, and any server actions that run in the

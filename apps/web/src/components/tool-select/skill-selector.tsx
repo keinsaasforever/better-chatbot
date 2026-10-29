@@ -48,7 +48,7 @@ export function SkillSelector({
             Skills
           </DropdownMenuSubTrigger>
           <DropdownMenuPortal>
-            <DropdownMenuSubContent className="w-80 relative">
+            <DropdownMenuSubContent className="w-[var(--radix-popper-available-width)] relative md:w-80">
               <DropdownMenuItem
                 className="cursor-pointer text-muted-foreground"
                 onSelect={(e) => {

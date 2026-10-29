@@ -25,12 +25,33 @@ const AGENT = {
   organizationId: null,
 } as any;
 
-function streamResponse(status: number) {
+function streamResponse(
+  status: number,
+  finishReason: string | null = "stop",
+  blockedReason?: string,
+) {
+  const body =
+    finishReason === null
+      ? "data: ok\n\n"
+      : `data: ${JSON.stringify({
+          type: "finish",
+          finishReason,
+          ...(blockedReason
+            ? {
+                messageMetadata: {
+                  blocked: {
+                    source: "browser-automation",
+                    reason: blockedReason,
+                  },
+                },
+              }
+            : {}),
+        })}\n\n`;
   return new Response(
     status === 200
       ? new ReadableStream({
           start(controller) {
-            controller.enqueue(new TextEncoder().encode("data: ok\n\n"));
+            controller.enqueue(new TextEncoder().encode(body));
             controller.close();
           },
         })
@@ -72,6 +93,35 @@ describe("executeAgentRun", () => {
       provider: "anthropic",
       model: "claude-sonnet-5",
     });
+  });
+
+  /**
+   * The false-success bug. A browser run that hits an identity check ends the
+   * turn normally (`finishReason: "stop"`), so before this the owner was told
+   * their scheduled run had "finished" when it had done nothing.
+   */
+  it("records a blocked run as a failure, not a success", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      streamResponse(200, "stop", "The sign-in needs a Smart-ID confirmation."),
+    );
+
+    const result = await executeAgentRun(TASK, AGENT);
+
+    expect(result.success).toBe(false);
+    expect(result.error).toContain("Smart-ID");
+  });
+
+  it("sends the task id so the route can load its per-task grants", async () => {
+    const fetchMock = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValue(streamResponse(200));
+
+    await executeAgentRun(TASK, AGENT);
+
+    const [, init] = fetchMock.mock.calls[0]!;
+    expect(
+      (init!.headers as Record<string, string>)["X-Scheduled-Task-Id"],
+    ).toBe(TASK.id);
   });
 
   it("records a permanent failure (4xx) without throwing", async () => {
@@ -127,6 +177,28 @@ describe("executeAgentRun", () => {
 
     expect(result.success).toBe(false);
     expect(result.error).toContain("content-type");
+  });
+
+  it("fails a run that stopped on an unanswered tool call", async () => {
+    // The incident: the model called a client-side code tool on a run with no
+    // browser, the loop halted, and the drained stream still looked healthy.
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      streamResponse(200, "tool-calls"),
+    );
+
+    const result = await executeAgentRun(TASK, AGENT);
+
+    expect(result.success).toBe(false);
+    expect(result.error).toContain("tool-calls");
+  });
+
+  it("fails a run whose stream ended without finishing", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(streamResponse(200, null));
+
+    const result = await executeAgentRun(TASK, AGENT);
+
+    expect(result.success).toBe(false);
+    expect(result.error).toContain("without completing");
   });
 
   it("passes redirect:manual so fetch does not silently follow the bounce", async () => {

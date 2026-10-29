@@ -138,12 +138,6 @@ export function LocalModelsDialog({
       const { type, models } = await response.json();
       setDetectedType(type);
       setDiscoveredModels(models);
-
-      toast.success(
-        `🎉 Found ${models.length} model${models.length === 1 ? "" : "s"} in ${
-          type === "ollama" ? "Ollama" : "LM Studio"
-        }!`,
-      );
     } catch (error) {
       toast.error(
         error instanceof Error ? error.message : "Failed to discover models",
@@ -197,12 +191,6 @@ export function LocalModelsDialog({
         throw new Error(error);
       }
 
-      toast.success(
-        existingConfig
-          ? "Local models updated successfully!"
-          : "Local models connected successfully!",
-      );
-
       mutateConfig();
       swrMutate("/api/chat/models");
       router.refresh();
@@ -246,9 +234,6 @@ export function LocalModelsDialog({
 
       const { models } = json;
       setXinityDiscoveredModels(models);
-      toast.success(
-        `🎉 Found ${models.length} model${models.length === 1 ? "" : "s"} on Xinity!`,
-      );
     } catch (_error) {
       setXinityDiscoveryError("fetch failed");
     } finally {
@@ -284,7 +269,6 @@ export function LocalModelsDialog({
         throw new Error(error);
       }
 
-      toast.success("Xinity connected successfully!");
       mutateConfig();
       swrMutate("/api/chat/models");
       router.refresh();

@@ -1,5 +1,5 @@
 import "server-only";
-import { and, eq } from "drizzle-orm";
+import { and, eq, isNotNull, or } from "drizzle-orm";
 import { pgDb } from "@/lib/db/pg/db.pg";
 import {
   MemberTable,
@@ -27,6 +27,43 @@ export async function listUserProjects(userId: string): Promise<ProjectRef[]> {
     })
     .from(ProjectTable)
     .where(eq(ProjectTable.ownerUserId, userId));
+}
+
+/**
+ * Projects the user can access in their active org: owned ones plus those
+ * with a project_member row. No active org fails closed to owner-only
+ * (matching the repository convention).
+ */
+export async function listAccessibleProjects(
+  userId: string,
+  organizationId?: string | null,
+): Promise<ProjectRef[]> {
+  if (!organizationId) {
+    return listUserProjects(userId);
+  }
+  return pgDb
+    .select({
+      id: ProjectTable.id,
+      name: ProjectTable.name,
+      description: ProjectTable.description,
+    })
+    .from(ProjectTable)
+    .leftJoin(
+      ProjectMemberTable,
+      and(
+        eq(ProjectMemberTable.projectId, ProjectTable.id),
+        eq(ProjectMemberTable.userId, userId),
+      ),
+    )
+    .where(
+      and(
+        eq(ProjectTable.organizationId, organizationId),
+        or(
+          eq(ProjectTable.ownerUserId, userId),
+          isNotNull(ProjectMemberTable.userId),
+        ),
+      ),
+    );
 }
 
 /**

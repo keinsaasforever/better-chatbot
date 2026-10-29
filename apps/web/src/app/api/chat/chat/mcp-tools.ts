@@ -121,6 +121,7 @@ export const loadMcpTools = async (
   opt?: {
     mentions?: ChatMention[];
     allowedMcpServers?: Record<string, AllowedMCPServer>;
+    organizationId?: string | null;
   },
 ): Promise<Record<string, VercelAIMcpTool>> => {
   logger.warn(
@@ -139,6 +140,14 @@ export const loadMcpToolsStateless = async (
   opt?: {
     mentions?: ChatMention[];
     allowedMcpServers?: Record<string, AllowedMCPServer>;
+    organizationId?: string | null;
+    /**
+     * Return every reachable server's tools when neither mentions nor an
+     * allow-map narrow the set. Without this the final filter yields {} — the
+     * right default for chat (nothing selected means nothing enabled) but not
+     * for the voice UI, which has no tool picker.
+     */
+    includeAllServers?: boolean;
   },
 ): Promise<Record<string, VercelAIMcpTool>> => {
   try {
@@ -147,7 +156,8 @@ export const loadMcpToolsStateless = async (
     // Import here to avoid circular dependencies
     const { pgDb } = await import("lib/db/pg/db.pg");
     const { McpServerTable } = await import("lib/db/pg/schema.pg");
-    const { eq, and } = await import("drizzle-orm");
+    const { eq, and, or } = await import("drizzle-orm");
+    const { isMcpServerInScope } = await import("lib/ai/mcp/mcp-server-scope");
     const { createEphemeralMCPClient, MCP_INTROSPECT_TIMEOUT } = await import(
       "lib/ai/mcp/ephemeral-client"
     );
@@ -156,17 +166,31 @@ export const loadMcpToolsStateless = async (
       recordMcpServerSuccess,
       recordMcpServerFailure,
     } = await import("lib/ai/mcp/mcp-circuit-breaker");
-    const { peekMcpToolInfo, loadMcpToolInfoCached } = await import(
-      "lib/ai/mcp/mcp-tools-cache"
-    );
+    const {
+      peekMcpToolInfo,
+      loadMcpToolInfoCached,
+      rememberMcpToolLoadFailure,
+    } = await import("lib/ai/mcp/mcp-tools-cache");
 
-    // 1. Load server configs from DB
-    const servers = await pgDb.query.McpServerTable.findMany({
-      where: and(
-        eq(McpServerTable.userId, userId),
-        eq(McpServerTable.enabled, true),
-      ),
-    });
+    // 1. Load server configs from DB: own servers plus shared ("public")
+    // servers in the caller's active org — the same predicate the repository
+    // layer uses (selectAllForUser). No org fails closed to owner-only. The
+    // in-code scope filter is defense in depth for the same rule.
+    const organizationId = opt?.organizationId ?? null;
+    const scopeWhere = organizationId
+      ? or(
+          eq(McpServerTable.userId, userId),
+          and(
+            eq(McpServerTable.visibility, "public"),
+            eq(McpServerTable.organizationId, organizationId),
+          ),
+        )
+      : eq(McpServerTable.userId, userId);
+    const servers = (
+      await pgDb.query.McpServerTable.findMany({
+        where: and(scopeWhere, eq(McpServerTable.enabled, true)),
+      })
+    ).filter((server) => isMcpServerInScope(server, userId, organizationId));
 
     if (servers.length === 0) {
       return {};
@@ -229,7 +253,9 @@ export const loadMcpToolsStateless = async (
 
         toolInfo = await loadMcpToolInfoCached(server.id, version, async () => {
           const serverStart = performance.now();
-          const client = await createEphemeralMCPClient(server.id, userId);
+          const client = await createEphemeralMCPClient(server.id, userId, {
+            organizationId,
+          });
           if (!client) {
             throw new Error(`MCP client unavailable for "${server.name}"`);
           }
@@ -255,6 +281,10 @@ export const loadMcpToolsStateless = async (
           // circuit breaker — it should only trip on genuine connectivity failures.
           if (!isOAuthAuthorizationRequired(error)) {
             recordMcpServerFailure(server.id, server.name);
+            // Skip this server on the next request too. The breaker needs three
+            // strikes and this process is usually cold, so without this a dead
+            // server charges every chat request the full connect timeout.
+            rememberMcpToolLoadFailure(server.id, version);
           }
           logger.warn(
             `MCP server "${server.name}" degraded — its tools are unavailable this turn:`,
@@ -288,6 +318,7 @@ export const loadMcpToolsStateless = async (
             const execClient = await createEphemeralMCPClient(
               server.id,
               userId,
+              { organizationId },
             );
             if (!execClient) {
               throw new Error("MCP server not found");
@@ -331,7 +362,10 @@ export const loadMcpToolsStateless = async (
     if (opt?.mentions?.length) {
       // Filter by @mentions only
       allTools = filterMCPToolsByMentions(allTools, opt.mentions);
-    } else {
+    } else if (
+      !opt?.includeAllServers ||
+      Object.keys(opt?.allowedMcpServers ?? {}).length > 0
+    ) {
       // Otherwise filter by allowed servers
       allTools = filterMCPToolsByAllowedMCPServers(
         allTools,

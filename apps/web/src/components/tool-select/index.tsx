@@ -4,6 +4,7 @@ import { appStore } from "@/app/store";
 import { useChatModels } from "@/hooks/queries/use-chat-models";
 import { useMcpList } from "@/hooks/queries/use-mcp-list";
 import { useWorkflowToolList } from "@/hooks/queries/use-workflow-tool-list";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { AgentSummary } from "app-types/agent";
 import { ChatMention } from "app-types/chat";
 import { SkillSummary } from "app-types/skill";
@@ -15,7 +16,7 @@ import {
 import { cn, objectFlow } from "lib/utils";
 import { AtSign, Loader, WrenchIcon } from "lucide-react";
 import { useTranslations } from "next-intl";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "ui/button";
 import { CountAnimation } from "ui/count-animation";
@@ -50,7 +51,7 @@ interface ToolSelectDropdownProps {
     description?: string;
     icon?: SkillSummary["icon"];
   }) => void;
-  onGenerateImage?: (provider?: "google" | "openai") => void;
+  onGenerateImage?: (model?: string) => void;
   className?: string;
   compact?: boolean;
   hideToolCount?: boolean;
@@ -70,6 +71,22 @@ export function ToolSelectDropdown({
   hideToolCount,
 }: ToolSelectDropdownProps) {
   const [open, setOpen] = useState(false);
+  const isMobile = useIsMobile();
+  const triggerRef = useRef<HTMLDivElement>(null);
+  // On phones the trigger sits mid-composer, so a menu anchored to it leaves
+  // almost no room for the submenus that open next to it. Measure the trigger
+  // on open and shift the menu to the left viewport edge (never to the right).
+  const [alignOffset, setAlignOffset] = useState(0);
+
+  const handleOpenChange = useCallback((nextOpen: boolean) => {
+    if (nextOpen) {
+      const left = triggerRef.current?.getBoundingClientRect().left ?? 0;
+      setAlignOffset(Math.min(0, -(left - 8)));
+    } else {
+      setAlignOffset(0);
+    }
+    setOpen(nextOpen);
+  }, []);
   const [toolChoice, allowedAppDefaultToolkit, allowedMcpServers] = appStore(
     useShallow((state) => [
       state.toolChoice,
@@ -197,9 +214,9 @@ export function ToolSelectDropdown({
   }, [bindingTools.length > 128]);
 
   return (
-    <DropdownMenu open={open} onOpenChange={setOpen}>
+    <DropdownMenu open={open} onOpenChange={handleOpenChange}>
       <DropdownMenuTrigger asChild>
-        <div>
+        <div ref={triggerRef}>
           <Tooltip>
             <TooltipTrigger asChild>{triggerButton}</TooltipTrigger>
             <TooltipContent align={align} side={side} className="p-4 text-xs  ">
@@ -218,7 +235,8 @@ export function ToolSelectDropdown({
       {/* Reserve room for the mobile browser toolbar so the menu is not placed
           (or flipped) into the area it covers. */}
       <DropdownMenuContent
-        className="md:w-72"
+        className="max-w-[13rem] md:w-72 md:max-w-none"
+        alignOffset={isMobile ? alignOffset : undefined}
         align={align}
         side={side}
         collisionPadding={{ top: 12, bottom: 88 }}

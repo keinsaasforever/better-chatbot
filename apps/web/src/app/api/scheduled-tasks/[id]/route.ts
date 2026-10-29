@@ -8,6 +8,7 @@ import {
   computeNextRunAt,
   isValidCron,
 } from "@/lib/scheduled-tasks/schedule-validation";
+import { sanitizeCredentialAliases } from "@/lib/scheduled-tasks/browser-grants";
 
 /**
  * GET /api/scheduled-tasks/[id]
@@ -71,6 +72,8 @@ export const PATCH = withAuth(
         cronExpression,
         timezone,
         inputPrompt,
+        browserAutomationEnabled,
+        browserCredentialAliases,
         enabled,
       } = parsed.data;
 
@@ -117,6 +120,16 @@ export const PATCH = withAuth(
           : null
         : undefined;
 
+      // Aliases name a capability, so they are checked against the caller's
+      // organization rather than taken from the client.
+      const activeOrganizationId = (
+        session.session as { activeOrganizationId?: string | null } | undefined
+      )?.activeOrganizationId;
+      const grantedAliases = await sanitizeCredentialAliases({
+        organizationId: activeOrganizationId,
+        aliases: browserCredentialAliases,
+      });
+
       // Update task
       const [updatedTask] = await pgDb
         .update(ScheduledTaskTable)
@@ -126,6 +139,12 @@ export const PATCH = withAuth(
           ...(cronExpression !== undefined && { cronExpression }),
           ...(timezone !== undefined && { timezone }),
           ...(inputPrompt !== undefined && { inputPrompt }),
+          ...(browserAutomationEnabled !== undefined && {
+            browserAutomationEnabled,
+          }),
+          ...(grantedAliases !== null && {
+            browserCredentialAliases: grantedAliases,
+          }),
           ...(enabled !== undefined && { enabled }),
           ...(nextRunAt !== undefined && { nextRunAt }),
           updatedAt: new Date(),

@@ -12,6 +12,10 @@ vi.mock("@/lib/agentset/retrieval", () => ({
 vi.mock("./search-local", () => ({
   searchProjectBrainChunks: vi.fn().mockResolvedValue([]),
   keywordSearchProjectBrainChunks: vi.fn().mockResolvedValue([]),
+  loadCompiledTruthChunksForPages: vi.fn().mockResolvedValue([]),
+}));
+vi.mock("./graph-query", () => ({
+  traverse: vi.fn().mockResolvedValue({ nodes: [], edges: [] }),
 }));
 vi.mock("./generated-insights", () => ({
   getLatestProjectStatusSnapshot: vi.fn().mockResolvedValue(null),

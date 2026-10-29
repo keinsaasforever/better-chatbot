@@ -1,6 +1,29 @@
 import type { ChatAttachment } from "app-types/chat";
 import type { RouteSignals, RoutingTaskKey } from "./types";
 
+/**
+ * Tool nouns that are not ambiguous: an MCP server, a connector, or a product
+ * that a connected server exposes. Checked before the keyword list below and
+ * outranking it, because a message naming a bound tool is a tool request
+ * whatever else it happens to say.
+ *
+ * The keyword list is first-match-wins, so a single stray word decided the
+ * whole turn. Observed on staging 2026-09-03 12:02:57: "Funktioniert jetzt
+ * hier die Aufnahme einwandfrei? ... check mal nach unserem Google Business
+ * Profil" matched `coding` on the opening verb "Funktioniert" and routed to
+ * claude-sonnet-5; `tool_calling` matched too ("MCP") but sat two entries
+ * lower and never got the chance. The follow-up turn lost the same way to
+ * `web_search` on "Google".
+ *
+ * Deliberately narrow. Bare `tools` and `crm` stay out: "Websuche: beste CRM
+ * Tools" is a research request, and the keyword list already handles it.
+ *
+ * Only trusted when tools are actually bound. With none configured the
+ * mention is prose about tools, not a request to use one.
+ */
+const EXPLICIT_TOOL_PATTERN =
+  /\b(mcp|connectors?|konnektor\w*|gmail|hubspot|notion|slack|todoist|composio|open-?seo|search\s?console|business\s?profil\w*|google\s+(?:business|analytics|ads?|drive|docs?|sheets?|slides?|kalender|calendar|maps?|tasks?|forms?|workspace|meet|photos?))\b/i;
+
 // Ordered list \u2014 first match wins, so specificity decides placement:
 // document/table work before web_search ("extrahiere ... suche"), website
 // building before generic coding keywords, business writing before the
@@ -20,7 +43,13 @@ const TASK_PATTERNS: Array<{ taskKey: RoutingTaskKey; pattern: RegExp }> = [
   {
     taskKey: "coding",
     pattern:
-      /\b(code|coding|programmier\w*|typescript|javascript|python|bugs?|debug\w*|fehlermeldung\w*|refactor\w*|tests?|apis?|sql|skript\w*|scripts?|funktion\w*|functions?)\b/i,
+      // `funktion(en)?` is bounded on purpose. `funktion\w*` also swallowed
+      // "funktioniert" / "funktionieren" / "funktionsfähig" -- among the most
+      // common verbs in German -- so any message asking whether something
+      // works landed on `coding`. Compounds like "Funktionsname" are lost with
+      // it; `functions?` still covers the concept and a rare miss is far
+      // cheaper than misrouting every "funktioniert das?".
+      /\b(code|coding|programmier\w*|typescript|javascript|python|bugs?|debug\w*|fehlermeldung\w*|refactor\w*|tests?|apis?|sql|skript\w*|scripts?|funktion(?:en)?|functions?)\b/i,
   },
   {
     taskKey: "web_search",
@@ -72,11 +101,23 @@ export function extractRouteSignals(input: {
     };
   }
 
+  const requiresTools = input.toolCount > 0;
+  if (requiresTools && EXPLICIT_TOOL_PATTERN.test(input.text)) {
+    return {
+      taskKey: "tool_calling",
+      requiresTools: true,
+      requiresVision: false,
+      minimumContextTokens: input.minimumContextTokens ?? 0,
+      requiredRegion: input.requiredRegion,
+      requiredRetention: input.requiredRetention,
+    };
+  }
+
   const matched = TASK_PATTERNS.find(({ pattern }) => pattern.test(input.text));
 
   return {
     taskKey: matched?.taskKey ?? "general_chat",
-    requiresTools: input.toolCount > 0,
+    requiresTools,
     requiresVision: false,
     minimumContextTokens: input.minimumContextTokens ?? 0,
     requiredRegion: input.requiredRegion,

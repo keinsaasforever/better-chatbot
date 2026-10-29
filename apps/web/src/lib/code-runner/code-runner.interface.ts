@@ -7,7 +7,14 @@ export type E2BArtifact = {
   filename: string;
   mimeType?: string;
   url?: string;
+  /** Decoded size, so the chat can show it once the bytes themselves are gone. */
+  sizeBytes?: number;
   contentBase64?: string;
+  /**
+   * Why the file could not be delivered (too large, upload failed). The chat
+   * still names it so the user knows it existed; the model can explain.
+   */
+  error?: string;
 };
 
 export type CodeRunnerResult = {
@@ -33,6 +40,12 @@ export type CodeRunnerOptions = {
    * runs. Only used by the E2B backend; the browser worker ignores it.
    */
   threadId?: string;
+  /**
+   * Agent whose bound files should be staged into the sandbox alongside the
+   * thread's attachments. Only used by the E2B backend; the browser worker
+   * ignores it, and the server re-checks that the caller may use the agent.
+   */
+  agentId?: string;
 };
 
 export type CodeWorkerRequest = {

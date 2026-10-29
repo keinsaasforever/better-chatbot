@@ -45,7 +45,7 @@ export function WorkflowToolSelector({
           {t("Workflow.title")}
         </DropdownMenuSubTrigger>
         <DropdownMenuPortal>
-          <DropdownMenuSubContent className="w-80 relative">
+          <DropdownMenuSubContent className="w-[var(--radix-popper-available-width)] relative md:w-80">
             {myWorkflows.length === 0 && sharedWorkflows.length === 0 ? (
               <div className="text-sm text-muted-foreground flex flex-col py-6 px-6 gap-4 items-center">
                 <InfoIcon className="size-4" />

@@ -16,7 +16,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { Button } from "@/components/ui/button";
-import { FileText, MoreVertical, Download, Eye, Trash } from "lucide-react";
+import { FileText, MoreVertical, Download, Trash } from "lucide-react";
 import { toast } from "sonner";
 import { formatBytes } from "@/lib/utils";
 import { openProjectDocument } from "@/lib/citations/open-project-document";
@@ -74,7 +74,6 @@ export function DocumentCard({
       await fetch(`/api/projects/${projectId}/documents/${document.id}`, {
         method: "DELETE",
       });
-      toast.success("Document deleted");
       onDelete?.();
     } catch (_error) {
       toast.error("Failed to delete document");
@@ -84,13 +83,7 @@ export function DocumentCard({
   };
 
   const handleDownload = async () => {
-    const ok = await openProjectDocument(projectId, document.id);
-    if (ok) toast.success("Download started");
-  };
-
-  const handleViewDetails = () => {
-    // TODO: Implement view details
-    toast.info("View details feature coming soon");
+    await openProjectDocument(projectId, document.id);
   };
 
   return (
@@ -140,10 +133,6 @@ export function DocumentCard({
               <DropdownMenuItem onClick={handleDownload}>
                 <Download className="w-4 h-4 mr-2" />
                 Download
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={handleViewDetails}>
-                <Eye className="w-4 h-4 mr-2" />
-                View Details
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem

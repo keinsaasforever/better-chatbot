@@ -1,17 +1,17 @@
 "use client";
 
-import { useState } from "react";
-import Link from "next/link";
-import { formatDistanceToNow } from "date-fns";
-import { AlertCircle, Bell, CheckCircle2 } from "lucide-react";
-import { Button } from "ui/button";
-import { Popover, PopoverContent, PopoverTrigger } from "ui/popover";
-import { Tooltip, TooltipContent, TooltipTrigger } from "ui/tooltip";
-import { cn } from "lib/utils";
 import {
   type NotificationItem,
   useNotifications,
 } from "@/hooks/queries/use-notifications";
+import { formatDistanceToNow } from "date-fns";
+import { cn } from "lib/utils";
+import { AlertCircle, Bell, CheckCircle2 } from "lucide-react";
+import Link from "next/link";
+import { useState } from "react";
+import { Button } from "ui/button";
+import { Popover, PopoverContent, PopoverTrigger } from "ui/popover";
+import { Tooltip, TooltipContent, TooltipTrigger } from "ui/tooltip";
 
 function NotificationIcon({ type }: { type: string }) {
   if (type.endsWith("failure") || type.endsWith("error")) {
@@ -61,12 +61,13 @@ function NotificationRow({
     </div>
   );
 
-  if (notification.threadId) {
+  const href =
+    notification.url ??
+    (notification.threadId ? `/chat/${notification.threadId}` : null);
+
+  if (href) {
     return (
-      <Link
-        href={`/chat/${notification.threadId}`}
-        onClick={() => onOpen(notification)}
-      >
+      <Link href={href} onClick={() => onOpen(notification)}>
         {content}
       </Link>
     );

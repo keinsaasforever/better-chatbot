@@ -61,14 +61,51 @@ export function isCandidateEligible(
   return true;
 }
 
+/**
+ * Picks the model for a turn: the one the thread is already on when that is
+ * still allowed, otherwise the best task fit.
+ *
+ * Task fit is recomputed from every message, so scoring each turn from scratch
+ * moved threads between models mid-conversation - and because the prompt cache
+ * is keyed per provider *and* model, each of those moves re-sent the whole
+ * history at full price to a model that had never seen it. A thread therefore
+ * routes once, on its first turn, and stays there.
+ *
+ * `pinnedChatModel` is checked against the same hard eligibility as any other
+ * candidate, so the pin cannot outlive the org's allowlist, a deactivated
+ * deployment, or a turn that needs vision, tools, or a bigger context window
+ * than the pinned model has. Those are the only switches left, and they are
+ * the ones where staying put would fail the request outright.
+ */
 export function selectDeterministicRoute(input: {
   candidates: RoutingCandidate[];
   signals: RouteSignals;
   policy?: OrganizationRoutingPolicy;
+  /** The model this thread's previous turn ran on, if it had one. */
+  pinnedChatModel?: { provider?: string; model?: string } | null;
 }): DeterministicRoute {
   const eligible = input.candidates.filter((candidate) =>
     isCandidateEligible(candidate, input.signals, input.policy),
   );
+
+  const pinned = input.pinnedChatModel
+    ? eligible.find(
+        (candidate) =>
+          candidate.chatModel.provider === input.pinnedChatModel?.provider &&
+          candidate.chatModel.model === input.pinnedChatModel?.model,
+      )
+    : undefined;
+  if (pinned) {
+    const profile = pinned.profiles.find(
+      (entry) => entry.taskKey === input.signals.taskKey,
+    );
+    return {
+      candidate: pinned,
+      taskKey: input.signals.taskKey,
+      taskScore: profile?.score ?? 0,
+      reasonCode: `thread_pinned:${input.signals.taskKey}`,
+    };
+  }
 
   const ranked = eligible
     .map((candidate) => {

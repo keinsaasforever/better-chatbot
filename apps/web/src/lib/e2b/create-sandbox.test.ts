@@ -167,6 +167,36 @@ describe("createSandbox", () => {
     expect(createMock).toHaveBeenCalledTimes(1);
   });
 
+  // The regression this file missed, and the mock above is why: it builds a
+  // class hierarchy in which `instanceof` works. Production has no such
+  // guarantee — a missing template arrives as an error class this module does
+  // not recognise, carrying the status in its message, so every such call was
+  // classified retryable and burned both attempts. Hence a plain Error here.
+  test("does NOT retry an unrecognised 404 (the production shape)", async () => {
+    createMock.mockRejectedValue(
+      new Error("404: template 'navigator-python-docs' not found"),
+    );
+    await expect(
+      createSandbox("navigator-python-docs", {
+        billing,
+        backoffMs: 0,
+        maxAttempts: 3,
+      }),
+    ).rejects.toThrow("404");
+    expect(createMock).toHaveBeenCalledTimes(1);
+  });
+
+  test("still retries an unrecognised 5xx", async () => {
+    const sbx = fakeSandbox();
+    createMock
+      .mockRejectedValueOnce(new Error("503: service unavailable"))
+      .mockResolvedValueOnce(sbx);
+    await expect(
+      createSandbox("nextjs-developer", { billing, backoffMs: 0 }),
+    ).resolves.toBe(sbx);
+    expect(createMock).toHaveBeenCalledTimes(2);
+  });
+
   test("gives up after maxAttempts on persistent retryable error", async () => {
     createMock.mockRejectedValue(new TimeoutError("timeout"));
     await expect(
@@ -197,6 +227,19 @@ describe("toSandboxErrorResponse", () => {
   test("RateLimit → 429, Timeout → 504", () => {
     expect(toSandboxErrorResponse(new RateLimitError("rl")).status).toBe(429);
     expect(toSandboxErrorResponse(new TimeoutError("to")).status).toBe(504);
+  });
+
+  test("unrecognised 404 → 502 template_not_available, not a generic retry-me", () => {
+    // What the user actually saw while this was broken: "Failed to start the
+    // sandbox. Please try again." — advice that could never work.
+    const r = toSandboxErrorResponse(
+      new Error("404: template 'navigator-python-docs' not found"),
+      "navigator-python-docs",
+    );
+    expect(r.status).toBe(502);
+    expect(r.code).toBe("template_not_available");
+    expect(r.retryable).toBe(false);
+    expect(r.message).toContain("navigator-python-docs");
   });
 
   test("unknown error → 500 e2b_error", () => {

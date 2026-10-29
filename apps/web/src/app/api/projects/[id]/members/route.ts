@@ -3,11 +3,11 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { pgDb } from "@/lib/db/pg/db.pg";
 import { ProjectMemberTable, UserTable } from "@/lib/db/pg/schema.pg";
-import { isUserMemberOfOrganization } from "@/lib/organization/members";
 import {
   requireProjectAccess,
   toProjectErrorResponse,
 } from "@/lib/projects/access";
+import { ProjectMemberError, addProjectMember } from "@/lib/projects/members";
 
 const AddMemberSchema = z.object({
   userId: z.string().uuid(),
@@ -48,10 +48,6 @@ export async function POST(
 ) {
   try {
     const { id: projectId } = await params;
-    const { actor, project } = await requireProjectAccess({
-      projectId,
-      minRole: "editor",
-    });
     const parsed = AddMemberSchema.safeParse(await request.json());
 
     if (!parsed.success) {
@@ -66,47 +62,20 @@ export async function POST(
       );
     }
 
-    const { userId, role } = parsed.data;
-
-    if (userId === project.ownerUserId) {
-      return NextResponse.json(
-        {
-          error: {
-            code: "cannot_modify_owner",
-            message: "The project owner's membership can't be changed here.",
-          },
-        },
-        { status: 409 },
-      );
-    }
-
-    const isOrgMember = await isUserMemberOfOrganization(
-      actor.organizationId,
-      userId,
-    );
-    if (!isOrgMember) {
-      return NextResponse.json(
-        {
-          error: {
-            code: "not_org_member",
-            message: "That user isn't a member of this organization.",
-          },
-        },
-        { status: 422 },
-      );
-    }
-
-    const [member] = await pgDb
-      .insert(ProjectMemberTable)
-      .values({ projectId, userId, role })
-      .onConflictDoUpdate({
-        target: [ProjectMemberTable.projectId, ProjectMemberTable.userId],
-        set: { role },
-      })
-      .returning();
+    const member = await addProjectMember({
+      projectId,
+      userId: parsed.data.userId,
+      role: parsed.data.role,
+    });
 
     return NextResponse.json({ member }, { status: 201 });
   } catch (error) {
+    if (error instanceof ProjectMemberError) {
+      return NextResponse.json(
+        { error: { code: error.code, message: error.message } },
+        { status: error.status },
+      );
+    }
     return toProjectErrorResponse(error);
   }
 }

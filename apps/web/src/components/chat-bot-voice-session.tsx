@@ -1,31 +1,30 @@
 "use client";
 
 import { appStore } from "@/app/store";
-import { useMcpList } from "@/hooks/queries/use-mcp-list";
-import { useAgent } from "@/hooks/queries/use-agent";
 import { useScrollAnchor } from "@/hooks/use-scroll-anchor";
+import { useVoiceToolMentions } from "@/hooks/use-voice-tool-mentions";
 import { TextPart, getToolName, isToolUIPart } from "ai";
-import { ChatMention } from "app-types/chat";
 import { DEFAULT_VOICE_TOOLS, UIMessageWithCompleted } from "lib/ai/speech";
 import { useOpenAIVoiceChat as OpenAIVoiceChat } from "lib/ai/speech/open-ai/use-voice-chat.openai";
-import { OPENAI_VOICE } from "lib/ai/speech/open-ai/voice-constants";
+import { getVoiceAppToolDefinitions } from "lib/voice/app-tool-definitions";
+import { useMirrorVoiceLiveStatus } from "lib/voice/voice-live-status";
 import { cn, groupBy } from "lib/utils";
 import {
-  CheckIcon,
   ChevronRight,
   Loader,
   MessageSquareMoreIcon,
   MessagesSquareIcon,
+  MessageSquareTextIcon,
   MicIcon,
   MicOffIcon,
   PhoneIcon,
-  RadioIcon,
-  Settings2Icon,
+  SquareIcon,
   TriangleAlertIcon,
   WrenchIcon,
   XIcon,
 } from "lucide-react";
 import { useTranslations } from "next-intl";
+import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { safe } from "ts-safe";
@@ -34,30 +33,34 @@ import { Avatar, AvatarFallback, AvatarImage } from "ui/avatar";
 import { Button } from "ui/button";
 import { Dialog, DialogContent, DialogTitle, DialogTrigger } from "ui/dialog";
 import { Drawer, DrawerContent, DrawerPortal, DrawerTitle } from "ui/drawer";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuGroup,
-  DropdownMenuItem,
-  DropdownMenuPortal,
-  DropdownMenuSub,
-  DropdownMenuSubContent,
-  DropdownMenuSubTrigger,
-  DropdownMenuTrigger,
-} from "ui/dropdown-menu";
-import { GeminiIcon } from "ui/gemini-icon";
 import JsonView from "ui/json-view";
 import { MessageLoading } from "ui/message-loading";
-import { OpenAIIcon } from "ui/openai-icon";
 import { Tooltip, TooltipContent, TooltipTrigger } from "ui/tooltip";
 import { useShallow } from "zustand/shallow";
 import { EnabledTools, EnabledToolsDropdown } from "./enabled-tools-dropdown";
 import { ToolMessagePart } from "./message-parts";
+import { VoiceBrowserPreview } from "./voice/voice-browser-preview";
+import { VoiceSettingsPopover } from "./voice/voice-settings-popover";
 import { VoiceDeviceSettingsDialog } from "./voice-device-settings-dialog";
 
-const prependTools: EnabledTools[] = [
+/**
+ * The always-present tool groups, for the read-only tools dropdown.
+ *
+ * Takes the same capability filter the session route applies, so the list
+ * cannot advertise a browser tool an org has switched off.
+ */
+const buildPrependTools = (browserAutomation: boolean): EnabledTools[] => [
   {
-    groupName: "Browser",
+    groupName: "App",
+    tools: getVoiceAppToolDefinitions({ browserAutomation }).map((tool) => ({
+      name: tool.name,
+      description: tool.description,
+    })),
+  },
+  {
+    // Not "Browser": these control the app's own UI (theme, hanging up), and
+    // that label now reads as browser automation, which lives under "App".
+    groupName: "Session",
     tools: DEFAULT_VOICE_TOOLS.map((tool) => ({
       name: tool.name,
       description: tool.description,
@@ -67,47 +70,40 @@ const prependTools: EnabledTools[] = [
 
 export function VoiceChatSession() {
   const t = useTranslations("Chat");
-  const { data: mcpList = [] } = useMcpList();
-  const [agentId, appStoreMutate, voiceChat, allowedMcpServers] = appStore(
+  const [agentId, appStoreMutate, voiceChat] = appStore(
     useShallow((state) => [
       state.voiceChat.agentId,
       state.mutate,
       state.voiceChat,
-      state.allowedMcpServers,
     ]),
   );
 
-  const { agent } = useAgent(agentId);
+  const { agent, toolMentions } = useVoiceToolMentions(agentId);
+  const router = useRouter();
+  // Functional update: two quick changes in the settings panel must not
+  // overwrite each other through a stale `voiceChat` closure.
+  const updateVoiceOptions = useCallback(
+    (patch: { voice?: string; settings?: unknown }) => {
+      appStoreMutate((state) => ({
+        voiceChat: {
+          ...state.voiceChat,
+          options: {
+            provider: "openai",
+            providerOptions: {
+              ...state.voiceChat.options.providerOptions,
+              ...patch,
+            },
+          },
+        },
+      }));
+    },
+    [appStoreMutate],
+  );
 
   const [isClosing, setIsClosing] = useState(false);
   const startAudio = useRef<HTMLAudioElement>(null);
   const [useCompactView, setUseCompactView] = useState(true);
   const [deviceSettingsOpen, setDeviceSettingsOpen] = useState(false);
-
-  const toolMentions = useMemo<ChatMention[]>(() => {
-    if (!agentId) {
-      if (!allowedMcpServers) return [];
-      return mcpList.flatMap((server) => {
-        const allowedTools = allowedMcpServers[server.id]?.tools ?? [];
-        return allowedTools.map((tool) => {
-          const toolInfo = server.toolInfo.find((item) => item.name === tool);
-          const mention: ChatMention = {
-            type: "mcpTool",
-            serverName: server.name,
-            serverId: server.id,
-            name: tool,
-            description: toolInfo?.description ?? "",
-          };
-          return mention;
-        });
-      });
-    }
-    return (
-      agent?.instructions.mentions?.filter(
-        (mention) => mention.type === "mcpTool",
-      ) ?? []
-    );
-  }, [agentId, agent, mcpList, allowedMcpServers]);
 
   const {
     isListening,
@@ -116,18 +112,31 @@ export function VoiceChatSession() {
     isActive,
     isUserSpeaking,
     messages,
+    threadId,
     error,
     toolStatus,
     toolWarning,
+    browserAutomationEnabled,
+    browserPreview,
+    dismissBrowserPreview,
     start,
     startListening,
     stop,
     stopListening,
+    interruptResponse,
+    sessionConfirmation,
+    settingsPending,
+    sessionVoice,
   } = OpenAIVoiceChat({
     toolMentions,
     agentId,
     ...voiceChat.options.providerOptions,
+    context: voiceChat.context,
   });
+
+  // Mirror the session state for controls outside the drawer (the cockpit's
+  // COM 1 pushbutton); the drawer unmounts on close, which resets it.
+  useMirrorVoiceLiveStatus({ isLoading, isActive, isUserSpeaking });
 
   const startWithSound = useCallback(() => {
     if (!startAudio.current) {
@@ -146,9 +155,25 @@ export function VoiceChatSession() {
       voiceChat: {
         ...voiceChat,
         isOpen: false,
+        // The opener sets it again; a stale "cockpit" must not follow the
+        // user into the next voice chat opened from somewhere else.
+        context: undefined,
       },
     });
   }, [appStoreMutate, stop, voiceChat]);
+
+  /**
+   * Leave the call and land in the thread it was saved to.
+   *
+   * The transcript in the drawer is gone the moment the drawer closes, and a
+   * spoken summary of a web search is not the search — the links only exist in
+   * the persisted thread. Hanging up first flushes the last turn.
+   */
+  const openInChat = useCallback(async () => {
+    if (!threadId) return;
+    await endVoiceChat();
+    router.push(`/chat/${threadId}`);
+  }, [endVoiceChat, router, threadId]);
 
   const statusMessage = useMemo(() => {
     if (isLoading) {
@@ -212,8 +237,8 @@ export function VoiceChatSession() {
   }, [toolStatus.available]);
 
   const tools = useMemo<EnabledTools[]>(() => {
-    return [...prependTools, ...mcpTools];
-  }, [mcpTools]);
+    return [...buildPrependTools(browserAutomationEnabled), ...mcpTools];
+  }, [browserAutomationEnabled, mcpTools]);
 
   useEffect(() => {
     if (!error) {
@@ -288,6 +313,27 @@ export function VoiceChatSession() {
                   </TooltipContent>
                 </Tooltip>
 
+                {/*
+                  Only once a turn has actually been written: a link to a thread
+                  that does not exist yet would 404 on the first click of a
+                  session.
+                */}
+                {threadId && (
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        variant={"secondary"}
+                        size={"icon"}
+                        disabled={isClosing}
+                        onClick={openInChat}
+                      >
+                        <MessageSquareTextIcon />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>{t("VoiceChat.openInChat")}</TooltipContent>
+                  </Tooltip>
+                )}
+
                 <EnabledToolsDropdown
                   align="start"
                   side="bottom"
@@ -295,129 +341,73 @@ export function VoiceChatSession() {
                 />
 
                 <DrawerTitle className="ml-auto">
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button
-                        variant={"ghost"}
-                        size={"icon"}
-                        disabled={isActive || isLoading}
-                      >
-                        <Settings2Icon className="text-foreground size-5" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent
-                      side="left"
-                      className="min-w-40"
-                      align="start"
-                    >
-                      <DropdownMenuGroup className="cursor-pointer">
-                        <DropdownMenuSub>
-                          <DropdownMenuSubTrigger
-                            className="flex items-center gap-2 cursor-pointer"
-                            icon=""
-                          >
-                            <OpenAIIcon className="size-3.5 stroke-none fill-foreground" />
-                            Open AI
-                          </DropdownMenuSubTrigger>
-                          <DropdownMenuPortal>
-                            <DropdownMenuSubContent>
-                              {Object.entries(OPENAI_VOICE).map(
-                                ([key, value]) => (
-                                  <DropdownMenuItem
-                                    className="cursor-pointer flex items-center justify-between"
-                                    disabled={isActive || isLoading}
-                                    onClick={() =>
-                                      appStoreMutate({
-                                        voiceChat: {
-                                          ...voiceChat,
-                                          options: {
-                                            provider: "openai",
-                                            providerOptions: {
-                                              voice: value,
-                                            },
-                                          },
-                                        },
-                                      })
-                                    }
-                                    key={key}
-                                  >
-                                    {key}
-
-                                    {value ===
-                                      voiceChat.options.providerOptions
-                                        ?.voice && (
-                                      <CheckIcon className="size-3.5" />
-                                    )}
-                                  </DropdownMenuItem>
-                                ),
-                              )}
-                            </DropdownMenuSubContent>
-                          </DropdownMenuPortal>
-                        </DropdownMenuSub>
-                        <DropdownMenuItem
-                          className="cursor-pointer flex items-center gap-2"
-                          onSelect={() => setDeviceSettingsOpen(true)}
-                        >
-                          <RadioIcon className="size-3.5" />
-                          {t("VoiceChat.Devices.menuLabel")}
-                        </DropdownMenuItem>
-                        <DropdownMenuSub>
-                          <DropdownMenuSub>
-                            <DropdownMenuSubTrigger
-                              className="flex items-center gap-2 text-muted-foreground"
-                              icon=""
-                            >
-                              <GeminiIcon className="size-3.5" />
-                              Gemini
-                            </DropdownMenuSubTrigger>
-                            <DropdownMenuPortal>
-                              <DropdownMenuSubContent>
-                                <div className="text-xs text-muted-foreground p-6">
-                                  Not Implemented Yet
-                                </div>
-                              </DropdownMenuSubContent>
-                            </DropdownMenuPortal>
-                          </DropdownMenuSub>
-                        </DropdownMenuSub>
-                      </DropdownMenuGroup>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
+                  <VoiceSettingsPopover
+                    voice={voiceChat.options.providerOptions?.voice}
+                    settings={voiceChat.options.providerOptions?.settings}
+                    onChange={updateVoiceOptions}
+                    disabled={isLoading || isClosing}
+                    isActive={isActive}
+                    sessionVoice={sessionVoice}
+                    settingsPending={settingsPending === true}
+                    confirmation={sessionConfirmation}
+                    onOpenDevices={() => setDeviceSettingsOpen(true)}
+                  />
                 </DrawerTitle>
               </div>
-              <div className="flex-1 min-h-0 mx-auto w-full">
-                {error ? (
-                  <div className="max-w-3xl mx-auto">
-                    <Alert variant={"destructive"}>
-                      <TriangleAlertIcon className="size-4 " />
-                      <AlertTitle className="">Error</AlertTitle>
-                      <AlertDescription>{error.message}</AlertDescription>
+              <div className="flex-1 min-h-0 w-full flex gap-4 px-4 md:px-6">
+                <div
+                  className={cn(
+                    "min-h-0 w-full mx-auto flex flex-col",
+                    // While a browser is on screen the transcript becomes the
+                    // sidebar, and on a narrow viewport it gives way entirely:
+                    // watching the run is the point, and two columns at 400px
+                    // wide is neither.
+                    browserPreview &&
+                      "hidden md:flex md:w-[360px] md:shrink-0 md:mx-0",
+                  )}
+                >
+                  {error ? (
+                    <div className="max-w-3xl mx-auto">
+                      <Alert variant={"destructive"}>
+                        <TriangleAlertIcon className="size-4 " />
+                        <AlertTitle className="">Error</AlertTitle>
+                        <AlertDescription>{error.message}</AlertDescription>
 
-                      <AlertDescription className="my-4 ">
-                        <p className="text-muted-foreground ">
-                          {t("VoiceChat.pleaseCloseTheVoiceChatAndTryAgain")}
-                        </p>
-                      </AlertDescription>
-                    </Alert>
-                  </div>
-                ) : null}
-                {toolWarning ? (
-                  <div className="max-w-3xl mx-auto">
-                    <Alert>
-                      <TriangleAlertIcon className="size-4" />
-                      <AlertTitle>Some MCP tools are unavailable</AlertTitle>
-                      <AlertDescription>{toolWarning}</AlertDescription>
-                    </Alert>
-                  </div>
-                ) : null}
-                {isLoading ? (
-                  <div className="flex-1"></div>
-                ) : (
-                  <div className="h-full w-full">
-                    {useCompactView ? (
-                      <CompactMessageView messages={messages} />
-                    ) : (
-                      <ConversationView messages={messages} />
-                    )}
+                        <AlertDescription className="my-4 ">
+                          <p className="text-muted-foreground ">
+                            {t("VoiceChat.pleaseCloseTheVoiceChatAndTryAgain")}
+                          </p>
+                        </AlertDescription>
+                      </Alert>
+                    </div>
+                  ) : null}
+                  {toolWarning ? (
+                    <div className="max-w-3xl mx-auto">
+                      <Alert>
+                        <TriangleAlertIcon className="size-4" />
+                        <AlertTitle>Some MCP tools are unavailable</AlertTitle>
+                        <AlertDescription>{toolWarning}</AlertDescription>
+                      </Alert>
+                    </div>
+                  ) : null}
+                  {isLoading ? (
+                    <div className="flex-1"></div>
+                  ) : (
+                    <div className="h-full w-full min-h-0">
+                      {useCompactView ? (
+                        <CompactMessageView messages={messages} />
+                      ) : (
+                        <ConversationView messages={messages} />
+                      )}
+                    </div>
+                  )}
+                </div>
+                {browserPreview && (
+                  <div className="flex-1 min-h-0 py-2">
+                    <VoiceBrowserPreview
+                      frame={browserPreview}
+                      onDismiss={dismissBrowserPreview}
+                    />
                   </div>
                 )}
               </div>
@@ -476,6 +466,25 @@ export function VoiceChatSession() {
                         : t("VoiceChat.openMic")}
                   </TooltipContent>
                 </Tooltip>
+                {isActive && isAssistantSpeaking && interruptResponse && (
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        variant={"secondary"}
+                        size={"icon"}
+                        className="rounded-full p-6"
+                        disabled={isClosing}
+                        onClick={interruptResponse}
+                        aria-label={t("VoiceChat.stopAnswer")}
+                      >
+                        <SquareIcon className="text-foreground size-5 fill-current" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p>{t("VoiceChat.stopAnswer")}</p>
+                    </TooltipContent>
+                  </Tooltip>
+                )}
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <Button

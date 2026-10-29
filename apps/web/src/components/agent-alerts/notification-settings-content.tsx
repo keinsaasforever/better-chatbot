@@ -75,7 +75,6 @@ export function NotificationSettingsContent() {
         }
         setCachedNotificationPrefs(next);
         await mutate();
-        toast.success(t("saved"));
       } catch {
         toast.error(t("saveFailed"));
       } finally {
@@ -99,7 +98,6 @@ export function NotificationSettingsContent() {
     setPermission(result);
     if (result === "granted") {
       await registerWebPushSubscription();
-      toast.success(t("permissionGranted"));
     } else if (result === "denied") {
       toast.error(t("permissionDenied"));
     }
@@ -107,7 +105,6 @@ export function NotificationSettingsContent() {
 
   const handleTest = () => {
     sendTestAgentAlert();
-    toast.message(t("testSent"));
   };
 
   const permissionLabel =

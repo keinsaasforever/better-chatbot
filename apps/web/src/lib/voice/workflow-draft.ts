@@ -7,6 +7,11 @@ export async function createWorkflowDraftFromTranscript(_input: {
   userId: string;
   orgId: string;
   text: string;
-}): Promise<{ workflowId: string } | null> {
+}): Promise<{
+  workflowId: string;
+  summary?: string | null;
+  usage?: { inputTokens?: number; outputTokens?: number };
+  modelId?: string;
+} | null> {
   return null;
 }

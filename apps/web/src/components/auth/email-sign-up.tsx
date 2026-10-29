@@ -1,6 +1,6 @@
 "use client";
 
-import { existsByEmailAction, signUpAction } from "@/app/api/auth/actions";
+import { existsByEmailAction } from "@/app/api/auth/actions";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -22,6 +22,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { toast } from "sonner";
 import { safe } from "ts-safe";
+import { useCaptcha } from "./use-captcha";
 
 export default function EmailSignUp({
   isFirstUser,
@@ -33,6 +34,7 @@ export default function EmailSignUp({
   const t = useTranslations();
   const [step, setStep] = useState(1);
   const router = useRouter();
+  const captcha = useCaptcha();
   const [isLoading, setIsLoading] = useState(false);
   const [formData, setFormData] = useObjectState({
     email: "",
@@ -90,17 +92,25 @@ export default function EmailSignUp({
       return;
     }
 
-    // server side validation and admin user creation if first user
-    const { success, message } = await safeProcessWithLoading(() =>
-      signUpAction({
-        email: formData.email,
-        name: formData.name,
-        password: formData.password,
-      }),
+    // Signs up over the Better Auth HTTP endpoint rather than a server action:
+    // the Turnstile plugin hooks `onRequest`, which only runs on the handler,
+    // so a server action calling `auth.api.signUpEmail` would skip the captcha
+    // entirely — and be a second unprotected POST surface besides. Password
+    // policy is enforced server-side by the `before` hook in auth-instance.ts.
+    const { error } = await safeProcessWithLoading(() =>
+      authClient.signUp.email(
+        {
+          email: formData.email,
+          name: formData.name,
+          password: formData.password,
+        },
+        { headers: captcha.headers },
+      ),
     ).unwrap();
-    if (success) {
-      toast.success(message);
-
+    // Turnstile tokens are single-use, so the next attempt needs a fresh one
+    // whether this one succeeded or not.
+    captcha.reset();
+    if (!error) {
       // Get the newly created user session and track sign-up
       const session = await authClient.getSession();
       if (session?.data?.user?.id) {
@@ -121,7 +131,7 @@ export default function EmailSignUp({
       // invitation instead of being dropped into onboarding.
       router.push(callbackUrl || "/onboarding");
     } else {
-      toast.error(message);
+      toast.error(error.message || error.statusText);
     }
   };
 
@@ -223,10 +233,13 @@ export default function EmailSignUp({
           <p className="text-muted-foreground text-xs mb-6">
             {steps[step - 1]}
           </p>
+          {/* Only the last step submits, so that is the only one that needs a
+              token — and rendering it earlier would let it expire mid-flow. */}
+          {step === 3 && <div className="mb-6">{captcha.widget}</div>}
           <div className="flex flex-row-reverse gap-2">
             <Button
               tabIndex={0}
-              disabled={isLoading}
+              disabled={isLoading || (step === 3 && !captcha.ready)}
               className="w-1/2"
               onClick={() => {
                 if (step === 1) successEmailStep();

@@ -12,6 +12,7 @@ import {
   LibraryBig,
   Loader2,
   MicIcon,
+  Paintbrush,
   PaperclipIcon,
   PlusIcon,
   Sparkles,
@@ -25,10 +26,19 @@ import { useShallow } from "zustand/shallow";
 import { SelectModel } from "./select-model";
 import { ToolModeDropdown } from "./tool-mode-dropdown";
 
+import { setThreadKnowledgeBasesAction } from "@/app/api/chat/actions";
+import { useFileUpload } from "@/hooks/use-presigned-upload";
 import { useThreadFileUploader } from "@/hooks/use-thread-file-uploader";
+import { requireCredits } from "@/lib/billing/require-credits";
+import { MAX_KNOWLEDGE_SOURCES } from "@/lib/chat/knowledge-base-mentions";
 import { cn } from "@/lib/utils";
 import { Editor } from "@tiptap/react";
 import { WorkflowSummary } from "app-types/workflow";
+import {
+  AUTO_IMAGE_MODEL_ID,
+  isAutoImageModel,
+  resolveImageModel,
+} from "lib/ai/image/image-models";
 import { DefaultToolName } from "lib/ai/tools";
 import equal from "lib/equal";
 import { useTranslations } from "next-intl";
@@ -47,17 +57,28 @@ import { OpenAIIcon } from "ui/openai-icon";
 import { Tooltip, TooltipContent, TooltipTrigger } from "ui/tooltip";
 import { ProjectContextBadge } from "./chat/project-context-badge";
 import { DefaultToolIcon } from "./default-tool-icon";
-import { KnowledgeBaseUploadDialog } from "./knowledge-base/knowledge-base-upload-dialog";
+import { ImageMaskEditor } from "./image-mask-editor";
+import {
+  CREATE_NEW as KNOWLEDGE_BASE_CREATE_NEW,
+  KnowledgeBaseDialog,
+  type KnowledgeBaseTarget,
+} from "./knowledge-base/knowledge-base-dialog";
+import { KnowledgeBaseMenu } from "./knowledge-base/knowledge-base-menu";
 import { ToolSelectDropdown } from "./tool-select-dropdown";
 
 import { useChatModels } from "@/hooks/queries/use-chat-models";
 import { useAssemblyAI } from "@/hooks/use-assembly-ai";
 import { useIsMobile } from "@/hooks/use-mobile";
-import { isFilePartSupported, isIngestSupported } from "@/lib/ai/file-support";
+import {
+  isFilePartSupported,
+  isSummarizeSupported,
+} from "@/lib/ai/file-support";
 import { FileUIPart, TextUIPart } from "ai";
 import { AgentSummary } from "app-types/agent";
 import { EMOJI_DATA } from "lib/const";
 import { toast } from "sonner";
+import type { ContextTokenUsage } from "./ai-elements/context";
+import { ChatContextMeter } from "./chat-context-meter";
 
 interface PromptInputProps {
   placeholder?: string;
@@ -80,6 +101,8 @@ interface PromptInputProps {
     name: string;
   };
   showProjectContextBadge?: boolean;
+  contextUsage?: ContextTokenUsage;
+  contextUsageModel?: ChatModel;
 }
 
 const ChatMentionInput = dynamic(() => import("./chat-mention-input"), {
@@ -107,13 +130,22 @@ export default function PromptInput({
   disabledMention,
   projectInfo,
   showProjectContextBadge = true,
+  contextUsage,
+  contextUsageModel,
 }: PromptInputProps) {
   const t = useTranslations("Chat");
   const isMobile = useIsMobile();
   const toolbarCompact = isMobile;
   const [isUploadDropdownOpen, setIsUploadDropdownOpen] = useState(false);
+  // The upload a brush mask is being drawn for; null closes the editor.
+  const [maskTarget, setMaskTarget] = useState<UploadedFile | null>(null);
+  const [isApplyingMask, setIsApplyingMask] = useState(false);
+  const { upload: uploadMaskFile } = useFileUpload();
   const [isKnowledgeBaseDialogOpen, setIsKnowledgeBaseDialogOpen] =
     useState(false);
+  const [knowledgeBaseDialogTarget, setKnowledgeBaseDialogTarget] = useState(
+    KNOWLEDGE_BASE_CREATE_NEW,
+  );
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { uploadFiles } = useThreadFileUploader(threadId);
   const { data: providers } = useChatModels();
@@ -210,20 +242,53 @@ export default function PromptInput({
     [setModel, appStoreMutate],
   );
 
+  /**
+   * Mirrors a mention list's knowledge sources onto the thread row, which is
+   * the durable record. A draft thread has no row yet, so this resolves false
+   * and the chat POST writes the same list when it creates the thread; nothing
+   * to surface either way.
+   *
+   * Every path that changes a knowledge-base chip has to call this - the
+   * composer menu AND the chip's own remove button. Skipping it on removal
+   * left the source on the thread, so a reload brought the chip back and the
+   * model kept searching a source the user had detached.
+   */
+  const persistKnowledgeBases = useCallback(
+    (threadId: string, nextMentions: ChatMention[]) => {
+      setThreadKnowledgeBasesAction(
+        threadId,
+        nextMentions
+          .filter((m) => m.type === "knowledgeBase")
+          .map((m) => ({
+            type: m.sourceType,
+            id: m.knowledgeBaseId,
+            name: m.name,
+          })),
+      ).catch((error) => {
+        console.error("Failed to save the chat's knowledge bases", error);
+        toast.error(t("KnowledgeBase.errorAttach"));
+      });
+    },
+    [t],
+  );
+
   const deleteMention = useCallback(
     (mention: ChatMention) => {
       if (!threadId) return;
-      appStoreMutate((prev) => {
-        const newMentions = mentions.filter((m) => !equal(m, mention));
-        return {
-          threadMentions: {
-            ...prev.threadMentions,
-            [threadId!]: newMentions,
-          },
-        };
-      });
+      const newMentions = mentions.filter((m) => !equal(m, mention));
+      appStoreMutate((prev) => ({
+        threadMentions: {
+          ...prev.threadMentions,
+          [threadId!]: newMentions,
+        },
+      }));
+      // Knowledge sources are also stored on the thread, so dropping the chip
+      // has to clear the row too or a reload restores it.
+      if (mention.type === "knowledgeBase") {
+        persistKnowledgeBases(threadId, newMentions);
+      }
     },
-    [mentions, threadId],
+    [appStoreMutate, mentions, persistKnowledgeBases, threadId],
   );
 
   const deleteFile = useCallback(
@@ -254,6 +319,51 @@ export default function PromptInput({
     [uploadedFiles, threadId, appStoreMutate],
   );
 
+  const setFileMask = useCallback(
+    (fileId: string, mask: UploadedFile["mask"]) => {
+      if (!threadId) return;
+      appStoreMutate((prev) => ({
+        threadFiles: {
+          ...prev.threadFiles,
+          [threadId]: (prev.threadFiles[threadId] ?? []).map((f) =>
+            f.id === fileId ? { ...f, mask } : f,
+          ),
+        },
+      }));
+    },
+    [threadId, appStoreMutate],
+  );
+
+  const applyMask = useCallback(
+    async (maskFile: File) => {
+      if (!threadId || !maskTarget) return;
+      setIsApplyingMask(true);
+      try {
+        const uploaded = await uploadMaskFile(maskFile);
+        if (!uploaded) {
+          toast.error(t("MaskEditor.uploadFailed"));
+          return;
+        }
+        setFileMask(maskTarget.id, { url: uploaded.url });
+        // A mask only means something to the image tool, so make sure it is
+        // bound for this turn; the model choice stays automatic.
+        appStoreMutate((prev) => ({
+          threadImageToolModel: {
+            ...prev.threadImageToolModel,
+            [threadId]:
+              prev.threadImageToolModel[threadId] ?? AUTO_IMAGE_MODEL_ID,
+          },
+        }));
+        setMaskTarget(null);
+      } catch (_err) {
+        toast.error(t("MaskEditor.uploadFailed"));
+      } finally {
+        setIsApplyingMask(false);
+      }
+    },
+    [threadId, maskTarget, uploadMaskFile, setFileMask, appStoreMutate, t],
+  );
+
   // uploadFiles handled by hook
 
   const handleFileSelect = useCallback(
@@ -269,8 +379,8 @@ export default function PromptInput({
   );
 
   const handleGenerateImage = useCallback(
-    (provider?: "google" | "openai") => {
-      if (!provider) {
+    (model?: string) => {
+      if (!model) {
         appStoreMutate({
           threadImageToolModel: {},
         });
@@ -282,7 +392,7 @@ export default function PromptInput({
       appStoreMutate((prev) => ({
         threadImageToolModel: {
           ...prev.threadImageToolModel,
-          [threadId]: provider,
+          [threadId]: model,
         },
       }));
 
@@ -340,6 +450,73 @@ export default function PromptInput({
     [addMention],
   );
 
+  const attachedKnowledgeBaseIds = useMemo(
+    () =>
+      mentions
+        .filter((m) => m.type === "knowledgeBase")
+        .map((m) => m.knowledgeBaseId),
+    [mentions],
+  );
+
+  const onToggleKnowledgeBase = useCallback(
+    (target: KnowledgeBaseTarget, attached: boolean) => {
+      if (!threadId) return;
+
+      // The server caps how many sources one turn searches; refusing here is
+      // the only way the user learns the extra pick did nothing.
+      if (
+        attached &&
+        !attachedKnowledgeBaseIds.includes(target.id) &&
+        attachedKnowledgeBaseIds.length >= MAX_KNOWLEDGE_SOURCES
+      ) {
+        toast.error(
+          t("KnowledgeBase.errorTooMany", { count: MAX_KNOWLEDGE_SOURCES }),
+        );
+        return;
+      }
+
+      const without = mentions.filter(
+        (m) => !(m.type === "knowledgeBase" && m.knowledgeBaseId === target.id),
+      );
+      const next: ChatMention[] = attached
+        ? [
+            ...without,
+            {
+              type: "knowledgeBase",
+              name: target.name,
+              knowledgeBaseId: target.id,
+              sourceType: target.sourceType,
+            },
+          ]
+        : without;
+
+      appStoreMutate((prev) => ({
+        threadMentions: { ...prev.threadMentions, [threadId]: next },
+      }));
+      persistKnowledgeBases(threadId, next);
+    },
+    [
+      appStoreMutate,
+      attachedKnowledgeBaseIds,
+      mentions,
+      persistKnowledgeBases,
+      t,
+      threadId,
+    ],
+  );
+
+  const openKnowledgeBaseDialog = useCallback((initialTarget: string) => {
+    setKnowledgeBaseDialogTarget(initialTarget);
+    setIsKnowledgeBaseDialogOpen(true);
+  }, []);
+
+  // Whatever the dialog just created or filled is what this chat should search
+  // next, so attaching it is the flow's last step rather than a second chore.
+  const onKnowledgeBaseDialogDone = useCallback(
+    (target: KnowledgeBaseTarget) => onToggleKnowledgeBase(target, true),
+    [onToggleKnowledgeBase],
+  );
+
   const onSelectAgent = useCallback(
     (agent: AgentSummary) => {
       appStoreMutate((prev) => {
@@ -395,6 +572,9 @@ export default function PromptInput({
     const userMessage = input?.trim() || "";
     if (userMessage.length === 0) return;
 
+    // Gate before clearing the composer so the typed text survives a block.
+    if (!requireCredits()) return;
+
     setInput("");
     const attachmentParts = uploadedFiles.reduce<
       Array<FileUIPart | TextUIPart | any>
@@ -438,6 +618,18 @@ export default function PromptInput({
         ingestionPreview: true,
       });
     }
+
+    // Captured before the composer clears its files: the transport reads it
+    // from the store when it builds the request, which may be a tick later.
+    const maskedFile = uploadedFiles.find((file) => file.mask && file.url);
+    appStoreMutate((prev) => ({
+      threadImageMask: {
+        ...prev.threadImageMask,
+        [threadId!]: maskedFile?.mask
+          ? { imageUrl: maskedFile.url, maskUrl: maskedFile.mask.url }
+          : undefined,
+      },
+    }));
 
     sendMessage({
       role: "user",
@@ -522,6 +714,8 @@ export default function PromptInput({
                             <MCPIcon className="size-3.5" />
                           ) : mention.type == "skill" ? (
                             <Sparkles className="size-3.5" />
+                          ) : mention.type == "knowledgeBase" ? (
+                            <LibraryBig className="size-3.5" />
                           ) : (
                             <DefaultToolIcon
                               name={mention.name as DefaultToolName}
@@ -538,6 +732,10 @@ export default function PromptInput({
                         {mention.description ? (
                           <span className="text-muted-foreground text-xs truncate">
                             {mention.description}
+                          </span>
+                        ) : mention.type === "knowledgeBase" ? (
+                          <span className="text-muted-foreground text-xs truncate">
+                            {t("KnowledgeBase.chipDescription")}
                           </span>
                         ) : null}
                       </div>
@@ -559,11 +757,14 @@ export default function PromptInput({
             )}
             <div
               className={cn(
-                "flex flex-col gap-3.5 pt-2 pb-4",
+                "flex flex-col gap-3.5 pt-3 pb-5 md:pt-2 md:pb-4",
                 embedded ? "px-3" : "px-5",
               )}
             >
-              <div className="relative min-h-[2rem]">
+              {/* `text-base` pins the editor at 16px — iOS Safari auto-zooms
+                  on focus below that. Taller minimum on small screens so the
+                  composer reads as a real writing surface. */}
+              <div className="relative text-base min-h-[3rem] md:min-h-[2rem]">
                 <ChatMentionInput
                   input={input}
                   onChange={setInput}
@@ -627,19 +828,31 @@ export default function PromptInput({
                       {t("uploadImage")}
                     </DropdownMenuItem>
 
-                    <DropdownMenuItem
-                      className="cursor-pointer"
-                      onClick={() => setIsKnowledgeBaseDialogOpen(true)}
-                    >
-                      <LibraryBig className="mr-2 size-4" />
-                      Upload to knowledge base
-                    </DropdownMenuItem>
+                    <KnowledgeBaseMenu
+                      attachedIds={attachedKnowledgeBaseIds}
+                      onToggle={onToggleKnowledgeBase}
+                      onAddDocuments={openKnowledgeBaseDialog}
+                    />
                   </DropdownMenuContent>
                 </DropdownMenu>
 
-                <KnowledgeBaseUploadDialog
+                {maskTarget && (
+                  <ImageMaskEditor
+                    open
+                    imageUrl={maskTarget.url}
+                    imageName={maskTarget.name}
+                    applying={isApplyingMask}
+                    onOpenChange={(open) => {
+                      if (!open) setMaskTarget(null);
+                    }}
+                    onApply={applyMask}
+                  />
+                )}
+                <KnowledgeBaseDialog
                   open={isKnowledgeBaseDialogOpen}
                   onOpenChange={setIsKnowledgeBaseDialogOpen}
+                  initialTarget={knowledgeBaseDialogTarget}
+                  onDone={onKnowledgeBaseDialogDone}
                 />
 
                 {!toolDisabled &&
@@ -651,7 +864,9 @@ export default function PromptInput({
                       onClick={() => handleGenerateImage()}
                     >
                       <ImagesIcon className="size-3.5" />
-                      {t("generateImage")}
+                      {isAutoImageModel(imageToolModel)
+                        ? t("imageModelAuto")
+                        : resolveImageModel(imageToolModel).name}
                       <XIcon className="size-3 group-hover/image-generator:opacity-100 opacity-0 transition-opacity duration-200" />
                     </Button>
                   ) : (
@@ -694,6 +909,16 @@ export default function PromptInput({
                     />
                   )}
 
+                  {!embedded && contextUsage && (
+                    <ChatContextMeter
+                      usage={contextUsage}
+                      usageModel={contextUsageModel}
+                      selectedModel={chatModel}
+                      autoRouting={autoRouting}
+                      className={toolbarCompact ? "mr-0.5" : "mr-1"}
+                    />
+                  )}
+
                   <SelectModel
                     onSelect={setChatModel}
                     currentModel={chatModel}
@@ -704,7 +929,13 @@ export default function PromptInput({
                       variant={"ghost"}
                       size={"sm"}
                       className={cn(
-                        "rounded-full group data-[state=open]:bg-input! hover:bg-input! flex-shrink-0",
+                        // overflow-hidden matters: the label below is a flex
+                        // child whose min-width defaults to min-content, and
+                        // with `whitespace-nowrap` from buttonVariants that is
+                        // the full model id. Without a clip here a long name
+                        // ("gemini-2.5-flash-preview-…") paints straight out of
+                        // the max-w box and across the mic and send buttons.
+                        "rounded-full group data-[state=open]:bg-input! hover:bg-input! flex-shrink-0 overflow-hidden",
                         toolbarCompact
                           ? "h-7 px-2 mr-0.5 max-w-[72px] sm:max-w-[120px] text-xs"
                           : "mr-2 min-[475px]:mr-3 max-w-[90px] min-[450px]:max-w-[120px] sm:max-w-[180px]",
@@ -713,7 +944,7 @@ export default function PromptInput({
                     >
                       {autoRouting ? (
                         <span
-                          className="text-foreground group-data-[state=open]:text-foreground truncate"
+                          className="text-foreground group-data-[state=open]:text-foreground truncate min-w-0"
                           data-testid="selected-model-name"
                         >
                           Automatic
@@ -731,7 +962,7 @@ export default function PromptInput({
                               <GeminiIcon className="size-3 opacity-0 group-data-[state=open]:opacity-100 group-hover:opacity-100 flex-shrink-0" />
                             ) : null)}
                           <span
-                            className="text-foreground group-data-[state=open]:text-foreground truncate"
+                            className="text-foreground group-data-[state=open]:text-foreground truncate min-w-0"
                             data-testid="selected-model-name"
                           >
                             {chatModel.model}
@@ -751,80 +982,96 @@ export default function PromptInput({
                   </SelectModel>
                 </div>
 
-                {isLoading ? (
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <div
-                        onClick={onStop}
-                        aria-label="Disconnect from the current response"
-                        className={cn(
-                          "cursor-pointer text-muted-foreground rounded-full bg-secondary hover:bg-accent-foreground hover:text-accent transition-all duration-200 flex-shrink-0",
-                          toolbarCompact
-                            ? "size-7 p-1.5"
-                            : "p-2 mr-0 min-[450px]:mr-2",
-                        )}
-                      >
-                        <Square
-                          size={toolbarCompact ? 14 : 16}
-                          className="fill-muted-foreground text-muted-foreground"
-                        />
-                      </div>
-                    </TooltipTrigger>
-                    <TooltipContent>Disconnect</TooltipContent>
-                  </Tooltip>
-                ) : input.trim().length > 0 ? (
-                  <div
-                    onClick={submit}
-                    className={cn(
-                      "cursor-pointer text-muted-foreground rounded-full bg-secondary hover:bg-accent-foreground hover:text-accent transition-all duration-200 flex-shrink-0",
-                      toolbarCompact
-                        ? "size-7 p-1.5"
-                        : "p-2 mr-0 min-[450px]:mr-2",
-                    )}
-                  >
-                    <CornerRightUp size={toolbarCompact ? 14 : 16} />
-                  </div>
-                ) : !voiceDisabled ? (
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button
-                        size={"sm"}
-                        onClick={toggleListening}
-                        className={cn(
-                          "rounded-full flex-shrink-0 transition-all duration-200",
-                          toolbarCompact
-                            ? "size-7 p-0"
-                            : "p-2! mr-0 min-[450px]:mr-2",
-                          isListening &&
-                            "bg-red-500/10 text-red-500 hover:bg-red-500/20 border border-red-500/50",
-                        )}
-                      >
-                        {isListening ? (
-                          <MicIcon
-                            size={toolbarCompact ? 14 : 16}
-                            className="animate-pulse"
+                {/* Mic and send sit side by side so dictation can be stopped
+                    and the transcript edited before sending. */}
+                <div
+                  className={cn(
+                    "flex items-center flex-shrink-0",
+                    toolbarCompact ? "gap-1" : "gap-1.5 mr-0 min-[450px]:mr-2",
+                  )}
+                >
+                  {!voiceDisabled && (
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          size="icon"
+                          variant="secondary"
+                          onClick={toggleListening}
+                          aria-label={
+                            isListening
+                              ? t("stopDictation")
+                              : t("voiceDictation")
+                          }
+                          className={cn(
+                            "rounded-full flex-shrink-0 transition-all duration-200",
+                            toolbarCompact ? "size-11" : "size-9",
+                            isListening &&
+                              "bg-red-500/10 text-red-500 hover:bg-red-500/20 border border-red-500/50",
+                          )}
+                        >
+                          {/* A filled square while recording reads as "stop"
+                              at a glance, which the pulsing mic did not. */}
+                          {isListening ? (
+                            <Square
+                              className={cn(
+                                "fill-current animate-pulse",
+                                toolbarCompact ? "size-[18px]" : "size-4",
+                              )}
+                            />
+                          ) : (
+                            <MicIcon
+                              className={toolbarCompact ? "size-5" : "size-4"}
+                            />
+                          )}
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        {isListening ? t("stopDictation") : t("voiceDictation")}
+                      </TooltipContent>
+                    </Tooltip>
+                  )}
+
+                  {isLoading ? (
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          size="icon"
+                          variant="secondary"
+                          onClick={onStop}
+                          aria-label="Disconnect from the current response"
+                          className={cn(
+                            "rounded-full flex-shrink-0 text-muted-foreground hover:bg-accent-foreground hover:text-accent transition-all duration-200",
+                            toolbarCompact ? "size-11" : "size-9",
+                          )}
+                        >
+                          <Square
+                            className={cn(
+                              "fill-current",
+                              toolbarCompact ? "size-[18px]" : "size-4",
+                            )}
                           />
-                        ) : (
-                          <MicIcon size={toolbarCompact ? 14 : 16} />
-                        )}
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent>
-                      {isListening ? t("stopDictation") : t("voiceDictation")}
-                    </TooltipContent>
-                  </Tooltip>
-                ) : (
-                  <div
-                    className={cn(
-                      "text-muted-foreground rounded-full bg-secondary opacity-40 flex-shrink-0 cursor-not-allowed",
-                      toolbarCompact
-                        ? "size-7 p-1.5"
-                        : "p-2 mr-0 min-[450px]:mr-2",
-                    )}
-                  >
-                    <CornerRightUp size={toolbarCompact ? 14 : 16} />
-                  </div>
-                )}
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>Disconnect</TooltipContent>
+                    </Tooltip>
+                  ) : (
+                    <Button
+                      size="icon"
+                      onClick={submit}
+                      disabled={input.trim().length === 0}
+                      aria-label={t("sendMessage")}
+                      className={cn(
+                        "rounded-full flex-shrink-0 bg-primary text-primary-foreground hover:bg-primary/90 transition-all duration-200",
+                        "disabled:opacity-40 disabled:cursor-not-allowed",
+                        toolbarCompact ? "size-11" : "size-9",
+                      )}
+                    >
+                      <CornerRightUp
+                        className={toolbarCompact ? "size-5" : "size-4"}
+                      />
+                    </Button>
+                  )}
+                </div>
               </div>
 
               {/* Uploaded Files Preview - Below Input */}
@@ -837,7 +1084,10 @@ export default function PromptInput({
                     const displayName = file.name;
                     const displayExt =
                       file.name.split(".").pop()?.toUpperCase() || "FILE";
-                    const isSummarizable = isIngestSupported(file.mimeType);
+                    // Narrower than "we can read this": the button posts to
+                    // /api/storage/ingest, which handles CSV only. It used to
+                    // show for PDFs, whose request the route rejected.
+                    const isSummarizable = isSummarizeSupported(file.mimeType);
                     return (
                       <div
                         key={file.id}
@@ -939,6 +1189,31 @@ export default function PromptInput({
                                 <TooltipContent>Summarize</TooltipContent>
                               </Tooltip>
                             )}
+                            {isImage && file.url && (
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Button
+                                    variant={
+                                      file.mask ? "default" : "secondary"
+                                    }
+                                    size="icon"
+                                    className="rounded-full"
+                                    onClick={() => setMaskTarget(file)}
+                                    disabled={file.isUploading}
+                                  >
+                                    <Paintbrush className="size-4" />
+                                    <span className="sr-only">
+                                      {t("MaskEditor.open")}
+                                    </span>
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>
+                                  {file.mask
+                                    ? t("MaskEditor.edit")
+                                    : t("MaskEditor.open")}
+                                </TooltipContent>
+                              </Tooltip>
+                            )}
                             <Button
                               variant="ghost"
                               size="icon"
@@ -950,6 +1225,20 @@ export default function PromptInput({
                             </Button>
                           </div>
                         </div>
+
+                        {/* Masked badge: the next send edits only the painted
+                            region of this photo. Click removes the mask. */}
+                        {file.mask && !file.isUploading && (
+                          <button
+                            type="button"
+                            onClick={() => setFileMask(file.id, undefined)}
+                            title={t("MaskEditor.remove")}
+                            className="absolute bottom-1 left-1 flex items-center gap-1 rounded-full bg-primary px-2 py-0.5 text-[11px] font-medium text-primary-foreground shadow"
+                          >
+                            <Paintbrush className="size-3" />
+                            {t("MaskEditor.badge")}
+                          </button>
+                        )}
 
                         {/* Cancel Upload Button (Top Right) */}
                         {file.isUploading && (

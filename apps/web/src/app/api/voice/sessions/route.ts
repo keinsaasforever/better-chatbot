@@ -39,7 +39,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Device not found" }, { status: 404 });
     }
 
-    const billingCustomerId = resolveVoiceBillingCustomerId({
+    const billingCustomerId = await resolveVoiceBillingCustomerId({
       userId: device.userId,
       organizationId: device.organizationId ?? input.organizationId,
     });

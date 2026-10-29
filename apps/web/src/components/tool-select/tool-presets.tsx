@@ -82,7 +82,6 @@ export function ToolPresets() {
       });
       setPresetName("");
       setOpen(false);
-      toast.success(t("Chat.Tool.presetSaved"));
     },
     [allowedMcpServers, allowedAppDefaultToolkit, presets],
   );
@@ -110,8 +109,8 @@ export function ToolPresets() {
           {t("Chat.Tool.preset")}
         </DropdownMenuSubTrigger>
         <DropdownMenuPortal>
-          <DropdownMenuSubContent className="md:w-80 md:max-h-96 overflow-y-auto">
-            <DropdownMenuLabel className="flex items-center text-muted-foreground gap-2 text-xs">
+          <DropdownMenuSubContent className="w-[var(--radix-popper-available-width)] overflow-y-auto md:w-80 md:max-h-96">
+            <DropdownMenuLabel className="flex flex-wrap items-center text-muted-foreground gap-2 text-xs">
               {t("Chat.Tool.toolPresets")}
               <div className="flex-1" />
               <Dialog open={open} onOpenChange={setOpen}>

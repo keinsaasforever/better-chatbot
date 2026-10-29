@@ -28,3 +28,20 @@ export function useLocalModelsCheckout(): {
     subscribe: async () => {},
   };
 }
+
+/**
+ * Referral credits are part of the hosted product, so the entry points never
+ * show here. Mirrors the cloud export so consumers stay edition-agnostic.
+ */
+export function ReferralEnabledProvider({
+  children,
+}: {
+  enabled: boolean;
+  children: React.ReactNode;
+}) {
+  return <>{children}</>;
+}
+
+export function useReferralEnabled(): boolean {
+  return false;
+}

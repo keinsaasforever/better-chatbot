@@ -1,0 +1,53 @@
+name: Build E2B template
+
+# Manual only, on purpose.
+#
+# A template build takes minutes, counts against the account's concurrent-build
+# limit, and produces an image that changes maybe twice a year — while this repo
+# is pushed to many times a day. Running it on push would rebuild an identical
+# image constantly; running it inside the Vercel build would put E2B in the
+# critical path of shipping a page and the API key in the app's build
+# environment.
+#
+# Requires the E2B_API_KEY repository secret.
+on:
+  workflow_dispatch:
+    inputs:
+      template:
+        description: Which template to build
+        required: true
+        default: navigator-python-docs
+        type: choice
+        options:
+          - navigator-python-docs
+          - navigator-remotion-nextjs
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    # Well inside E2B's one-hour build limit, but bounded so a hung ready
+    # command does not hold a runner for an hour.
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      # e2b/build is its own npm package, outside the pnpm workspace — see its
+      # README for why the SDK cannot live in the root lockfile. Nothing here
+      # needs the app's dependencies, so the workspace is never installed.
+      - name: Install the builder
+        working-directory: e2b/build
+        run: npm install
+
+      - name: Build the template
+        working-directory: e2b/build
+        env:
+          E2B_API_KEY: ${{ secrets.E2B_API_KEY }}
+          E2B_TEMPLATE: ${{ inputs.template }}
+        run: npx tsx build.ts

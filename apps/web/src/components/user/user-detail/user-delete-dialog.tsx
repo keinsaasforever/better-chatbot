@@ -41,7 +41,6 @@ export function UserDeleteDialog({
 
       if (result?.success) {
         router.replace(result.redirect || "/admin");
-        toast.success(t("userDeletedSuccessfully"));
         setShowDeleteDialog(false);
       } else {
         toast.error(result?.message || t("failedToDeleteUser"));

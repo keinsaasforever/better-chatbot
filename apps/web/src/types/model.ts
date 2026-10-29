@@ -24,6 +24,13 @@ export interface ModelMetadata {
   speed?: boolean;
   thinking?: boolean;
   maxPerformance?: boolean;
+  /**
+   * Catalog price in USD per million tokens. Drizzle returns `numeric` as a
+   * string to avoid the precision loss a float would introduce, and either
+   * column may be null for a model nobody has priced yet.
+   */
+  inputPriceUsd?: string | null;
+  outputPriceUsd?: string | null;
 }
 
 export type ModelCapability =

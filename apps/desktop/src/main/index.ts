@@ -1,11 +1,22 @@
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { BrowserWindow, app, shell } from "electron";
+import { BrowserWindow, app, session, shell } from "electron";
 import {
   initAutoUpdater,
   registerUpdateIpcHandlers,
   setUpdateMainWindow,
 } from "./auto-updater.js";
+import { openCheckoutWindow } from "./checkout-window.js";
+import { DESKTOP_PROTOCOL, findDeepLinkArg } from "./deep-link.js";
+import { registerDownloadHandler } from "./downloads.js";
+import {
+  flushQueuedDeepLinks,
+  focusMainWindow,
+  handleAuthDeepLink,
+  registerDesktopAuthIpcHandlers,
+  setDesktopAuthMainWindow,
+} from "./desktop-auth.js";
+import { classifyNavigation } from "./external-links.js";
 import { resolveAppIconPath } from "./icon.js";
 import { registerIpcHandlers } from "./ipc-handlers.js";
 import { registerMcpIpcHandlers } from "./mcp-ipc.js";
@@ -36,53 +47,54 @@ function resolveWebUrl(): string {
   return "https://app.keinsaas.com";
 }
 
-const ALLOWED_EXTERNAL_HOSTS = new Set([
-  "apps.apple.com",
-  "app.keinsaas.com",
-  "www.keinsaas.com",
-  "keinsaas.com",
-]);
+const webUrl = resolveWebUrl();
+const appOrigin = new URL(webUrl).origin;
 
-function isAllowedExternalUrl(url: string): boolean {
-  try {
-    const parsed = new URL(url);
-    if (parsed.protocol === "mailto:") return true;
-    return ALLOWED_EXTERNAL_HOSTS.has(parsed.hostname);
-  } catch {
-    return false;
-  }
+// A `keinsaas://` launch on Windows and Linux starts a second copy of the app
+// whose only job is to forward its argv to the running one. Without the lock
+// the deep link would open a second window and the sign-in would be lost.
+const hasSingleInstanceLock = app.requestSingleInstanceLock();
+if (!hasSingleInstanceLock) {
+  app.quit();
+} else {
+  app.on("second-instance", (_event, argv) => {
+    const link = findDeepLinkArg(argv);
+    if (link) void handleAuthDeepLink(link);
+    focusMainWindow();
+  });
 }
 
-/**
- * Identity providers the web app can hand off to (`lib/auth/config.ts` wires
- * Google, GitHub and Microsoft). These must navigate *inside* the app window:
- * the OAuth callback redirects back to the app origin and sets the Better Auth
- * session cookie there. Sent to the system browser via `shell.openExternal`,
- * that cookie would land in the user's default browser and never reach the
- * Electron session — sign-in would appear to succeed and leave them logged out.
- *
- * Kept separate from ALLOWED_EXTERNAL_HOSTS, which is for links that genuinely
- * belong in the system browser and must stay narrow.
- */
-const OAUTH_HOSTS = new Set([
-  "accounts.google.com",
-  "github.com",
-  "login.microsoftonline.com",
-]);
+// macOS delivers protocol launches here, also on a cold start, so the listener
+// has to exist before `ready`. Links that arrive before the window is up are
+// queued and replayed by bootstrap.
+app.on("open-url", (event, url) => {
+  event.preventDefault();
+  void handleAuthDeepLink(url);
+});
 
-function isOAuthUrl(url: string): boolean {
-  try {
-    const parsed = new URL(url);
-    if (parsed.protocol !== "https:") return false;
-    return OAUTH_HOSTS.has(parsed.hostname);
-  } catch {
-    return false;
+registerProtocolClient();
+
+/**
+ * Packaged builds are registered by the installer (`protocols` in
+ * electron-builder.yml); the runtime call keeps that registration pointing at
+ * the current executable after an update. In development (`electron .`) the
+ * registration has to carry the script path or Windows launches a bare
+ * Electron with no app.
+ */
+function registerProtocolClient(): void {
+  if (process.defaultApp) {
+    if (process.argv.length >= 2) {
+      app.setAsDefaultProtocolClient(DESKTOP_PROTOCOL, process.execPath, [
+        path.resolve(process.argv[1]),
+      ]);
+    }
+    return;
   }
+  app.setAsDefaultProtocolClient(DESKTOP_PROTOCOL);
 }
 
 async function createMainWindow(): Promise<BrowserWindow> {
   const preloadPath = path.join(__dirname, "../preload/index.js");
-  const webUrl = resolveWebUrl();
 
   const window = new BrowserWindow({
     width: 1280,
@@ -104,30 +116,60 @@ async function createMainWindow(): Promise<BrowserWindow> {
     window.show();
   });
 
+  const openCheckout = (url: string) => {
+    openCheckoutWindow({
+      url,
+      parent: window,
+      appOrigin,
+      onReturn: () => {
+        if (window.isDestroyed()) return;
+        window.webContents.send("billing:checkout-closed");
+      },
+    });
+  };
+
   window.webContents.setWindowOpenHandler(({ url }) => {
-    // Providers that open the consent screen in a popup keep it in-app, so the
-    // callback lands in this session rather than the system browser.
-    if (isOAuthUrl(url)) {
-      return { action: "allow" };
+    switch (classifyNavigation(url, appOrigin)) {
+      case "app":
+        return { action: "allow" };
+      case "download":
+        // A file response has nothing to show; a window opened for it stayed
+        // blank. Hand it to the session's download pipeline (./downloads.ts).
+        window.webContents.downloadURL(url);
+        return { action: "deny" };
+      case "checkout":
+        openCheckout(url);
+        return { action: "deny" };
+      case "external":
+        void shell.openExternal(url);
+        return { action: "deny" };
+      default:
+        console.warn(`[desktop] blocked window.open to ${url}`);
+        return { action: "deny" };
     }
-    if (isAllowedExternalUrl(url)) {
-      void shell.openExternal(url);
-    }
-    return { action: "deny" };
   });
 
   window.webContents.on("will-navigate", (event, url) => {
-    const target = new URL(url);
-    const origin = new URL(webUrl).origin;
-    if (target.origin !== origin) {
-      // Let the OAuth handshake run in-window. Blocking it here is what made
-      // "Sign in with Google" silently do nothing in the desktop app.
-      if (isOAuthUrl(url)) return;
-      event.preventDefault();
-      if (isAllowedExternalUrl(url)) {
-        void shell.openExternal(url);
-      }
+    const action = classifyNavigation(url, appOrigin);
+    // Same-origin routing navigates in place. Identity providers are *not*
+    // allowed in here: they reject OAuth in embedded web views, so sign-in
+    // runs in the system browser and returns via keinsaas:// (desktop-auth.ts).
+    if (action === "app") return;
+
+    event.preventDefault();
+    if (action === "download") {
+      window.webContents.downloadURL(url);
+      return;
     }
+    if (action === "checkout") {
+      openCheckout(url);
+      return;
+    }
+    if (action === "external") {
+      void shell.openExternal(url);
+      return;
+    }
+    console.warn(`[desktop] blocked navigation to ${url}`);
   });
 
   if (isDev) {
@@ -154,6 +196,20 @@ async function createMainWindow(): Promise<BrowserWindow> {
   return window;
 }
 
+/** Creates the window and points every main-window-aware module at it. */
+async function openMainWindow(): Promise<BrowserWindow> {
+  const window = await createMainWindow();
+  setNotificationMainWindow(window);
+  setUpdateMainWindow(window);
+  setDesktopAuthMainWindow(window);
+  window.on("closed", () => {
+    setNotificationMainWindow(null);
+    setUpdateMainWindow(null);
+    setDesktopAuthMainWindow(null);
+  });
+  return window;
+}
+
 async function bootstrap(): Promise<void> {
   if (process.platform === "win32") {
     app.setAppUserModelId("com.keinsaas.navigator");
@@ -163,18 +219,18 @@ async function bootstrap(): Promise<void> {
   registerMcpIpcHandlers();
   registerNotificationHandlers();
   registerUpdateIpcHandlers();
+  registerDesktopAuthIpcHandlers(webUrl);
+  registerDownloadHandler(session.defaultSession, appOrigin);
   createApplicationMenu();
-  let mainWindow: BrowserWindow | null = null;
   try {
-    mainWindow = await createMainWindow();
-    setNotificationMainWindow(mainWindow);
-    setUpdateMainWindow(mainWindow);
-    mainWindow.on("closed", () => {
-      mainWindow = null;
-      setNotificationMainWindow(null);
-      setUpdateMainWindow(null);
-    });
+    await openMainWindow();
     initAutoUpdater();
+
+    // Cold start through the protocol handler (Windows/Linux put the URL in
+    // argv); macOS links that arrived before the window existed were queued.
+    const initialLink = findDeepLinkArg(process.argv);
+    if (initialLink) void handleAuthDeepLink(initialLink);
+    flushQueuedDeepLinks();
   } catch (error) {
     console.error("Desktop startup failed:", error);
     recordDesktopError("desktop.bootstrap", error);
@@ -184,11 +240,13 @@ async function bootstrap(): Promise<void> {
   }
 }
 
-app.whenReady().then(() => {
-  // Off unless KEINSAAS_DESKTOP_TELEMETRY=1 — see ./otel.ts.
-  initDesktopTelemetry(app.getVersion());
-  void bootstrap();
-});
+if (hasSingleInstanceLock) {
+  app.whenReady().then(() => {
+    // Off unless KEINSAAS_DESKTOP_TELEMETRY=1 — see ./otel.ts.
+    initDesktopTelemetry(app.getVersion());
+    void bootstrap();
+  });
+}
 
 app.on("before-quit", () => {
   void shutdownDesktopTelemetry();
@@ -202,6 +260,6 @@ app.on("window-all-closed", () => {
 
 app.on("activate", () => {
   if (BrowserWindow.getAllWindows().length === 0) {
-    void createMainWindow();
+    void openMainWindow().then(() => flushQueuedDeepLinks());
   }
 });

@@ -11,6 +11,7 @@ import {
   CheckIcon,
   ClipboardCheck,
   Infinity,
+  ListTodo,
   PenOff,
   Settings2,
 } from "lucide-react";
@@ -41,8 +42,8 @@ export const ToolModeDropdown = ({
 }: { disabled?: boolean; className?: string; compact?: boolean }) => {
   const t = useTranslations("Chat.Tool");
   const debounce = useMemo(() => createDebounce(), []);
-  const [toolChoice, appStoreMutate] = appStore(
-    useShallow((state) => [state.toolChoice, state.mutate]),
+  const [toolChoice, planMode, appStoreMutate] = appStore(
+    useShallow((state) => [state.toolChoice, state.planMode, state.mutate]),
   );
   const [open, setOpen] = useState(false);
 
@@ -96,6 +97,7 @@ export const ToolModeDropdown = ({
                   "rounded-full data-[state=open]:bg-input! hover:bg-input!",
                   compact ? "size-7 p-0" : "p-2!",
                   toolChoice == "none" && "text-muted-foreground",
+                  planMode && "text-primary",
                   open && "bg-input!",
                 )}
                 onClick={() => setOpen(true)}
@@ -176,6 +178,25 @@ export const ToolModeDropdown = ({
 
               <p className="text-xs text-muted-foreground">
                 {t("noneToolModeDescription")}
+              </p>
+            </div>
+          </DropdownMenuItem>
+          <div className="px-2 py-1">
+            <DropdownMenuSeparator />
+          </div>
+          <DropdownMenuItem
+            onClick={() =>
+              appStoreMutate((state) => ({ planMode: !state.planMode }))
+            }
+          >
+            <div className="flex flex-col gap-2 w-full">
+              <div className="flex items-center gap-2">
+                <ListTodo className={cn(planMode && "text-primary")} />
+                <span className="font-bold">Plan</span>
+                {planMode && <Check className="ml-auto" />}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                {t("planToolModeDescription")}
               </p>
             </div>
           </DropdownMenuItem>

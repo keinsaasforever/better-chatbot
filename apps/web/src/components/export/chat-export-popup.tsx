@@ -38,9 +38,7 @@ export function ChatExportPopup(props: Props) {
       .watch(() => setIsExporting(false))
       .ifOk((exportId) => {
         const link = `${window.location.origin}/export/${exportId}`;
-        navigator.clipboard.writeText(link).then(() => {
-          toast.success(t("Chat.Thread.linkCopied"));
-        });
+        void navigator.clipboard.writeText(link);
         router.push(`/export/${exportId}`);
       })
       .ifFail((error) => {

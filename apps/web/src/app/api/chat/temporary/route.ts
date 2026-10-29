@@ -1,3 +1,5 @@
+import { billingRunKey } from "@/lib/billing/usage-idempotency";
+import { generateUUID } from "lib/utils";
 import {
   CreditsExhaustedError,
   assertCreditsAvailable,
@@ -41,6 +43,11 @@ export const POST = withAuth(async (request, session) => {
       instructions?: string;
     };
     logger.info(`model: ${chatModel?.provider}/${chatModel?.model}`);
+    // Unique per request. The key used to be built from the last message's id,
+    // which falls back to a literal "unknown" when the client omits one — every
+    // such request across a customer then collided on one key and only the
+    // first was ever billed.
+    const runId = generateUUID();
     const model = customModelProvider.getModel(chatModel);
     const userPreferences =
       (await getUserPreferences(session.user.id)) || undefined;
@@ -92,7 +99,16 @@ export const POST = withAuth(async (request, session) => {
               modelId: `${chatModel?.provider}/${chatModel?.model}`,
               promptTokens: usage.inputTokens,
               completionTokens: usage.outputTokens,
-              idempotencyKey: `temp-chat-${billing.customerId}-${messages.at(-1)?.id ?? "unknown"}`,
+              cacheReadTokens: usage.inputTokenDetails?.cacheReadTokens,
+              cacheWriteTokens: usage.inputTokenDetails?.cacheWriteTokens,
+              noCacheTokens: usage.inputTokenDetails?.noCacheTokens,
+              idempotencyKey: billingRunKey({
+                scope: "temp-chat",
+                // Null only in the community edition, where `trackUsage` drops
+                // the event before the key is read.
+                subject: billing.customerId ?? session.user.id,
+                runId,
+              }),
               properties: {
                 temporary: true,
                 instructions: instructions ? "yes" : "no",

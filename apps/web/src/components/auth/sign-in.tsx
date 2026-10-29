@@ -10,6 +10,7 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { useDesktopBrowserSignIn } from "@/hooks/use-desktop-browser-sign-in";
 import { useObjectState } from "@/hooks/use-object-state";
 import Link from "next/link";
 import { useState } from "react";
@@ -25,6 +26,8 @@ import { safe } from "ts-safe";
 import { GithubIcon } from "ui/github-icon";
 import { GoogleIcon } from "ui/google-icon";
 import { MicrosoftIcon } from "ui/microsoft-icon";
+import { DesktopSignInPending } from "./desktop-sign-in-pending";
+import { useCaptcha } from "./use-captcha";
 
 export default function SignIn({
   emailAndPasswordEnabled,
@@ -42,7 +45,11 @@ export default function SignIn({
   const t = useTranslations("Auth.SignIn");
 
   const [loading, setLoading] = useState(false);
+  const captcha = useCaptcha();
   const redirectTo = callbackUrl || "/";
+  // Inside the desktop app a provider sign-in has to run in the system
+  // browser; providers refuse OAuth in embedded web views.
+  const desktop = useDesktopBrowserSignIn({ page: "sign-in", callbackUrl });
 
   const [formData, setFormData] = useObjectState({
     email: "",
@@ -59,6 +66,7 @@ export default function SignIn({
           callbackURL: redirectTo,
         },
         {
+          headers: captcha.headers,
           onSuccess(ctx) {
             // Track successful sign-in
             if (ctx.data?.user?.id) {
@@ -79,11 +87,19 @@ export default function SignIn({
         },
       ),
     )
-      .watch(() => setLoading(false))
+      .watch(() => {
+        setLoading(false);
+        // Single-use token: the next attempt needs a fresh one.
+        captcha.reset();
+      })
       .unwrap();
   };
 
   const handleSocialSignIn = (provider: SocialAuthenticationProvider) => {
+    if (desktop.available) {
+      void desktop.start(provider);
+      return;
+    }
     authClient.signIn
       .social(
         { provider, callbackURL: redirectTo },
@@ -108,6 +124,16 @@ export default function SignIn({
         toast.error(e.error);
       });
   };
+  if (desktop.pending) {
+    return (
+      <div className="w-full h-full flex flex-col p-4 md:p-8 justify-center">
+        <DesktopSignInPending
+          onReopen={desktop.reopen}
+          onCancel={desktop.cancel}
+        />
+      </div>
+    );
+  }
   return (
     <div className="w-full h-full flex flex-col p-4 md:p-8 justify-center">
       <Card className="w-full md:max-w-md bg-background border-none mx-auto shadow-none animate-in fade-in duration-1000">
@@ -160,10 +186,11 @@ export default function SignIn({
                   required
                 />
               </div>
+              {captcha.widget}
               <Button
                 className="w-full"
                 onClick={emailAndPasswordSignIn}
-                disabled={loading}
+                disabled={loading || !captcha.ready}
                 data-testid="signin-submit-button"
               >
                 {loading ? (

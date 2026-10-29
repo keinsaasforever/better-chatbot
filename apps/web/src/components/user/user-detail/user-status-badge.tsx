@@ -51,7 +51,6 @@ export function UserStatusBadge({
     if (result?.success && result.user) {
       onStatusChange?.(result.user);
       setShowConfirmDialog(false);
-      toast.success(result.message);
     } else {
       toast.error(result?.message || t("failedToUpdateUserStatus"));
       setShowConfirmDialog(false);

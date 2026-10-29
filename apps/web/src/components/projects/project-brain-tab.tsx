@@ -1,18 +1,19 @@
 "use client";
 
-import { useState } from "react";
-import useSWR, { useSWRConfig } from "swr";
-import { Loader2, Plus, RefreshCw, X } from "lucide-react";
-import { toast } from "sonner";
 import { fetcher } from "@/lib/utils";
+import { Loader2, Plus, RefreshCw, X } from "lucide-react";
+import { useState } from "react";
+import { toast } from "sonner";
+import useSWR, { useSWRConfig } from "swr";
 import { Badge } from "ui/badge";
 import { Button } from "ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "ui/card";
 import { ProjectAddSourceDialog } from "./project-add-source-dialog";
 import { ProjectAddToolDialog } from "./project-add-tool-dialog";
+import { ProjectContradictionsCard } from "./project-contradictions-card";
 import {
-  ProjectDocumentsGrid,
   type ProjectDocumentForGrid,
+  ProjectDocumentsGrid,
 } from "./project-documents-grid";
 import { ProjectUploadDialog } from "./project-upload-dialog";
 
@@ -55,10 +56,10 @@ export function ProjectBrainTab({
   const refreshBrain = () => {
     void mutate();
     void globalMutate(`/api/projects/${projectId}/status`);
-    void globalMutate(`/api/projects/${projectId}/widgets`);
+    void globalMutate(`/api/projects/${projectId}/overview`);
   };
 
-  const syncTool = async (toolId: string, name: string) => {
+  const syncTool = async (toolId: string, _name: string) => {
     setBusyToolId(toolId);
     try {
       const response = await fetch(
@@ -69,7 +70,6 @@ export function ProjectBrainTab({
       if (!response.ok) {
         throw new Error(payload?.error?.message ?? "Could not start sync.");
       }
-      toast.success(`${name} sync started.`);
       void globalMutate(`/api/projects/${projectId}/runs/latest`);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Could not start sync.");
@@ -78,7 +78,7 @@ export function ProjectBrainTab({
     }
   };
 
-  const removeTool = async (toolId: string, name: string) => {
+  const removeTool = async (toolId: string, _name: string) => {
     setBusyToolId(toolId);
     try {
       const response = await fetch(
@@ -89,7 +89,6 @@ export function ProjectBrainTab({
         const payload = await response.json().catch(() => null);
         throw new Error(payload?.error?.message ?? "Could not remove tool.");
       }
-      toast.success(`${name} removed from this project.`);
       refreshBrain();
     } catch (err) {
       toast.error(
@@ -251,6 +250,8 @@ export function ProjectBrainTab({
           )}
         </CardContent>
       </Card>
+
+      <ProjectContradictionsCard projectId={projectId} canEdit={canEdit} />
 
       <Card className="lg:col-span-2">
         <CardHeader>

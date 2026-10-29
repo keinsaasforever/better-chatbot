@@ -1,22 +1,15 @@
 import { and, desc, eq, or } from "drizzle-orm";
 import { NextResponse } from "next/server";
-import { z } from "zod";
 import { pgDb } from "@/lib/db/pg/db.pg";
 import { ProjectMemberTable, ProjectTable } from "@/lib/db/pg/schema.pg";
 import {
   requireActiveOrganization,
   toProjectErrorResponse,
 } from "@/lib/projects/access";
-import { AGENTSET_EMBEDDING_PROFILE_IDS } from "@/types/project";
-
-const CreateProjectSchema = z.object({
-  name: z.string().trim().min(1).max(100),
-  description: z.string().trim().max(500).optional(),
-  goal: z.string().trim().max(4000).optional(),
-  // Agentset retrieval profile chosen in the creation dialog; locked after
-  // creation because changing it requires re-indexing the namespace.
-  embeddingProfile: z.enum(AGENTSET_EMBEDDING_PROFILE_IDS).optional(),
-});
+import {
+  CreateProjectSchema,
+  createProject,
+} from "@/lib/projects/create-project";
 
 export async function GET() {
   try {
@@ -73,34 +66,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const project = await pgDb.transaction(async (tx) => {
-      const [created] = await tx
-        .insert(ProjectTable)
-        .values({
-          organizationId: actor.organizationId,
-          ownerUserId: actor.userId,
-          name: parsed.data.name,
-          description: parsed.data.description,
-          goal: parsed.data.goal,
-          ...(parsed.data.embeddingProfile
-            ? { agentsetEmbeddingProfile: parsed.data.embeddingProfile }
-            : {}),
-        })
-        .returning();
-
-      if (!created) throw new Error("Could not create project.");
-
-      await tx
-        .insert(ProjectMemberTable)
-        .values({
-          projectId: created.id,
-          userId: actor.userId,
-          role: "owner",
-        })
-        .onConflictDoNothing();
-
-      return created;
-    });
+    const project = await createProject(actor, parsed.data);
 
     return NextResponse.json({ project, role: "owner" }, { status: 201 });
   } catch (error) {

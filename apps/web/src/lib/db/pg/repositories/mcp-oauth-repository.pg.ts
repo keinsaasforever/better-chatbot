@@ -3,6 +3,33 @@ import { and, desc, eq, isNotNull, isNull, ne } from "drizzle-orm";
 import { pgDb as db, pgClient } from "../db.pg";
 import { McpOAuthSessionTable } from "../schema.pg";
 
+/**
+ * Whether the pool can spare a connection for the refresh lock.
+ *
+ * Serializing a token refresh across instances needs a session-level advisory
+ * lock, and that needs a connection reserved out of the pool for the whole
+ * refresh. `POSTGRES_POOL_MAX` defaults to 1 (see db.pg.ts - instance count
+ * times max has to stay under the Supabase pooler limit), so on the default
+ * config that reservation *is* the pool: nothing is left for the re-read that
+ * follows the lock, nor for any other MCP server connecting in the same
+ * request. Production showed four of them timing out at once with
+ * "Failed to connect to <server>: Timed out reserving a connection for the MCP
+ * OAuth refresh lock", which fails the connect and empties that server's tools
+ * for the turn.
+ *
+ * A pool that small cannot serialize refreshes, so do not spend a connect
+ * failure pretending it can. Unserialized, two instances refreshing at once
+ * costs a wasted round trip - `tokens()` re-reads afterwards and `saveTokens`
+ * merges through `mergeOAuthTokens`. Raise POSTGRES_POOL_MAX to get the lock
+ * back.
+ */
+const CAN_RESERVE_FOR_REFRESH_LOCK = (() => {
+  const max = Number(process.env.POSTGRES_POOL_MAX ?? 1);
+  return Number.isFinite(max) && max > 1;
+})();
+
+const NO_REFRESH_LOCK = async () => {};
+
 // OAuth repository implementation for multi-instance support
 export const pgMcpOAuthRepository: McpOAuthRepository = {
   // 1. Query methods
@@ -119,6 +146,8 @@ export const pgMcpOAuthRepository: McpOAuthRepository = {
   },
 
   acquireRefreshLock: async (lockKey) => {
+    if (!CAN_RESERVE_FOR_REFRESH_LOCK) return NO_REFRESH_LOCK;
+
     const advisoryKey = `mcp-oauth-refresh:${lockKey}`;
 
     // Bound the pooled-connection reservation. With POSTGRES_POOL_MAX as low as

@@ -4,6 +4,7 @@ import { FileNotFoundError } from "lib/errors";
 import type {
   FileMetadata,
   FileStorage,
+  SignedUrlOptions,
   UploadOptions,
 } from "./file-storage.interface";
 import {
@@ -267,14 +268,20 @@ export const createSupabaseStorage = (): FileStorage => {
       return this.getSourceUrl(key);
     },
 
-    async getSignedUrl(key, expiresIn = 3600) {
+    async getSignedUrl(key, expiresIn = 3600, options?: SignedUrlOptions) {
       try {
         ensureSupabaseConfigured();
         const bucketName = getBucketName(key);
 
         const { data, error } = await supabase!.storage
           .from(bucketName)
-          .createSignedUrl(key, expiresIn);
+          .createSignedUrl(
+            key,
+            expiresIn,
+            options?.download !== undefined
+              ? { download: options.download }
+              : undefined,
+          );
 
         if (error) {
           throw new Error(`Failed to create signed URL: ${error.message}`);

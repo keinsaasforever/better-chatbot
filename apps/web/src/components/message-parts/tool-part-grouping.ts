@@ -1,6 +1,6 @@
 import { type ToolUIPart, type UIMessage, getToolName, isToolUIPart } from "ai";
 import { VercelAIWorkflowToolStreamingResultTag } from "app-types/workflow";
-import { DefaultToolName, ImageToolName } from "lib/ai/tools";
+import { DefaultToolName, ImageToolName, ResearchToolName } from "lib/ai/tools";
 
 type MessagePart = UIMessage["parts"][number];
 
@@ -18,11 +18,15 @@ const DEDICATED_UI_TOOL_NAMES = new Set<string>([
   DefaultToolName.WebContent,
   DefaultToolName.AnalyzeDocument,
   DefaultToolName.SearchKnowledgeBase,
+  DefaultToolName.QueryProjectGraph,
   DefaultToolName.JavascriptExecution,
   DefaultToolName.PythonExecution,
   DefaultToolName.E2BSandbox,
   DefaultToolName.EditDocument,
   DefaultToolName.CreateTabularReview,
+  DefaultToolName.CreatePlan,
+  DefaultToolName.BrowserAutomation,
+  ResearchToolName,
   ImageToolName,
   "proposeEmail",
   "askForPlanApproval",

@@ -1,4 +1,5 @@
 import "server-only";
+import { isComposioConfigured } from "lib/composio/config";
 import { minimalToolExecutionOptions } from "@/lib/ai/tools/minimal-tool-execution-options";
 import { resolveAllowedAppDefaultToolkits } from "@/lib/ai/tools/resolve-allowed-toolkits";
 import { Tool, ToolUIPart, getToolName } from "ai";
@@ -10,16 +11,21 @@ import {
 } from "app-types/workflow";
 import { MANUAL_REJECT_RESPONSE_PROMPT } from "lib/ai/prompts";
 import { AppDefaultToolkit, DefaultToolName } from "lib/ai/tools";
+import { createServerCodeExecutionTool } from "lib/ai/tools/code/server-code-tools";
 import {
   createAnalyzeDocumentTool,
   createEditDocumentTool,
 } from "lib/ai/tools/document/create-document-tools";
+import { createPdfTool } from "lib/ai/tools/document/create-pdf-tool";
+import { createQueryProjectGraphTool } from "lib/ai/tools/knowledge-base/query-project-graph";
 import { createTabularReviewToolWithExecute } from "lib/ai/tools/tabular/create-tabular-tool";
 import { APP_DEFAULT_TOOL_KIT } from "lib/ai/tools/tool-kit";
+import type { AgentFileBinding } from "app-types/agent";
 import {
   createExaContentsTool,
   createExaSearchTool,
 } from "lib/ai/tools/web/web-search";
+import { hasPreinstalledDocumentLibraries } from "lib/e2b/sandbox-registry";
 import { errorToString, objectFlow } from "lib/utils";
 import logger from "logger";
 import { safe } from "ts-safe";
@@ -34,6 +40,59 @@ export function excludeToolExecution(
     return {
       ...value,
       execute: undefined,
+    } as Tool;
+  });
+}
+
+/**
+ * Wrap every executable tool so each invocation is counted in Autumn.
+ *
+ * Composio tools arrive from its SDK with their own `execute`, so there is no
+ * chokepoint of ours they pass through — wrapping at load time is the one place
+ * that sees every call exactly once.
+ *
+ * Routed through the billing gate rather than the provider directly: this file
+ * ships in both editions, and the community build has no billing provider.
+ *
+ * The count is fired and not awaited: a tool call must not wait on a billing
+ * round trip. `trackWithRetry` already swallows its own failures, so the extra
+ * `catch` here only guards against an unexpected synchronous throw.
+ *
+ * Returns a new record; the cached tool objects are never mutated, so a cache
+ * hit cannot end up double-wrapped.
+ */
+export function meterToolCalls(
+  tools: Record<string, Tool>,
+  // `string | null` mirrors `BillingContext` from the gate, where a customer
+  // id is absent until one is resolved.
+  billing: { customerId?: string | null; entityId?: string },
+): Record<string, Tool> {
+  const { customerId, entityId } = billing;
+  if (!customerId) return tools;
+
+  return objectFlow(tools).map((tool, toolName) => {
+    const execute = tool.execute;
+    if (typeof execute !== "function") return tool;
+
+    return {
+      ...tool,
+      execute: (input: any, options: any) => {
+        void import("lib/gate")
+          .then(({ trackUsage }) =>
+            trackUsage({
+              kind: "toolCall",
+              customerId,
+              entityId,
+              toolCallId: options?.toolCallId ?? `${String(toolName)}-unknown`,
+              toolName: String(toolName),
+            }),
+          )
+          .catch(() => {
+            // Counting is best-effort; the tool call is what matters.
+          });
+
+        return execute.call(tool, input, options);
+      },
     } as Tool;
   });
 }
@@ -136,6 +195,103 @@ type ComposioToolsEntry = {
 const composioToolsCache = new Map<string, ComposioToolsEntry>();
 const composioToolsInflight = new Map<string, Promise<Record<string, Tool>>>();
 
+/**
+ * Whether this user has at least one connected Composio integration.
+ *
+ * The Tool Router returns the same four COMPOSIO_* meta-tools for everyone,
+ * connected or not, so their schemas were riding in every prompt of every user
+ * — including users who have never connected anything. Measured on one
+ * production thread, the system prompt plus the bound tool schemas accounted
+ * for ~9,700 tokens of every single request.
+ *
+ * `isConnected: true` is a server-side filter, so `limit: 1` answers the
+ * question in one small round trip rather than enumerating accounts.
+ *
+ * **Fails open.** The repo already documents that these toolkit flags lag
+ * behind, or miss accounts created through other auth flows (see the comments
+ * in `api/connections/route.ts` and `lib/composio/toolkit-connections.ts`).
+ * A wrongly-withheld tool is a broken feature; a wrongly-loaded one is only a
+ * few tokens. On any error, or any doubt, load the tools.
+ */
+const fetchHasComposioConnection = async (userId: string): Promise<boolean> => {
+  const { composio } = await import("lib/composio/client");
+  const session = await composio.create(userId);
+  const page = (await session.toolkits({ limit: 1, isConnected: true })) as {
+    items?: unknown[];
+  } | null;
+  // A missing or reshaped `items` is doubt, not evidence of zero connections -
+  // only an empty array is. Doubt falls open, same as a thrown error.
+  if (!Array.isArray(page?.items)) return true;
+  return page.items.length > 0;
+};
+
+/**
+ * A negative answer is cached only briefly: someone who connects their first
+ * integration should see their tools within a minute, not after the full tool
+ * TTL. A positive answer is stable and rides the same TTL as the tools.
+ */
+const COMPOSIO_UNCONNECTED_TTL_MS = 60 * 1000;
+
+type ComposioConnectionEntry = { connected: boolean; expiresAt: number };
+const composioConnectionCache = new Map<string, ComposioConnectionEntry>();
+const composioConnectionInflight = new Map<string, Promise<boolean>>();
+
+const hasComposioConnection = async (userId: string): Promise<boolean> => {
+  const now = Date.now();
+  const cached = composioConnectionCache.get(userId);
+  if (cached && cached.expiresAt > now) return cached.connected;
+
+  const existing = composioConnectionInflight.get(userId);
+  if (existing) return await existing;
+
+  const promise = fetchHasComposioConnection(userId)
+    .then((connected) => {
+      composioConnectionCache.set(userId, {
+        connected,
+        expiresAt:
+          Date.now() +
+          (connected ? COMPOSIO_TOOLS_TTL_MS : COMPOSIO_UNCONNECTED_TTL_MS),
+      });
+      return connected;
+    })
+    .catch((error) => {
+      // Deliberately not cached: retry on the next turn rather than withhold
+      // tools for a whole TTL because one lookup failed.
+      logger.warn("Composio connection check failed; loading tools:", error);
+      return true;
+    })
+    .finally(() => {
+      composioConnectionInflight.delete(userId);
+    });
+  composioConnectionInflight.set(userId, promise);
+  return await promise;
+};
+
+/**
+ * Prefixed onto every Composio tool description at load time.
+ *
+ * The Tool Router's own descriptions arrive over the network worded broadly
+ * enough ("accomplish any task") to outcompete first-party tools in the
+ * model's choice. We cannot edit them at the source, but we own the tool
+ * objects once loaded — so the fallback ranking is stamped into the text the
+ * model actually reads, mirroring the sandbox opt-out below. The system
+ * prompt states the same rule (`COMPOSIO_FALLBACK_SYSTEM_PROMPT`); the
+ * description carries it for models that weigh tool text over prompt text.
+ */
+export const COMPOSIO_FALLBACK_DESCRIPTION_PREFIX =
+  "LAST RESORT — use only when no built-in or MCP tool matches the request. ";
+
+const demoteComposioDescriptions = (
+  tools: Record<string, Tool>,
+): Record<string, Tool> =>
+  objectFlow(tools).map(
+    (tool) =>
+      ({
+        ...tool,
+        description: `${COMPOSIO_FALLBACK_DESCRIPTION_PREFIX}${tool.description ?? ""}`,
+      }) as Tool,
+  );
+
 const fetchComposioTools = async (
   userId: string,
 ): Promise<Record<string, Tool>> => {
@@ -148,7 +304,9 @@ const fetchComposioTools = async (
   // e2b-sandbox/python-execution. Code execution belongs to E2B here.
   const session = await composio.create(userId, { sandbox: { enable: false } });
   const tools = await session.tools();
-  return (tools as unknown as Record<string, Tool>) ?? {};
+  return demoteComposioDescriptions(
+    (tools as unknown as Record<string, Tool>) ?? {},
+  );
 };
 
 export const loadComposioTools = async (
@@ -156,6 +314,12 @@ export const loadComposioTools = async (
 ): Promise<Record<string, Tool>> => {
   try {
     if (!userId) return {};
+    if (!isComposioConfigured()) return {};
+
+    // Nothing connected: the meta-tools can only offer to connect something,
+    // which the UI does better. Skip them and keep their schemas out of the
+    // prompt.
+    if (!(await hasComposioConnection(userId))) return {};
 
     if (COMPOSIO_TOOLS_TTL_MS === 0) {
       return await fetchComposioTools(userId);
@@ -197,6 +361,11 @@ export const loadAppDefaultTools = (opt?: {
   billingCustomerId?: string | null;
   billingEntityId?: string;
   projectId?: string;
+  threadId?: string;
+  /** Files bound to the active agent, staged into every sandbox run. */
+  agentFiles?: AgentFileBinding[];
+  /** No browser will run client-side tools this turn (scheduled/loopback run). */
+  headless?: boolean;
 }) =>
   safe(APP_DEFAULT_TOOL_KIT)
     .map((tools) => {
@@ -276,6 +445,54 @@ export const loadAppDefaultTools = (opt?: {
           updatedTools[DefaultToolName.CreateTabularReview] =
             createTabularReviewToolWithExecute(opt.userId, opt.projectId);
         }
+        // The graph tool only makes sense inside a project chat.
+        if (updatedTools[DefaultToolName.QueryProjectGraph]) {
+          if (opt.projectId) {
+            updatedTools[DefaultToolName.QueryProjectGraph] =
+              createQueryProjectGraphTool(opt.userId, opt.projectId);
+          } else {
+            delete updatedTools[DefaultToolName.QueryProjectGraph];
+          }
+        }
+        if (updatedTools[DefaultToolName.CreatePdf]) {
+          // Rendering is WeasyPrint inside the sandbox, and only the document
+          // template has it. Offering the tool against the stock interpreter
+          // would mean every call fails on the import, so drop it instead —
+          // the model then reaches for python-execution, which still works.
+          if (hasPreinstalledDocumentLibraries()) {
+            updatedTools[DefaultToolName.CreatePdf] = createPdfTool({
+              userId: opt.userId,
+              customerId: opt.billingCustomerId ?? opt.userId,
+              entityId: opt.billingEntityId,
+            });
+          } else {
+            delete updatedTools[DefaultToolName.CreatePdf];
+          }
+        }
+      }
+
+      // Code tools are client-side by default (declared without `execute`), so
+      // a run with no browser halts on the call and ends with no answer. Swap
+      // in server-executing variants when nobody is watching.
+      if (opt?.headless && opt.userId) {
+        const codeContext = {
+          userId: opt.userId,
+          customerId: opt.billingCustomerId ?? opt.userId,
+          entityId: opt.billingEntityId,
+          threadId: opt.threadId,
+          agentFiles: opt.agentFiles,
+        };
+        if (updatedTools[DefaultToolName.PythonExecution]) {
+          updatedTools[DefaultToolName.PythonExecution] =
+            createServerCodeExecutionTool("python", codeContext);
+        }
+        if (updatedTools[DefaultToolName.JavascriptExecution]) {
+          updatedTools[DefaultToolName.JavascriptExecution] =
+            createServerCodeExecutionTool("javascript", codeContext);
+        }
+        // e2b-sandbox deploys a live preview panel for the user to open. Bound
+        // headlessly it can only produce another unanswerable call.
+        delete updatedTools[DefaultToolName.E2BSandbox];
       }
 
       return updatedTools;

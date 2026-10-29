@@ -1,9 +1,6 @@
 import { NextResponse } from "next/server";
 import { withAuth } from "auth/route-guard";
-import { pgDb } from "@/lib/db/pg/db.pg";
-import { ScheduledTaskTable } from "@/lib/db/pg/schema.pg";
-import { eq, and } from "drizzle-orm";
-import { inngest } from "@/lib/inngest/client";
+import { triggerScheduledTaskForUser } from "@/lib/scheduled-tasks/trigger";
 
 /**
  * POST /api/scheduled-tasks/[id]/trigger
@@ -18,29 +15,10 @@ export const POST = withAuth(
     try {
       const { id } = await params;
 
-      // Verify task exists and user owns it
-      const [task] = await pgDb
-        .select()
-        .from(ScheduledTaskTable)
-        .where(
-          and(
-            eq(ScheduledTaskTable.id, id),
-            eq(ScheduledTaskTable.userId, session.user.id),
-          ),
-        )
-        .limit(1);
-
+      const task = await triggerScheduledTaskForUser(session.user.id, id);
       if (!task) {
         return NextResponse.json({ error: "Task not found" }, { status: 404 });
       }
-
-      // Send event to Inngest to trigger the task. No event id on purpose:
-      // manual triggers always run (scheduled fires carry a deterministic id
-      // for dedup). userId feeds the executor's per-user concurrency key.
-      await inngest.send({
-        name: "scheduled-task/trigger",
-        data: { taskId: id, userId: task.userId },
-      });
 
       return NextResponse.json({
         success: true,

@@ -2,7 +2,9 @@ import "server-only";
 
 import {
   OAuthClientProvider,
+  OAuthDiscoveryState,
   UnauthorizedError,
+  registerClient,
 } from "@modelcontextprotocol/sdk/client/auth.js";
 import type {
   OAuthClientInformation,
@@ -14,6 +16,7 @@ import type {
 import { McpOAuthSession } from "app-types/mcp";
 import { ConsolaInstance } from "consola";
 import { colorize } from "consola/utils";
+import { MCP_OAUTH_FALLBACK_SCOPE } from "lib/const";
 import { pgMcpOAuthRepository } from "lib/db/pg/repositories/mcp-oauth-repository.pg";
 import globalLogger from "lib/logger";
 import { generateUUID } from "lib/utils";
@@ -30,6 +33,7 @@ export class PgOAuthClientProvider implements OAuthClientProvider {
   private initialized = false;
   private refreshLockRelease?: () => Promise<void>;
   private refreshLockTimer?: ReturnType<typeof setTimeout>;
+  private useFallbackScope = false;
 
   constructor(
     private config: {
@@ -121,6 +125,9 @@ export class PgOAuthClientProvider implements OAuthClientProvider {
   }
 
   private async updateAuthData(data: Partial<McpOAuthSession>) {
+    // clientInformation() resets state on a redirect-URI mismatch; start a
+    // fresh session instead of failing the re-registration that follows.
+    await this.initializeOAuth();
     if (!this.currentOAuthState) {
       throw new Error("OAuth not initialized");
     }
@@ -137,7 +144,56 @@ export class PgOAuthClientProvider implements OAuthClientProvider {
   }
 
   get clientMetadata(): OAuthClientMetadata {
-    return this.config._clientMetadata;
+    if (!this.useFallbackScope) return this.config._clientMetadata;
+    return { ...this.config._clientMetadata, scope: MCP_OAUTH_FALLBACK_SCOPE };
+  }
+
+  /**
+   * Called by the SDK after discovery and before it registers a client. Some
+   * authorization servers (Clerk) reject the non-standard `mcp:tools` scope.
+   * Drop it when the server's metadata does not list it, and register here
+   * (instead of letting the SDK do it) so a rejected registration is retried
+   * once with the fallback scope. The SDK then finds the stored client and
+   * skips its own registration.
+   */
+  async saveDiscoveryState(state: OAuthDiscoveryState): Promise<void> {
+    const metadata = state.authorizationServerMetadata;
+    const supported = metadata?.scopes_supported;
+    if (supported && !supported.includes("mcp:tools")) {
+      this.useFallbackScope = true;
+    }
+
+    if (await this.clientInformation()) return;
+
+    let info: OAuthClientInformationFull;
+    try {
+      info = await registerClient(state.authorizationServerUrl, {
+        metadata,
+        clientMetadata: this.clientMetadata,
+      });
+    } catch (error) {
+      if (this.useFallbackScope) throw error;
+      this.logger.warn(
+        `Client registration failed; retrying without mcp:tools: ${error}`,
+      );
+      this.useFallbackScope = true;
+      try {
+        info = await registerClient(state.authorizationServerUrl, {
+          metadata,
+          clientMetadata: this.clientMetadata,
+        });
+      } catch {
+        this.useFallbackScope = false;
+        throw error;
+      }
+    }
+
+    // Persist the scope the client was registered with so later requests
+    // (other instances, the OAuth callback) keep requesting only that.
+    await this.saveClientInformation({
+      ...info,
+      scope: info.scope ?? this.clientMetadata.scope,
+    });
   }
 
   state(): string {
@@ -163,6 +219,12 @@ export class PgOAuthClientProvider implements OAuthClientProvider {
         this.currentOAuthState = "";
         await this.releaseRefreshSerialization();
         return undefined;
+      }
+      // Registered without mcp:tools (fallback path, possibly on another
+      // instance): don't ask the authorization server for it now.
+      const registeredScope = authData.clientInfo.scope?.split(" ");
+      if (registeredScope && !registeredScope.includes("mcp:tools")) {
+        this.useFallbackScope = true;
       }
       return authData.clientInfo;
     }

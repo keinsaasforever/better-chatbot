@@ -9,6 +9,7 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { ChatModel } from "app-types/chat";
 import { cn, fetcher } from "lib/utils";
 import { CheckIcon, ChevronDown, HelpCircle } from "lucide-react";
+import { useTranslations } from "next-intl";
 import {
   Fragment,
   PropsWithChildren,
@@ -72,6 +73,36 @@ const getCountryFlag = (countryCode: string | null | undefined): string => {
 
   return flags[countryCode.toUpperCase()] || "";
 };
+
+/**
+ * Catalog price for one model, as "$3 / $15" (input / output per 1M tokens).
+ *
+ * Drizzle hands `numeric` back as a string, so the raw values look like
+ * "3.0000000000" — readable only once trailing zeros are dropped. Sub-dollar
+ * prices, which most cheap models have, need enough decimals to stay
+ * distinguishable: $0.15 and $0.075 must not both render as "$0.1".
+ *
+ * Returns null unless both sides are known; half a price is worse than none.
+ */
+export function formatModelPrice(
+  input?: string | null,
+  output?: string | null,
+): string | null {
+  const format = (value?: string | null) => {
+    if (value == null) return null;
+    const amount = Number(value);
+    if (!Number.isFinite(amount) || amount < 0) return null;
+    if (amount === 0) return "$0";
+    const decimals = amount < 0.01 ? 4 : amount < 1 ? 3 : 2;
+    // toFixed then trim: "0.1500" -> "0.15", "3.00" -> "3".
+    return `$${amount.toFixed(decimals).replace(/\.?0+$/, "")}`;
+  };
+
+  const inputPrice = format(input);
+  const outputPrice = format(output);
+  if (!inputPrice || !outputPrice) return null;
+  return `${inputPrice} / ${outputPrice}`;
+}
 
 // Helper function to get badge icons with tooltips
 const getBadgeIcons = (badges: {
@@ -142,6 +173,18 @@ const FEATURED_TOP3_MODELS: ReadonlyArray<{ provider: string; model: string }> =
     { provider: "anthropic", model: "claude-sonnet-5" },
   ];
 
+/**
+ * Direct TensorX provider (see lib/ai/models.ts). It gets its own block right
+ * under "Top 3" rather than sitting in the alphabetical tail, because the
+ * zero-retention path is the reason to pick it.
+ */
+const TENSORX_PROVIDER = "TensorX";
+
+/** Suffix appended after a provider's name in its group heading. */
+const PROVIDER_LABEL_SUFFIX: Record<string, string> = {
+  [TENSORX_PROVIDER]: "(0 Data Retention)",
+};
+
 type ModelsProvider = NonNullable<
   ReturnType<typeof useChatModels>["data"]
 >[number] & { isPlaceholder?: boolean };
@@ -174,6 +217,7 @@ function buildModelMenuPlan(filtered: ModelsProvider[] | undefined) {
   }
 
   const mistral = byProvider.get("mistral");
+  const tensorx = byProvider.get(TENSORX_PROVIDER);
 
   const tail: ModelsProvider[] = [];
   const localPlaceholders: ModelsProvider[] = [];
@@ -181,6 +225,7 @@ function buildModelMenuPlan(filtered: ModelsProvider[] | undefined) {
   for (const p of filtered) {
     if (p.provider === "Navigator") continue;
     if (p.provider === "mistral") continue;
+    if (p.provider === TENSORX_PROVIDER) continue;
     if (p.provider === "Add Local Models" || p.isPlaceholder) {
       localPlaceholders.push(p);
       continue;
@@ -199,10 +244,12 @@ function buildModelMenuPlan(filtered: ModelsProvider[] | undefined) {
   }
 
   const mistralBlock = mistral && mistral.models.length > 0 ? mistral : null;
+  const tensorxBlock = tensorx && tensorx.models.length > 0 ? tensorx : null;
 
   return {
     baseModel,
     top3,
+    tensorx: tensorxBlock,
     mistral: mistralBlock,
     tail,
     localPlaceholders,
@@ -230,6 +277,8 @@ export const SelectModel = (props: PropsWithChildren<SelectModelProps>) => {
   const [forceConfigView, setForceConfigView] = useState(false);
   const { hasAccess } = useLocalModelsAccess();
 
+  const t = useTranslations();
+
   // Fetch metadata from database
   const { data: modelsMetadata } = useModelsMetadata();
 
@@ -245,7 +294,7 @@ export const SelectModel = (props: PropsWithChildren<SelectModelProps>) => {
         m.model === modelName,
     );
 
-    if (!metadata) return { badges: {}, country: null };
+    if (!metadata) return { badges: {}, country: null, price: null };
 
     return {
       badges: {
@@ -258,6 +307,7 @@ export const SelectModel = (props: PropsWithChildren<SelectModelProps>) => {
         maxPerformance: metadata.maxPerformance,
       },
       country: metadata.country,
+      price: formatModelPrice(metadata.inputPriceUsd, metadata.outputPriceUsd),
     };
   };
 
@@ -336,7 +386,10 @@ export const SelectModel = (props: PropsWithChildren<SelectModelProps>) => {
           });
           setOpen(false);
         }}
-        value={item.name}
+        // cmdk tracks items by value, so it must be unique: Kimi K3 is offered
+        // both via the gateway and via TensorX. The name stays a substring, so
+        // searching by model name still matches.
+        value={`${provider.provider}/${item.name}`}
         data-testid={`model-option-${provider.provider}-${item.name}`}
       >
         {model?.provider === provider.provider && model?.model === item.name ? (
@@ -349,8 +402,30 @@ export const SelectModel = (props: PropsWithChildren<SelectModelProps>) => {
           {flag && <span className="text-sm">{flag}</span>}
         </span>
 
+        {modelData.price && (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <span className="ml-auto text-xs text-muted-foreground tabular-nums whitespace-nowrap">
+                {modelData.price}
+              </span>
+            </TooltipTrigger>
+            <TooltipContent side="left">
+              <p className="text-xs">
+                {t("Chat.modelPriceTooltip", { price: modelData.price })}
+              </p>
+            </TooltipContent>
+          </Tooltip>
+        )}
+
         {badgeIcons.length > 0 && (
-          <div className="ml-auto flex gap-1 mr-2">
+          <div
+            className={cn(
+              "flex gap-1 mr-2",
+              // The price already claimed ml-auto when it is shown.
+              !modelData.price && "ml-auto",
+              modelData.price && "ml-2",
+            )}
+          >
             {badgeIcons.map((badge, idx) => (
               <Tooltip key={idx}>
                 <TooltipTrigger asChild>
@@ -368,7 +443,8 @@ export const SelectModel = (props: PropsWithChildren<SelectModelProps>) => {
           <div
             className={cn(
               "flex items-center gap-1 text-xs text-muted-foreground",
-              badgeIcons.length === 0 && "ml-auto",
+              // Whichever of price/badges renders first already took ml-auto.
+              badgeIcons.length === 0 && !modelData.price && "ml-auto",
             )}
           >
             No tools
@@ -431,7 +507,8 @@ export const SelectModel = (props: PropsWithChildren<SelectModelProps>) => {
     );
   }
 
-  function renderMistralGroup(provider: ModelsProvider) {
+  /** A plain provider group, without the Local Models add/update affordances. */
+  function renderSimpleProviderGroup(provider: ModelsProvider) {
     return (
       <CommandGroup
         heading={
@@ -674,6 +751,7 @@ export const SelectModel = (props: PropsWithChildren<SelectModelProps>) => {
                 )}
                 {menuPlan.baseModel &&
                   (menuPlan.top3.length > 0 ||
+                    menuPlan.tensorx ||
                     menuPlan.mistral ||
                     menuPlan.tail.length > 0 ||
                     menuPlan.localPlaceholders.length > 0) && (
@@ -694,12 +772,22 @@ export const SelectModel = (props: PropsWithChildren<SelectModelProps>) => {
                   </CommandGroup>
                 )}
                 {menuPlan.top3.length > 0 &&
+                  (menuPlan.tensorx ||
+                    menuPlan.mistral ||
+                    menuPlan.tail.length > 0 ||
+                    menuPlan.localPlaceholders.length > 0) && (
+                    <CommandSeparator />
+                  )}
+                {menuPlan.tensorx &&
+                  renderSimpleProviderGroup(menuPlan.tensorx)}
+                {menuPlan.tensorx &&
                   (menuPlan.mistral ||
                     menuPlan.tail.length > 0 ||
                     menuPlan.localPlaceholders.length > 0) && (
                     <CommandSeparator />
                   )}
-                {menuPlan.mistral && renderMistralGroup(menuPlan.mistral)}
+                {menuPlan.mistral &&
+                  renderSimpleProviderGroup(menuPlan.mistral)}
                 {menuPlan.mistral &&
                   (menuPlan.tail.length > 0 ||
                     menuPlan.localPlaceholders.length > 0) && (
@@ -793,6 +881,9 @@ const ProviderHeader = memo(function ProviderHeader({
         <ModelProviderIcon provider={provider} className="size-3" />
       )}
       {provider}
+      {PROVIDER_LABEL_SUFFIX[provider] && (
+        <span className="text-xs">{PROVIDER_LABEL_SUFFIX[provider]}</span>
+      )}
       {!hasAPIKey && !isPlaceholder && (
         <>
           <span className="text-xs ml-auto text-muted-foreground">

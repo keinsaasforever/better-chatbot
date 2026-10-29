@@ -5,7 +5,6 @@ import {
   convertToModelMessages,
   createUIMessageStream,
   createUIMessageStreamResponse,
-  pruneMessages,
   safeValidateUIMessages,
   smoothStream,
   stepCountIs,
@@ -14,14 +13,23 @@ import {
 } from "ai";
 import { eq } from "drizzle-orm";
 
-import { getModelInstance, isToolCallUnsupportedModel } from "lib/ai/models";
+import {
+  getModelInstance,
+  isToolCallUnsupportedModel,
+  supportsImageInput,
+} from "lib/ai/models";
+import { SERVER_TOOL_STEP_BUDGET_MS } from "lib/code-runner/timeouts";
 import {
   MemberBudgetExceededError,
   type RoutingCandidate,
   RoutingPolicyError,
+  detectModelSwitch,
   estimateCostMicros,
   extractRouteSignals,
   finalizeMemberBudget,
+  findPreviousThreadChatModel,
+  resolveBrowserAutomationGate,
+  resolveUnattendedBrowserGate,
   isRoutingSchemaUnavailableError,
   releaseMemberBudget,
   reserveMemberBudget,
@@ -37,14 +45,16 @@ import {
   chatApiSchemaRequestBodySchema,
 } from "app-types/chat";
 import {
+  COMPOSIO_FALLBACK_SYSTEM_PROMPT,
   buildCurrentDateTimePrompt,
   buildHitlSystemPrompt,
   buildMcpServerCustomizationsSystemPrompt,
+  buildPlanModeSystemPrompt,
   buildProjectInstructionsPrompt,
+  buildSandboxAssetsSystemPrompt,
   buildSkillCatalogSystemPrompt,
   buildSkillsSystemPrompt,
   buildToolCallUnsupportedModelSystemPrompt,
-  buildSandboxAssetsSystemPrompt,
   buildUserSystemPrompt,
 } from "lib/ai/prompts";
 import {
@@ -57,10 +67,16 @@ import {
   skillRepository,
 } from "lib/db/repository";
 import globalLogger from "logger";
+import { after } from "next/server";
+import { flushLogs } from "lib/observability/register";
+
+import { generateThreadTitle } from "lib/chat/generate-thread-title";
+import { buildThreadTitleSeed } from "lib/chat/thread-title";
 
 import { errorIf, safe } from "ts-safe";
 
 import { buildAgentKnowledgeRetrievalPrompt } from "@/lib/agentset/agent-knowledge";
+import { resolveKnowledgeBaseBindings } from "@/lib/chat/knowledge-base-mentions";
 import { AGENTSET_CITATION_GUIDELINES } from "@/lib/agentset/citation-context";
 import { parseAgentModel } from "@/lib/ai/agent-model";
 import { normalizeAgentInstructions } from "@/lib/ai/agent/normalize";
@@ -75,9 +91,12 @@ import {
   buildDocumentContextPrompt,
   getProjectDocumentHandles,
 } from "@/lib/ai/document-context";
-import { buildCsvIngestionPreviewParts } from "@/lib/ai/ingest/csv-ingest";
-import { buildPdfIngestionPreviewParts } from "@/lib/ai/ingest/pdf-ingest";
+import { buildIngestionPreviewParts } from "@/lib/ai/ingest";
 import { loadHitlTools } from "@/lib/ai/tools/hitl/load-hitl-tools";
+import { buildCitationSystemPrompt } from "@/lib/citations/parse-citations";
+import { isBrowserToolkitOn } from "lib/chat/browser-tool-pin";
+import { pgDb } from "@/lib/db/pg/db.pg";
+import { ProjectTable } from "@/lib/db/pg/schema.pg";
 import {
   CreditsExhaustedError,
   assertCreditsAvailable,
@@ -85,32 +104,54 @@ import {
   requireFeature,
   trackUsage,
 } from "@/lib/gate";
-import { buildCitationSystemPrompt } from "@/lib/citations/parse-citations";
-import { pgDb } from "@/lib/db/pg/db.pg";
-import { ProjectTable } from "@/lib/db/pg/schema.pg";
 import { buildProjectRetrievalPrompt } from "@/lib/project-brain/retrieve-for-chat";
 import { colorize } from "consola/utils";
+import { getContextWindow } from "lib/ai/model-context-windows";
 import {
   ANTHROPIC_CACHE_CONTROL,
   withTrailingCacheBreakpoint,
 } from "lib/ai/prompt-cache";
 import { createRequestTimer } from "lib/ai/request-timer";
 import { collectSandboxAssets } from "lib/ai/sandbox-assets";
+import { createResearchAgentTool } from "lib/ai/subagents/research-subagent";
+import { createBrowserAutomationTool } from "lib/ai/tools/browser/browser-automation-tool";
+import { IS_KERNEL_CONFIGURED } from "lib/kernel/client";
+import { isUnattended } from "lib/chat/run-mode";
+import {
+  DENIED_UNATTENDED_CONTEXT,
+  loadUnattendedContext,
+} from "lib/chat/unattended-context";
+import {
+  resolveBrowserToolSuppression,
+  shouldReadBrowserPolicy,
+} from "lib/chat/browser-tool-gate";
+import { resolveBrowserCredentials } from "lib/kernel/credential-vault";
+import { browserCredentialRepository } from "lib/db/repository";
 import { aiTelemetry } from "lib/ai/telemetry";
-import { ImageToolName, PublishPageToolName } from "lib/ai/tools";
+import {
+  DefaultToolName,
+  ImageToolName,
+  PublishPageToolName,
+  ResearchToolName,
+} from "lib/ai/tools";
 import { createImageTool } from "lib/ai/tools/image";
+import { createPlanTool } from "lib/ai/tools/planning/create-plan-tool";
 import { createPublishPageTool } from "lib/ai/tools/publish/publish-page-tool";
 import { serverFileStorage } from "lib/file-storage";
+import { billingRunKey } from "@/lib/billing/usage-idempotency";
 import { generateUUID } from "lib/utils";
 import {
   rememberAgentAction,
   rememberMcpServerCustomizationsAction,
 } from "./actions";
+import { compactLoopMessages } from "./chat/compact-loop-messages";
+import { repairToolName } from "./chat/repair-tool-name";
 import { appendRetrievalContext } from "./chat/retrieval-context";
 import { slimHistoryForModel } from "./chat/slim-history";
 import {
   buildInitialMessageParts,
   buildMessageParts,
+  resolveAbortOutcome,
   resolveChatSession,
 } from "./route-helpers";
 import {
@@ -126,6 +167,7 @@ import {
   loadWorkFlowTools,
   manualToolExecuteByLastMessage,
   mergeSystemPrompt,
+  meterToolCalls,
 } from "./shared.chat";
 
 /**
@@ -136,11 +178,20 @@ import {
 const estimateTokens = (messages: ModelMessage[]) =>
   JSON.stringify(messages).length / 4;
 
-/** Compact a running turn once it grows past this many estimated tokens. */
-const COMPACT_AFTER_TOKENS = 100_000;
+/**
+ * Compact once a turn is using this share of the model's context window.
+ * Above gemini-cli's 0.5 and below opencode's effective ~0.9: the prune has to
+ * leave room for the model's output and the next tool result, but firing early
+ * trims context nobody needed to lose.
+ */
+const COMPACT_AT_CONTEXT_FRACTION = 0.7;
 
-/** Messages left intact when compacting - the model is still working on these. */
-const COMPACT_KEEP_RECENT_MESSAGES = 6;
+/**
+ * Assumed window for models missing from MODEL_CONTEXT_WINDOWS (Local Models,
+ * openai-compatible endpoints). Conservative on purpose: compacting a turn
+ * that did not need it costs some context, guessing high costs the whole turn.
+ */
+const FALLBACK_CONTEXT_WINDOW = 64_000;
 
 const logger = globalLogger.withDefaults({
   message: colorize("blackBright", `Chat API: `),
@@ -190,7 +241,16 @@ export async function POST(request: Request) {
     if (sessionOrResponse instanceof Response) {
       return sessionOrResponse;
     }
-    const session = sessionOrResponse;
+    const {
+      session,
+      headless: isHeadless,
+      runMode,
+      scheduledTaskId,
+    } = sessionOrResponse;
+    // Distinct from `isHeadless`: that one means "no client can answer an
+    // execute-less tool", this one means "no human is present". See
+    // `lib/chat/run-mode`.
+    const isUnattendedRun = isUnattended(runMode);
 
     const parsedRequest = chatApiSchemaRequestBodySchema.safeParse(json);
     if (!parsedRequest.success) {
@@ -207,6 +267,7 @@ export async function POST(request: Request) {
       chatModel: requestedChatModel,
       autoRouting,
       toolChoice,
+      planMode,
       allowedAppDefaultToolkit,
       allowedMcpServers,
       imageTool,
@@ -216,6 +277,12 @@ export async function POST(request: Request) {
     } = parsedRequest.data;
 
     let chatModel = requestedChatModel;
+
+    // Read before the agent's own tool mentions are merged in below, so the
+    // list persisted onto the thread stays exactly what the composer attached.
+    const composerKnowledgeBindings = resolveKnowledgeBaseBindings({
+      mentions,
+    });
 
     const validatedIncomingMessage = await safeValidateUIMessages<UIMessage>({
       messages: [incomingMessage],
@@ -246,6 +313,10 @@ export async function POST(request: Request) {
         title: "",
         userId: session.user.id,
         projectId, // Pass projectId from request
+        // A draft thread has no row for `setThreadKnowledgeBasesAction` to
+        // update, so whatever the composer attached before the first message
+        // becomes durable here.
+        knowledgeBases: composerKnowledgeBindings,
       });
     }
 
@@ -324,6 +395,14 @@ export async function POST(request: Request) {
             0,
           ) +
           mentions.length;
+    // Automatic routing decides once per thread, not once per message. Task
+    // signals are recomputed from every message, so re-scoring each turn moved
+    // a conversation between models mid-flight — and the prompt cache is keyed
+    // per provider *and* model, so each move re-sent the whole history at full
+    // price to a model that had never seen it. Routing re-uses the model the
+    // thread already ran on unless it can no longer serve the turn (see
+    // `selectDeterministicRoute`); an empty value here is a first turn.
+    const threadModel = findPreviousThreadChatModel(thread?.messages);
     let routingMetadata: ChatMetadata["routing"] = {
       automatic: effectiveAutoRouting,
     };
@@ -340,6 +419,7 @@ export async function POST(request: Request) {
             attachments,
             toolCount: configuredToolCount,
           }),
+          previousChatModel: threadModel,
         });
         chatModel = route.candidate.chatModel;
         resolvedCandidate = route.candidate;
@@ -425,17 +505,38 @@ export async function POST(request: Request) {
     }
 
     // Kick off the independent pre-stream stages together. None depends on the
-    // others: model resolution needs only the routed chatModel and the CSV/PDF
-    // ingestion previews download attachments. (The agent was resolved earlier
-    // — before routing — because its pinned model feeds model resolution.)
-    const [model, csvParts, pdfParts] = await Promise.all([
+    // others: model resolution needs only the routed chatModel, and reading the
+    // attachments needs only their storage keys. (The agent was resolved
+    // earlier — before routing — because its pinned model feeds model
+    // resolution.) Reading attachments blocks the stream — the model needs
+    // their text in its first prompt — so it is tracked as a stage. Without
+    // this its cost was invisible in `stages` and a slow format could not be
+    // told from a slow model.
+    //
+    // `session.user.id` goes to the reader, not just the thread: the attachment
+    // array arrives in the request body, so a key in it is under the caller's
+    // control and the storage client holds the service role.
+    //
+    // Vision models also get PDF pages rendered as images: extraction keeps the
+    // words and throws the document away, which is exactly what a question
+    // about layout or appearance needs.
+    const [model, ingestionPreviewParts] = await Promise.all([
       getModelInstance(chatModel, session.user.id),
-      // Text previews for CSVs and PDFs (sent to LLM, not binary files)
-      buildCsvIngestionPreviewParts(attachments, (key) =>
-        serverFileStorage.download(key),
-      ),
-      buildPdfIngestionPreviewParts(attachments, (key) =>
-        serverFileStorage.download(key),
+      timer.track("ingest", () =>
+        buildIngestionPreviewParts(
+          attachments,
+          (key) => serverFileStorage.download(key),
+          { userId: session.user.id },
+          {
+            supportsVision: supportsImageInput(chatModel),
+            // Per-format stages, so a slow format is visible as itself rather
+            // than as "reading files was slow". Called once per format, and
+            // format ids are a fixed set of six, so this stays
+            // low-cardinality.
+            onFormatTiming: (formatId, ms) =>
+              timer.mark(`ingest:${formatId}`, ms),
+          },
+        ),
       ),
     ]);
 
@@ -452,8 +553,6 @@ export async function POST(request: Request) {
       messages.pop();
     }
 
-    const ingestionPreviewParts = [...csvParts, ...pdfParts];
-
     message.parts = buildMessageParts(
       message.parts,
       attachments,
@@ -461,6 +560,20 @@ export async function POST(request: Request) {
     );
 
     messages.push(message);
+
+    // Unique per POST, and therefore per model run. Both the budget reservation
+    // and the usage event key off it.
+    //
+    // Keying those off `message.id` alone was wrong: a client-side tool (one
+    // declared without `execute`) ends the stream, the browser runs the tool and
+    // posts back — same user message, new model run. Production showed 14 runs
+    // on one message id, of which Autumn billed the first and rejected 13 as
+    // `duplicate_idempotency_key`, and the member's cap counted one reservation
+    // for all 14. Both under-counted by roughly the whole tool loop.
+    //
+    // Still stable *within* a run, which is what idempotency is actually for:
+    // `trackWithRetry` retries with identical params and must stay deduped.
+    const runId = generateUUID();
 
     let budgetReservationId: string | undefined;
     if (resolvedCandidate) {
@@ -477,7 +590,12 @@ export async function POST(request: Request) {
           memberId,
           deploymentId: resolvedCandidate.deploymentId,
           estimateMicros: estimatedCost,
-          idempotencyKey: `${memberId ?? session.user.id}:${message.id}`,
+          idempotencyKey: billingRunKey({
+            scope: "reserve",
+            subject: memberId ?? session.user.id,
+            detail: message.id,
+            runId,
+          }),
         });
         budgetReservationId = reservation?.id;
       } catch (error) {
@@ -510,10 +628,40 @@ export async function POST(request: Request) {
       mentions.push(...def.tools, ...def.skills);
     }
 
-    const useImageTool = Boolean(imageTool?.model);
+    const useImageTool = Boolean(imageTool?.model) || Boolean(imageTool?.mask);
+
+    // Plan mode replaces the whole tool surface with research + createPlan;
+    // every regular tool source below is gated off via isToolCallAllowed, so
+    // no MCP/workflow/Composio/app-default loading happens for these turns.
+    const planModeActive = planMode && supportToolCall && !useImageTool;
 
     const isToolCallAllowed =
-      supportToolCall && toolChoice !== "none" && !useImageTool;
+      supportToolCall &&
+      toolChoice !== "none" &&
+      !useImageTool &&
+      !planModeActive;
+
+    // A model switch throws away the prompt cache for the whole thread: the
+    // cache is keyed per provider *and* model, so the next turn re-pays full
+    // price for history the previous model had already cached. Automatic
+    // routing pins a thread to its previous model, so what is left to record
+    // here is a user switching by hand, or a pin dropped because the model
+    // could not serve this turn. Free to compute: the thread is already loaded
+    // and every assistant message records the model it ran on.
+    const modelSwitch = detectModelSwitch({
+      messages: thread?.messages,
+      current: chatModel,
+      automatic: routingMetadata.automatic,
+    });
+
+    if (modelSwitch) {
+      routingMetadata = { ...routingMetadata, switchedFrom: modelSwitch.from };
+      logger.info(
+        `[model-switch] thread=${id} ${modelSwitch.from} -> ${modelSwitch.to} by=${
+          modelSwitch.automatic ? "routing" : "user"
+        }`,
+      );
+    }
 
     const metadata: ChatMetadata = {
       runId: message.id,
@@ -585,7 +733,13 @@ export async function POST(request: Request) {
 
         // HITL tools are synchronous (no I/O), so build them up front.
         // 🔥 Pass userId for secure MCP server scoping
-        const HITL_TOOLS = loadHitlTools(session.user.id);
+        // Every HITL tool is declared without an `execute`: the unresolved call
+        // is how it waits for a person. On an unattended run nobody answers, so
+        // binding them only buys a `finishReason: "tool-calls"` failure and a
+        // wasted model turn.
+        const HITL_TOOLS = isUnattendedRun
+          ? {}
+          : loadHitlTools(session.user.id);
 
         // ── Parallel pre-stream loading ──────────────────────────────────
         // These stages are independent network/DB calls that previously ran
@@ -604,12 +758,14 @@ export async function POST(request: Request) {
                 return loadMcpToolsStateless(session.user.id, {
                   mentions,
                   allowedMcpServers,
+                  organizationId: activeOrganizationId,
                 });
               } else {
                 logger.warn("Using legacy stateful MCP loader (fallback)");
                 return loadMcpTools(session.user.id, {
                   mentions,
                   allowedMcpServers,
+                  organizationId: activeOrganizationId,
                 });
               }
             })
@@ -636,6 +792,10 @@ export async function POST(request: Request) {
               loadWorkFlowTools({
                 mentions,
                 dataStream,
+                caller: {
+                  userId: session.user.id,
+                  organizationId: activeOrganizationId,
+                },
               }),
             )
             .orElse({}),
@@ -645,6 +805,10 @@ export async function POST(request: Request) {
           safe()
             .map(errorIf(() => !isToolCallAllowed && "Not allowed"))
             .map(() => loadComposioTools(session.user.id))
+            // Composio bills per tool call, so every invocation gets counted.
+            // Wrapping here rather than inside the loader keeps the per-user
+            // tool cache free of request-scoped billing identity.
+            .map((tools) => meterToolCalls(tools, { customerId, entityId }))
             .orElse({}),
         );
 
@@ -659,6 +823,11 @@ export async function POST(request: Request) {
                 billingCustomerId: customerId,
                 billingEntityId: entityId,
                 projectId: thread?.projectId, // Pass projectId for RAG-enabled project chats
+                threadId: thread?.id,
+                // The agent's own files ride into every sandbox run, so a saved
+                // template/render script is there without the user re-uploading.
+                agentFiles: agent?.instructions?.files,
+                headless: isHeadless,
               }),
             )
             .orElse({}),
@@ -694,7 +863,7 @@ export async function POST(request: Request) {
         // Auto mode only: a lightweight name+description catalog of all in-scope
         // skills, which the model reads and loads on demand via loadSkill.
         const skillCatalogPromise = timer.track("skillCatalog", () =>
-          toolChoice === "auto"
+          !planModeActive && toolChoice === "auto"
             ? skillRepository.selectSkills(
                 session.user.id,
                 ["all"],
@@ -740,23 +909,35 @@ export async function POST(request: Request) {
             )
           : Promise.resolve(null);
 
-        // Agent-bound knowledge bases: search only the namespaces the agent is
-        // bound to (access re-validated inside the builder). Projects already
-        // covered by the thread's own retrieval are excluded.
-        const agentKnowledgeBindings = agent?.instructions?.knowledgeBases;
-        // Fixed for the life of the thread, so the citation rules can be
-        // included (or not) without the system prompt changing between turns.
+        // Knowledge sources for this turn: the ones the active agent is bound
+        // to, the ones stored on the thread, and the ones this request's
+        // composer mentions carry. Only those namespaces are searched, and the
+        // builder re-validates access on every id. Projects already covered by
+        // the thread's own retrieval are excluded.
+        const knowledgeBindings = resolveKnowledgeBaseBindings({
+          mentions,
+          bindings: [
+            ...(agent?.instructions?.knowledgeBases ?? []),
+            // What the thread itself carries. A client that never sent the
+            // mentions (a resumed thread, a scheduled run) still retrieves.
+            ...(thread?.knowledgeBases ?? []),
+          ],
+        });
+        // Gates the citation rules in the cache-stable prefix. It only flips
+        // when the thread's knowledge sources change (attaching one in the
+        // composer, or switching agent), so ordinary turns still hit the
+        // prompt cache.
         const hasKnowledgeRetrieval = Boolean(
-          retrievalProjectId || agentKnowledgeBindings?.length,
+          retrievalProjectId || knowledgeBindings.length,
         );
         const agentKnowledgePromise =
-          agentKnowledgeBindings?.length && message.role === "user"
+          knowledgeBindings.length && message.role === "user"
             ? timer.track("agentKnowledgeRetrieval", () =>
                 buildAgentKnowledgeRetrievalPrompt({
                   userId: session.user.id,
                   activeOrganizationId,
                   query: extractMessageText(message.parts),
-                  bindings: agentKnowledgeBindings,
+                  bindings: knowledgeBindings,
                   excludeProjectId: retrievalProjectId,
                 }),
               )
@@ -891,9 +1072,17 @@ export async function POST(request: Request) {
           projectInstructions
             ? buildProjectInstructionsPrompt(projectInstructions)
             : undefined,
+          planModeActive && buildPlanModeSystemPrompt(),
           // ~870 tokens of tool-approval rules. Unreachable, but still billed,
-          // when the model cannot call tools at all.
-          isToolCallAllowed && buildHitlSystemPrompt(),
+          // when the model cannot call tools at all — or when there is no human
+          // to approve anything.
+          isToolCallAllowed && !isUnattendedRun && buildHitlSystemPrompt(),
+          // Ranks Composio below first-party and MCP tools. Present exactly
+          // when Composio tools are bound: stable per user (the connection
+          // check is TTL-cached), so it stays in the cacheable prefix.
+          isToolCallAllowed &&
+            Object.keys(COMPOSIO_TOOLS).length > 0 &&
+            COMPOSIO_FALLBACK_SYSTEM_PROMPT,
           !supportToolCall && buildToolCallUnsupportedModelSystemPrompt,
           buildMcpServerCustomizationsSystemPrompt(mcpServerCustomizations),
           buildSkillsSystemPrompt(selectedSkills),
@@ -907,16 +1096,23 @@ export async function POST(request: Request) {
           documentContextPrompt,
           projectDocCitationPrompt,
           attachmentCitationPrompt,
-          // Per-request: the URLs change every turn, so it sits in the volatile
-          // tail rather than invalidating the cached prefix above.
-          sandboxAssetsPrompt,
-          buildCurrentDateTimePrompt(),
+          // Nothing per-request below this line. The sandbox URLs and the clock
+          // ride with the user's message instead (see appendRetrievalContext) -
+          // putting them last *inside* the system block did not help, because
+          // the cache breakpoint sits at the end of that block and therefore
+          // after them.
         );
 
         const IMAGE_TOOL: Record<string, Tool> =
           useImageTool && toolChoice !== "none"
             ? {
-                [ImageToolName]: createImageTool(customerId, id, entityId),
+                [ImageToolName]: createImageTool(
+                  customerId,
+                  id,
+                  entityId,
+                  imageTool?.model,
+                  imageTool?.mask,
+                ),
               }
             : {};
         // Expose loadSkill only when the Auto catalog is non-empty — the model
@@ -943,21 +1139,150 @@ export async function POST(request: Request) {
             }
           : {};
 
+        // Plan mode's entire tool surface: parallel research subagents plus
+        // the plan artifact. HITL tools are excluded with the rest — nothing
+        // is executed in plan mode, so there is nothing to approve.
+        const PLAN_TOOLS: Record<string, Tool> = planModeActive
+          ? {
+              [ResearchToolName]: createResearchAgentTool({
+                model,
+                customerId: customerId ?? undefined,
+                entityId,
+                projectId: thread?.projectId ?? undefined,
+                organizationId: activeOrganizationId ?? undefined,
+                threadId: id,
+                modelId: chatModel
+                  ? `${chatModel.provider}/${chatModel.model}`
+                  : undefined,
+              }),
+              [DefaultToolName.CreatePlan]: createPlanTool,
+            }
+          : {};
+
+        // Browser automation is bound here rather than in the toolkit map: it
+        // drives an inner agent and so needs the request's resolved model, the
+        // same reason the research subagent is bound here.
+        // A `@browser-automation` pin has to count as the toolkit being on —
+        // see `lib/chat/browser-tool-pin` for why naming the tool used to be
+        // what removed it.
+        const browserToolkitOn = isBrowserToolkitOn({
+          mentions,
+          allowedAppDefaultToolkit,
+        });
+        // An unattended run's grants live on its scheduled_task row, not in the
+        // request body. Loaded only on that path, and fails closed.
+        const unattendedContext = isUnattendedRun
+          ? await loadUnattendedContext({
+              scheduledTaskId,
+              userId: session.user.id,
+            })
+          : DENIED_UNATTENDED_CONTEXT;
+
+        // Several independent gates collapse into one absent tool, which has
+        // already cost a debugging session — name the first gate that failed
+        // so "why is browser automation missing?" is answerable from one log
+        // line. Ordering and reasons live in `lib/chat/browser-tool-gate` so
+        // they can be tested; the org policy read only runs when every cheap
+        // check passed.
+        const browserGateInput = {
+          planModeActive,
+          unattended: isUnattendedRun,
+          kernelConfigured: IS_KERNEL_CONFIGURED,
+          toolkitOn: browserToolkitOn,
+          taskBrowserEnabled: unattendedContext.browserAutomationEnabled,
+        };
+        const browserPolicyGate = shouldReadBrowserPolicy(browserGateInput)
+          ? await (isUnattendedRun
+              ? resolveUnattendedBrowserGate
+              : resolveBrowserAutomationGate)({
+              organizationId: activeOrganizationId,
+              userId: session.user.id,
+            })
+          : null;
+        const browserToolSuppressedBy = resolveBrowserToolSuppression({
+          ...browserGateInput,
+          policyGate: browserPolicyGate,
+        });
+        if (browserToolSuppressedBy && isToolCallAllowed) {
+          logger.info(
+            `browser-automation tool not bound: ${browserToolSuppressedBy}`,
+          );
+        }
+        // Which stored sign-ins this run may use. An unattended run gets only
+        // the aliases a human pinned to its schedule; an interactive one gets
+        // the org's, because a person is present and chose to run the tool.
+        // Resolved (a Scaleway read per credential) only when the tool is
+        // actually bound.
+        const browserCredentials =
+          browserToolSuppressedBy === null
+            ? await resolveBrowserCredentials({
+                organizationId: activeOrganizationId,
+                aliases: isUnattendedRun
+                  ? unattendedContext.credentialAliases
+                  : await browserCredentialRepository
+                      .selectAliasesForOrganization(activeOrganizationId ?? "")
+                      .catch(() => []),
+              })
+            : [];
+
+        const BROWSER_TOOL: Record<string, Tool> =
+          browserToolSuppressedBy === null
+            ? {
+                [DefaultToolName.BrowserAutomation]:
+                  createBrowserAutomationTool({
+                    model,
+                    customerId: customerId ?? undefined,
+                    entityId,
+                    organizationId: activeOrganizationId ?? undefined,
+                    threadId: id,
+                    modelId: chatModel
+                      ? `${chatModel.provider}/${chatModel.model}`
+                      : undefined,
+                    unattended: isUnattendedRun,
+                    credentials: browserCredentials,
+                    // Read back off the terminal `finish` frame by the
+                    // scheduled-task runner, which is what turns "the page
+                    // needed a person" into a recorded failure instead of a
+                    // silent success.
+                    onRunBlocked: (block) => {
+                      metadata.blocked = block;
+                    },
+                    onCredentialUsed: (aliases) => {
+                      if (!activeOrganizationId) return;
+                      void browserCredentialRepository
+                        .touchLastUsed(activeOrganizationId, aliases)
+                        .catch(() => {
+                          // Best-effort bookkeeping; never fail a run for it.
+                        });
+                    },
+                  }),
+              }
+            : {};
+
         const availableTools: Record<string, Tool> = {
           ...MCP_TOOLS,
           ...WORKFLOW_TOOLS,
-          ...COMPOSIO_TOOLS,
-          ...HITL_TOOLS,
+          ...(planModeActive ? {} : HITL_TOOLS),
           ...APP_DEFAULT_TOOLS,
           ...SKILL_TOOLS,
           ...IMAGE_TOOL,
           ...PUBLISH_TOOL,
+          ...PLAN_TOOLS,
+          ...BROWSER_TOOL,
         };
+        // Composio is the fallback family (see COMPOSIO_FALLBACK_SYSTEM_PROMPT):
+        // it binds last so its meta-tools sit at the bottom of the tool list,
+        // and it can never shadow a first-party tool on a name collision.
+        for (const [name, composioTool] of Object.entries(COMPOSIO_TOOLS)) {
+          if (!(name in availableTools)) availableTools[name] = composioTool;
+        }
         // `manual` keeps the model's ability to request a tool, but removes
         // every execute callback until the existing confirmation flow supplies
         // a result. `none` is an actual no-tools mode, even with mentions.
-        const vercelAITooles: Record<string, Tool> =
-          toolChoice === "none"
+        // Plan mode overrides both: its two tools always auto-execute.
+        const vercelAITooles: Record<string, Tool> = planModeActive
+          ? availableTools
+          : toolChoice === "none"
             ? {}
             : toolChoice === "manual"
               ? excludeToolExecution(availableTools)
@@ -972,14 +1297,22 @@ export async function POST(request: Request) {
           `${agent ? `agent: ${agent.name}, ` : ""}tool mode: ${toolChoice}, mentions: ${mentions.length}`,
         );
 
+        // Names, not just counts: answering "was web search even offered?"
+        // from counts alone requires reconstructing it from the tool registry.
         logger.info(
-          `allowedMcpTools: ${allowedMcpTools.length ?? 0}, allowedAppDefaultToolkit: ${allowedAppDefaultToolkit?.length ?? 0}`,
+          `allowedMcpTools: ${allowedMcpTools.length ?? 0}, allowedAppDefaultToolkit: ${allowedAppDefaultToolkit?.length ?? 0} [${(allowedAppDefaultToolkit ?? []).join(", ")}]`,
         );
         if (useImageTool) {
-          logger.info(`binding tool count Image: ${imageTool?.model}`);
-        } else {
           logger.info(
-            `binding tool count APP_DEFAULT: ${Object.keys(APP_DEFAULT_TOOLS ?? {}).length}, MCP: ${Object.keys(MCP_TOOLS ?? {}).length}, Workflow: ${Object.keys(WORKFLOW_TOOLS ?? {}).length}, Composio: ${Object.keys(COMPOSIO_TOOLS ?? {}).length}`,
+            `binding tool count Image: ${imageTool?.model ?? "auto"}${imageTool?.mask ? " (masked)" : ""}`,
+          );
+        } else {
+          // Composio tools are loaded dynamically by the Tool Router, so the
+          // names are the only way to tell afterwards whether a connected app
+          // offered a competing search/code tool alongside our own.
+          const composioToolNames = Object.keys(COMPOSIO_TOOLS ?? {});
+          logger.info(
+            `binding tool count APP_DEFAULT: ${Object.keys(APP_DEFAULT_TOOLS ?? {}).length}, MCP: ${Object.keys(MCP_TOOLS ?? {}).length}, Workflow: ${Object.keys(WORKFLOW_TOOLS ?? {}).length}, Composio: ${composioToolNames.length} [${composioToolNames.slice(0, 15).join(", ")}${composioToolNames.length > 15 ? ", …" : ""}]`,
           );
         }
         logger.info(`model: ${chatModel?.provider}/${chatModel?.model}`);
@@ -1005,11 +1338,16 @@ export async function POST(request: Request) {
         // ttftMs in the flush, this isolates pure gateway + provider latency.
         timer.beforeModel();
 
-        // Compaction state for this request. `prepareStep` fires before every
-        // step, but pruning must happen at most once: the returned messages
-        // carry forward, so re-pruning on a moving boundary would rewrite the
-        // prefix on every step and defeat the cache it is meant to protect.
-        let compactedThisRequest = false;
+        // Compaction budget for this request. A flat token threshold was wrong
+        // in both directions: a 40k-window model dies at the provider before
+        // reaching it, a 400k-window one gives up context it still had room
+        // for. Models outside the catalog (Local, openai-compatible) fall back
+        // low rather than high - the cost of guessing high is the whole turn.
+        const contextWindow =
+          getContextWindow(chatModel) ?? FALLBACK_CONTEXT_WINDOW;
+        const compactAtTokens = Math.floor(
+          contextWindow * COMPACT_AT_CONTEXT_FRACTION,
+        );
 
         const result = streamText({
           model,
@@ -1025,7 +1363,12 @@ export async function POST(request: Request) {
           // question to still match on the next turn.
           messages: appendRetrievalContext(
             withTrailingCacheBreakpoint(modelMessages),
-            [agentKnowledgePrompt, projectRetrievalPrompt],
+            [
+              agentKnowledgePrompt,
+              projectRetrievalPrompt,
+              sandboxAssetsPrompt,
+              buildCurrentDateTimePrompt(),
+            ],
           ),
           experimental_telemetry: aiTelemetry("chat.stream", {
             organizationId: activeOrganizationId,
@@ -1035,36 +1378,40 @@ export async function POST(request: Request) {
             modelId: chatModel?.model,
             toolCount: Object.keys(vercelAITooles ?? {}).length,
           }),
-          prepareStep: ({ messages: stepMessages }) => {
-            // A single turn can run up to 10 steps, each re-sending everything
-            // accumulated so far. Past the threshold, drop tool payloads from
-            // all but the most recent messages.
-            if (compactedThisRequest) return;
-            const estimated = estimateTokens(stepMessages);
-            if (estimated <= COMPACT_AFTER_TOKENS) return;
-
-            const cut = Math.max(
-              0,
-              stepMessages.length - COMPACT_KEEP_RECENT_MESSAGES,
-            );
-            if (cut === 0) return;
-
-            compactedThisRequest = true;
+          prepareStep: ({ initialMessages, responseMessages, steps }) => {
+            // Logged before anything can throw in here. Its absence before a
+            // missing step is the difference between "the next step never
+            // started" and "the step ran and its log was dropped".
             logger.info(
-              `compacting step context: ${stepMessages.length} messages, ~${Math.round(estimated / 1000)}k tokens`,
+              `[chat] step=${steps.length} starting, ${responseMessages.length} loop messages`,
+            );
+            // A single turn can run up to 10 steps, each re-sending everything
+            // the loop accumulated so far. Past the threshold, drop tool
+            // payloads from all but the most recent loop messages.
+            //
+            // The provider already measured the last prompt, so use that
+            // instead of a JSON estimate: `inputTokens` is the total prompt
+            // including cache reads, which is what has to fit in the window.
+            // Step 0 has no usage yet, hence the fallback.
+            const lastUsage = steps.at(-1)?.usage;
+            const used =
+              lastUsage?.inputTokens != null
+                ? lastUsage.inputTokens + (lastUsage.outputTokens ?? 0)
+                : estimateTokens([...initialMessages, ...responseMessages]);
+            if (used <= compactAtTokens) return;
+
+            const compacted = compactLoopMessages(responseMessages);
+            if (!compacted) return;
+
+            logger.info(
+              `compacting step context: ${responseMessages.length} loop messages -> ${compacted.length}, ~${Math.round(used / 1000)}k of ${Math.round(contextWindow / 1000)}k window`,
             );
 
-            return {
-              messages: [
-                ...pruneMessages({
-                  messages: stepMessages.slice(0, cut),
-                  reasoning: "all",
-                  toolCalls: "all",
-                  emptyMessages: "remove",
-                }),
-                ...stepMessages.slice(cut),
-              ],
-            };
+            // Rebuilt from `initialMessages` rather than from the carried-
+            // forward step messages: the conversation - and both cache
+            // breakpoints, which sit inside it - stays byte-stable for the
+            // whole turn, and re-compacting a later step cannot compound.
+            return { messages: [...initialMessages, ...compacted] };
           },
           // Server-owned abort. Without Redis it tracks request.signal
           // (viewer-bound: tab close / stop halts the run, onAbort persists the
@@ -1076,31 +1423,57 @@ export async function POST(request: Request) {
           maxRetries: 0, // Disable retries for faster response (gateway handles failover)
           tools: vercelAITooles,
           stopWhen: stepCountIs(10),
-          toolChoice: toolChoice === "none" ? "none" : "auto",
-          // Tool-loop trace. A step ending `finishReason: "tool-calls"` with no
-          // following step means the loop stopped waiting on a client-side tool
-          // (one declared without `execute`, e.g. e2b-sandbox) whose result the
-          // browser never sent back — indistinguishable from a hang without
-          // this line.
-          onStepFinish: ({ toolCalls, toolResults, finishReason }) => {
-            logger.info(
-              `[chat] step finishReason=${finishReason} calls=${
-                toolCalls?.map((c) => c.toolName).join(",") || "none"
-              } results=${toolResults?.length ?? 0} threadId=${thread?.id ?? "n/a"}`,
+          toolChoice:
+            toolChoice === "none" && !planModeActive ? "none" : "auto",
+          // A tool name the model got slightly wrong costs a whole step: the
+          // SDK cannot resolve it, the step returns a `tool-error` instead of a
+          // result, and the model re-emits it against the step budget. The
+          // Kimi line sends its wire-format namespace, which the gateway
+          // flattens to `functions_COMPOSIO_SEARCH_TOOLS`. `repairToolName` only ever
+          // returns a name that is already bound, so this cannot reach a tool
+          // the model was not offered.
+          experimental_repairToolCall: async ({ toolCall }) => {
+            const boundNames = Object.keys(vercelAITooles);
+            const repaired = repairToolName(boundNames, toolCall.toolName);
+            // Bad arguments land here too. The name resolving to itself means
+            // the call failed for some other reason, which is not ours to fix.
+            if (repaired === toolCall.toolName) return null;
+            if (!repaired) {
+              logger.warn(
+                `[chat] unresolvable tool call "${toolCall.toolName}" against ${boundNames.length} bound tools`,
+              );
+              return null;
+            }
+            logger.warn(
+              `[chat] repaired tool call "${toolCall.toolName}" -> "${repaired}"`,
             );
+            // Spread rather than rebuild: only the name is wrong, and the rest
+            // of the call is whatever shape this SDK version uses.
+            return { ...toolCall, toolName: repaired };
           },
           // These nest: a step cannot outlive the total, and the total must
           // finish inside maxDuration with time left to persist. stepMs used to
           // be 120s — half the total — which capped a single-step reasoning
           // answer at two minutes and made the rest of the budget unreachable.
           // Turns were dying mid-reasoning at ~127s with an already-200 stream,
-          // so the UI just stopped. chunkMs stays tight: reasoning streams
-          // deltas, so a 45s gap still means genuinely stalled, not thinking.
+          // so the UI just stopped.
+          //
+          // chunkMs was 45s on the assumption that reasoning always streams
+          // deltas, so a 45s gap meant a dead connection. It does not hold for
+          // every provider: TensorX/kimi-k3 went silent for >45s while
+          // composing a large tool call (trace fd0141e9…, 2026-09-08) and the
+          // run was killed 124s into a step that was still producing. A real
+          // stall is now bounded by stepMs instead of being detected early;
+          // that costs a spinner on a rare dead socket, where the old value
+          // cost the answer on a healthy one.
+          //
+          // toolMs bounds a server-executed tool call; the headless code tool
+          // runs for up to 90s plus sandbox creation and artifact upload.
           timeout: {
             totalMs: 540_000,
             stepMs: 300_000,
-            chunkMs: 45_000,
-            toolMs: 90_000,
+            chunkMs: 180_000,
+            toolMs: SERVER_TOOL_STEP_BUDGET_MS,
           },
           // First model output chunk → time-to-first-token. The gap between
           // preStreamMs (sum of blocking stages) and ttftMs is gateway +
@@ -1115,7 +1488,13 @@ export async function POST(request: Request) {
           },
           onError: ({ error }) => {
             clearStopPoll();
-            void releaseMemberBudget(budgetReservationId);
+            // Unguarded, this is an unhandled rejection: the helper opens an
+            // advisory-locked transaction against a pool whose default size is
+            // 1, so a checkout timeout here would kill the instance mid-run —
+            // taking the terminal write and the buffered logs with it.
+            void releaseMemberBudget(budgetReservationId).catch((error) =>
+              logger.warn("Failed to release the member budget", error),
+            );
             const isTimeout =
               error instanceof Error && error.name === "TimeoutError";
             metadata.runStatus = isTimeout ? "timed_out" : "failed";
@@ -1129,26 +1508,46 @@ export async function POST(request: Request) {
               }]${isTimeout ? " (timeout scope: total/step/chunk/tool)" : ""}`,
               error,
             );
+            // The only other flush sites are onEnd, onAbort and the outer
+            // catch, so a run that errored used to emit no LatencyTimer at
+            // all — which reads in the logs exactly like a run that vanished.
+            timer.flush({
+              error: error instanceof Error ? error.name : "UnknownError",
+              provider: chatModel?.provider,
+              model: chatModel?.model,
+              userId: session.user.id,
+              threadId: thread?.id,
+            });
           },
-          onAbort: ({ steps }) => {
+          onAbort: (event) => {
+            const { steps } = event;
+            // ai@7.0.18 passes the abort signal's `reason` on this event but
+            // does not declare it on the callback type yet.
+            const reason = (event as { reason?: unknown }).reason;
             clearStopPoll();
-            void releaseMemberBudget(budgetReservationId);
-            metadata.runStatus = "cancelled";
+            // Guarded for the same reason as in onError above.
+            void releaseMemberBudget(budgetReservationId).catch((error) =>
+              logger.warn("Failed to release the member budget", error),
+            );
             metadata.lastCompletedStep =
               steps.length > 0 ? steps.length - 1 : undefined;
             // A stop the user asked for and a budget that quietly ran out land
-            // in the same callback. Only the first is expected, so tell them
-            // apart: no stop request and zero completed steps means the run was
-            // killed mid-generation, which the client otherwise cannot see —
-            // the stream is already a 200 by then, so it just ends.
-            const userStopped = stopRequestedAt !== null;
-            if (!userStopped) {
-              metadata.error = { code: "run_timeout", retryable: true };
+            // in the same callback. Only the first is a "cancelled" run; the
+            // SDK's step/chunk/total timeouts arrive here too (through the
+            // merged abort signal, `reason` carrying the TimeoutError) and are
+            // persisted as "timed_out" so the UI does not claim the user
+            // stopped it. The stream is already a 200 by then, so the client
+            // only ever learns this from the persisted status.
+            const outcome = resolveAbortOutcome({
+              userStopped: stopRequestedAt !== null,
+              reason,
+            });
+            metadata.runStatus = outcome.runStatus;
+            metadata.error = outcome.error;
+            if (outcome.detail) {
               logger.error(
-                `AI SDK run aborted without a stop request — completed steps: ${steps.length}. Budget exhausted (total/step/chunk/tool) or the function was killed.`,
+                `AI SDK run aborted without a stop request — completed steps: ${steps.length}. ${outcome.detail}`,
               );
-            } else {
-              metadata.error = { code: "aborted", retryable: true };
             }
             timer.flush({
               aborted: true,
@@ -1158,8 +1557,19 @@ export async function POST(request: Request) {
               threadId: thread?.id,
             });
           },
-          onStepEnd: ({ stepNumber }) => {
+          // Tool-loop trace. A step ending `finishReason: "tool-calls"` with no
+          // following step means the loop stopped waiting on a client-side tool
+          // (one declared without `execute`, e.g. e2b-sandbox) whose result the
+          // browser never sent back — indistinguishable from a hang without
+          // this line. `onStepFinish` is the deprecated alias for it; this
+          // call passed both until now, which silently dropped one of them.
+          onStepEnd: ({ stepNumber, toolCalls, toolResults, finishReason }) => {
             metadata.lastCompletedStep = stepNumber;
+            logger.info(
+              `[chat] step=${stepNumber} finishReason=${finishReason} calls=${
+                toolCalls?.map((c) => c.toolName).join(",") || "none"
+              } results=${toolResults?.length ?? 0} threadId=${thread?.id ?? "n/a"}`,
+            );
           },
           onEnd: async ({
             usage,
@@ -1202,6 +1612,9 @@ export async function POST(request: Request) {
                   inputTokens: usage.inputTokens,
                   outputTokens: usage.outputTokens,
                   candidate: resolvedCandidate,
+                  cacheReadTokens: usage.inputTokenDetails?.cacheReadTokens,
+                  cacheWriteTokens: usage.inputTokenDetails?.cacheWriteTokens,
+                  noCacheTokens: usage.inputTokenDetails?.noCacheTokens,
                 }),
               });
             } else {
@@ -1242,9 +1655,29 @@ export async function POST(request: Request) {
                     modelId: `${chatModel?.provider}/${chatModel?.model}`,
                     promptTokens: usage.inputTokens,
                     completionTokens: usage.outputTokens,
-                    idempotencyKey: `${customerId}-${message.id}`,
+                    // The cache breakdown of the prompt. Without it every
+                    // cached token is billed at full price.
+                    cacheReadTokens: usage.inputTokenDetails?.cacheReadTokens,
+                    cacheWriteTokens: usage.inputTokenDetails?.cacheWriteTokens,
+                    noCacheTokens: usage.inputTokenDetails?.noCacheTokens,
+                    idempotencyKey: billingRunKey({
+                      scope: "chat",
+                      // `trackUsage` drops the event when the customer is null
+                      // (community edition), so this only keeps the key well
+                      // formed — it never redirects a charge.
+                      subject: customerId ?? session.user.id,
+                      detail: message.id,
+                      runId,
+                    }),
                     properties: {
                       threadId: thread?.id,
+                      // Who spent it. The billing customer is the organization
+                      // for a team workspace, and `entity_id` is no longer sent
+                      // (Autumn rejects an entity that was never created), so
+                      // without this the event cannot be attributed to a person
+                      // at all.
+                      userId: session.user.id,
+                      ...(memberId ? { memberId } : {}),
                     },
                   });
 
@@ -1317,6 +1750,38 @@ export async function POST(request: Request) {
           });
         }
 
+        // Titling is normally kicked off by the client once the stream ends,
+        // but a closed tab, a navigation, or a failed request left the thread
+        // untitled forever — the sidebar shows "New Chat" and nothing retries.
+        // after() runs once the response is flushed, so this adds no latency to
+        // the answer, and setThreadTitleIfEmpty makes the first write win if the
+        // client is titling concurrently.
+        if (!thread!.title?.trim()) {
+          const titleSeed = buildThreadTitleSeed([message, responseMessage]);
+          if (titleSeed) {
+            // Titling is best effort and must never take the answer down with
+            // it, so even scheduling it is guarded.
+            try {
+              after(async () => {
+                try {
+                  const current = await chatRepository.selectThread(id);
+                  if (current?.title?.trim()) return;
+                  const title = await generateThreadTitle({
+                    seed: titleSeed,
+                    telemetryId: "chat.title.fallback",
+                    telemetryMetadata: { threadId: id },
+                  });
+                  await chatRepository.setThreadTitleIfEmpty(id, title);
+                } catch (error) {
+                  logger.error("Failed to backfill thread title", error);
+                }
+              });
+            } catch (error) {
+              logger.error("Failed to schedule thread titling", error);
+            }
+          }
+        }
+
         if (agent) {
           // Recency bump only. Pass the active org so an org member using a
           // shared agent still updates it, and swallow failures (a non-owner of
@@ -1334,10 +1799,25 @@ export async function POST(request: Request) {
       },
       onError: (error) => {
         clearStopPoll();
+        // The terminal state is written in `onEnd`, which does not run when the
+        // stream is torn down here. A persisted `runStatus: "running"` plus a
+        // live Redis pointer is exactly what makes a reopened thread try to
+        // resume a run that is already over, so retire both on this path too.
+        if (metadata.runStatus === "running") {
+          metadata.runStatus = "failed";
+          metadata.error = { code: "stream_error", retryable: true };
+        }
+        if (resumeEnabled) {
+          void Promise.allSettled([clearActiveStream(id), clearStop(id)]);
+        }
         return handleError(error);
       },
       originalMessages: messages,
     });
+
+    // Runs once the response has finished streaming, which is the last moment
+    // before the instance is frozen and the pending log batch is lost with it.
+    after(flushLogs);
 
     return createUIMessageStreamResponse({
       stream,

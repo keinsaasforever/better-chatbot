@@ -13,9 +13,12 @@ vi.mock("ai", () => ({
   generateText: (...args: unknown[]) => mocks.generateText(...args),
 }));
 
-const { extractJsonObject, generateObjectResilient } = await import(
-  "./resilient-object"
-);
+const {
+  extractJsonObject,
+  generateObjectResilient,
+  GenerationAbortedError,
+  isGenerationAbortedError,
+} = await import("./resilient-object");
 
 describe("extractJsonObject", () => {
   it("parses plain JSON", () => {
@@ -90,5 +93,60 @@ describe("generateObjectResilient abort signal", () => {
     expect(mocks.generateObject.mock.calls[0][0].abortSignal).toBe(signal);
     expect(mocks.generateText.mock.calls[0][0].abortSignal).toBe(signal);
     expect(mocks.generateObject.mock.calls[1][0].abortSignal).toBe(signal);
+  });
+
+  it("stops at the first attempt once the signal has fired", async () => {
+    // The AI SDK reports an abort as `DOMException: Delay was aborted`, which
+    // names neither the caller nor the deadline; its `code` of 20 is also what
+    // OTel records as the exception type. Both make the incident unreadable.
+    mocks.generateObject.mockReset();
+    mocks.generateText.mockReset();
+    const controller = new AbortController();
+    mocks.generateObject.mockImplementation(() => {
+      controller.abort();
+      return Promise.reject(
+        new DOMException("Delay was aborted", "AbortError"),
+      );
+    });
+
+    await expect(run(controller.signal)).rejects.toBeInstanceOf(
+      GenerationAbortedError,
+    );
+
+    // No doomed text-repair or fallback call against an already-dead signal.
+    expect(mocks.generateObject).toHaveBeenCalledTimes(1);
+    expect(mocks.generateText).not.toHaveBeenCalled();
+  });
+
+  it("reports the original failure when the signal never fired", async () => {
+    mocks.generateObject.mockReset();
+    mocks.generateText.mockReset();
+    mocks.generateObject.mockRejectedValue(new Error("strict parse failed"));
+    mocks.generateText.mockRejectedValue(new Error("repair failed"));
+
+    await expect(run(AbortSignal.timeout(10_000))).rejects.toThrow(
+      "strict parse failed",
+    );
+  });
+});
+
+describe("isGenerationAbortedError", () => {
+  it("matches the class", () => {
+    expect(isGenerationAbortedError(new GenerationAbortedError("x"))).toBe(
+      true,
+    );
+  });
+
+  it("matches an error replayed by Inngest, which loses the prototype", () => {
+    expect(
+      isGenerationAbortedError(
+        Object.assign(new Error("boom"), { name: "GenerationAbortedError" }),
+      ),
+    ).toBe(true);
+  });
+
+  it("does not match anything else", () => {
+    expect(isGenerationAbortedError(new Error("boom"))).toBe(false);
+    expect(isGenerationAbortedError(null)).toBe(false);
   });
 });

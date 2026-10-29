@@ -8,6 +8,7 @@ import {
   VercelAIWorkflowToolStreamingResultTag,
   VercelAIWorkflowToolTag,
 } from "app-types/workflow";
+import type { WorkflowCaller } from "lib/ai/workflow/executor/graph-store";
 import { createWorkflowExecutor } from "lib/ai/workflow/executor/workflow-executor";
 import { NodeKind } from "lib/ai/workflow/workflow.interface";
 import { workflowRepository } from "lib/db/repository";
@@ -21,12 +22,14 @@ export const workflowToVercelAITool = ({
   schema,
   dataStream,
   name,
+  caller,
 }: {
   id: string;
   name: string;
   description?: string;
   schema: ObjectJsonSchema7;
   dataStream: UIMessageStreamWriter;
+  caller?: WorkflowCaller;
 }): VercelAIWorkflowTool => {
   const toolName = name
     .replace(/[^a-zA-Z0-9\s]/g, "")
@@ -61,6 +64,7 @@ export const workflowToVercelAITool = ({
           const executor = createWorkflowExecutor({
             nodes: workflow.nodes,
             edges: workflow.edges,
+            caller,
           });
           toolResult.workflowIcon = workflow.icon;
 
@@ -173,12 +177,14 @@ export const workflowToVercelAITools = (
     schema: ObjectJsonSchema7;
   }[],
   dataStream: UIMessageStreamWriter,
+  caller?: WorkflowCaller,
 ) => {
   return workflows
     .map((v) =>
       workflowToVercelAITool({
         ...v,
         dataStream,
+        caller,
       }),
     )
     .reduce(
@@ -193,6 +199,7 @@ export const workflowToVercelAITools = (
 export const loadWorkFlowTools = (opt: {
   mentions?: ChatMention[];
   dataStream: UIMessageStreamWriter;
+  caller?: WorkflowCaller;
 }) =>
   safe(() =>
     opt?.mentions?.length
@@ -206,5 +213,5 @@ export const loadWorkFlowTools = (opt: {
         )
       : [],
   )
-    .map((tools) => workflowToVercelAITools(tools, opt.dataStream))
+    .map((tools) => workflowToVercelAITools(tools, opt.dataStream, opt.caller))
     .orElse({} as Record<string, VercelAIWorkflowTool>);

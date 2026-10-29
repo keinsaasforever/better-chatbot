@@ -81,7 +81,6 @@ export function DocumentEditCard({ part }: { part: ToolUIPart }) {
         ...p,
         [changeId]: mode === "accept" ? "accepted" : "rejected",
       }));
-      toast.success(`Change ${mode}d`);
     } catch (err) {
       toast.error(
         `Failed to ${mode}: ${err instanceof Error ? err.message : "Unknown error"}`,

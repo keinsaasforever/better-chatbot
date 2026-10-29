@@ -67,9 +67,7 @@ export function ThreadDropdown({
       .ifOk(() => updateThreadAction(threadId, { title }))
       .ifOk(() => mutate("/api/thread"))
       .watch(({ isOk, error }) => {
-        if (isOk) {
-          toast.success(t("Chat.Thread.threadUpdated"));
-        } else {
+        if (!isOk) {
           toast.error(error.message || t("Chat.Thread.failedToUpdateThread"));
         }
       });
@@ -82,9 +80,7 @@ export function ThreadDropdown({
       .watch(() => setIsDeleting(false))
       .watch(() => setOpen(false))
       .watch(({ isOk, error }) => {
-        if (isOk) {
-          toast.success(t("Chat.Thread.threadDeleted"));
-        } else {
+        if (!isOk) {
           toast.error(error.message || t("Chat.Thread.failedToDeleteThread"));
         }
       })

@@ -2,11 +2,17 @@
 
 import { cn } from "lib/utils";
 import { Download, FileIcon } from "lucide-react";
+import { useTranslations } from "next-intl";
 import { Badge } from "ui/badge";
 import { Button } from "ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "ui/tooltip";
 
-// Source URL (non-model) attachment renderer
+/**
+ * A link the app cannot vouch for: a pasted URL, a data: URI, an attachment
+ * from before the current storage layout. Uploads no longer reach this —
+ * `AttachmentMessagePart` adapts those into the artifact panel first — so this
+ * is the fallback for something we can neither fetch nor preview.
+ */
 export function SourceUrlMessagePart({
   part,
   isUserMessage,
@@ -14,6 +20,7 @@ export function SourceUrlMessagePart({
   part: { type: "source-url"; url: string; title?: string; mediaType?: string };
   isUserMessage: boolean;
 }) {
+  const t = useTranslations("Chat.Artifact");
   const name = part.title || part.url?.split("/").pop() || "attachment";
   const ext = name.split(".").pop()?.toUpperCase() || "FILE";
   const mediaType =
@@ -98,11 +105,11 @@ export function SourceUrlMessagePart({
             >
               <a href={part.url} target="_blank" rel="noopener noreferrer">
                 <Download className="size-4" />
-                <span className="sr-only">Open attachment</span>
+                <span className="sr-only">{t("openAttachment")}</span>
               </a>
             </Button>
           </TooltipTrigger>
-          <TooltipContent>Open attachment</TooltipContent>
+          <TooltipContent>{t("openAttachment")}</TooltipContent>
         </Tooltip>
       </div>
     </div>

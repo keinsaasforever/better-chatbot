@@ -17,6 +17,7 @@ import {
 import { generateText } from "ai";
 import { ANTHROPIC_CACHE_CONTROL } from "lib/ai/prompt-cache";
 import "lib/ai/register-gateway-provider";
+import { cellKey, collectAnsweredCells } from "lib/tabular/cell-completion";
 import type { ColumnType } from "lib/tabular/column-presets";
 import { aiTelemetry } from "lib/ai/telemetry";
 
@@ -24,9 +25,23 @@ export const maxDuration = 300;
 
 const MODEL_ID = "anthropic/claude-haiku-4.5";
 
+type ReviewColumn = {
+  id: string;
+  label: string;
+  type: ColumnType;
+  preset?: string;
+  prompt?: string;
+};
+
 export const POST = withAuth(
-  async (_req, session, { params }: { params: Promise<{ id: string }> }) => {
+  async (req, session, { params }: { params: Promise<{ id: string }> }) => {
     const { id: reviewId } = await params;
+
+    // The client POSTs without a body, so an unparseable body is the norm.
+    const body = (await req.json().catch(() => null)) as {
+      force?: boolean;
+    } | null;
+    const force = body?.force === true;
 
     const [review] = await pgDb
       .select()
@@ -43,6 +58,8 @@ export const POST = withAuth(
       return NextResponse.json({ error: "Review not found" }, { status: 404 });
     }
 
+    const columns = review.columns as ReviewColumn[];
+
     const reviewDocs = await pgDb
       .select({
         documentId: TabularReviewDocumentTable.documentId,
@@ -51,6 +68,26 @@ export const POST = withAuth(
       .from(TabularReviewDocumentTable)
       .where(eq(TabularReviewDocumentTable.reviewId, reviewId))
       .orderBy(TabularReviewDocumentTable.rowIndex);
+
+    // A cell that already holds an answer must not be generated again. The card
+    // remounts every time the thread is reopened, and generation used to start
+    // unconditionally - so reopening a 40 cell review paid for 40 more model
+    // calls. `force` is the deliberate way to regenerate anyway. This is the
+    // authoritative half: it also covers a POST that does not come from the
+    // card.
+    const answered = force
+      ? new Map<string, string>()
+      : collectAnsweredCells(
+          await pgDb
+            .select({
+              documentId: TabularCellTable.documentId,
+              columnId: TabularCellTable.columnId,
+              value: TabularCellTable.value,
+              status: TabularCellTable.status,
+            })
+            .from(TabularCellTable)
+            .where(eq(TabularCellTable.reviewId, reviewId)),
+        );
 
     await pgDb
       .update(TabularReviewTable)
@@ -67,8 +104,29 @@ export const POST = withAuth(
           );
         };
 
+        const sendAnswered = (documentId: string, col: ReviewColumn) =>
+          send({
+            type: "cell_update",
+            documentId,
+            columnId: col.id,
+            value: answered.get(cellKey(documentId, col.id)) ?? "",
+            status: "done",
+          });
+
         try {
           for (const { documentId } of reviewDocs) {
+            const pending = columns.filter(
+              (col) => !answered.has(cellKey(documentId, col.id)),
+            );
+
+            // Every column of this document is answered. Skip the download and
+            // the text extraction too - nothing left here needs the file.
+            if (pending.length === 0) {
+              for (const col of columns) sendAnswered(documentId, col);
+              send({ type: "row_complete", documentId });
+              continue;
+            }
+
             const [doc] = await pgDb
               .select()
               .from(DocumentTable)
@@ -87,13 +145,12 @@ export const POST = withAuth(
 
             const truncated = docText.slice(0, 80_000);
 
-            for (const col of review.columns as {
-              id: string;
-              label: string;
-              type: ColumnType;
-              preset?: string;
-              prompt?: string;
-            }[]) {
+            for (const col of columns) {
+              if (answered.has(cellKey(documentId, col.id))) {
+                sendAnswered(documentId, col);
+                continue;
+              }
+
               const basePrompt = resolveColumnPrompt(col);
               const suffix = formatPromptSuffix(col.type);
               const fullPrompt = `${basePrompt}${suffix}`;

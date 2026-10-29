@@ -22,6 +22,7 @@ export default async function Page({
       initialThread={{
         title: thread.title,
         projectId: thread.projectId,
+        knowledgeBases: thread.knowledgeBases,
       }}
     />
   );

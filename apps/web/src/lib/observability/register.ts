@@ -24,6 +24,27 @@ import {
 export const SERVICE_NAME = "keinsaas-navigator-web";
 
 let registered = false;
+let logProcessor: BatchLogRecordProcessor | null = null;
+
+/**
+ * Push buffered log records to the exporter now.
+ *
+ * `BatchLogRecordProcessor` holds records for up to its scheduled delay, and a
+ * serverless instance is frozen the moment the response body ends — so the
+ * last batch of every invocation is the most droppable thing in the system. That is
+ * routinely the lines you need most: the final `[chat] step=N`, the latency
+ * flush, the error that ended the run. Call this from `after()` so an
+ * invocation cannot take its own tail with it.
+ *
+ * Never throws: telemetry must not be able to fail a request.
+ */
+export async function flushLogs(): Promise<void> {
+  try {
+    await logProcessor?.forceFlush();
+  } catch {
+    // Dropping telemetry is bad; failing the request over it is worse.
+  }
+}
 
 export function registerObservability(): void {
   // `register()` can run more than once across HMR reloads in dev; registering
@@ -59,15 +80,17 @@ export function registerObservability(): void {
   // MCP, workflows and every AI Gateway call actually run.
   const isNodeRuntime = process.env.NEXT_RUNTIME === "nodejs";
 
-  const logRecordProcessors: LogRecordProcessor[] = isNodeRuntime
-    ? [
-        new BatchLogRecordProcessor({
-          exporter: new OTLPLogExporter({
-            url: superlogSignalUrl("logs"),
-            headers,
-          }),
+  logProcessor = isNodeRuntime
+    ? new BatchLogRecordProcessor({
+        exporter: new OTLPLogExporter({
+          url: superlogSignalUrl("logs"),
+          headers,
         }),
-      ]
+      })
+    : null;
+
+  const logRecordProcessors: LogRecordProcessor[] = logProcessor
+    ? [logProcessor]
     : [];
 
   const metricReaders: MetricReader[] = isNodeRuntime

@@ -72,6 +72,7 @@ describe("POST /api/voice/audio-command", () => {
   it("transcribes audio, executes the command, and stores device history", async () => {
     vi.mocked(transcribeAudioWithAssemblyAI).mockResolvedValue({
       text: "Create a task called test from Atom.",
+      verbatimText: "create a task called test from atom",
       language: "en",
       confidence: 0.91,
       transcriptId: "assembly-1",

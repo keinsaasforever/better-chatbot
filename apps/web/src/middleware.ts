@@ -1,6 +1,12 @@
 import { getSessionCookie } from "better-auth/cookies";
 import { type NextRequest, NextResponse } from "next/server";
 import { isPublicAuthPath, signInRedirectPath } from "@/lib/auth/public-routes";
+import {
+  REFERRAL_COOKIE,
+  REFERRAL_COOKIE_MAX_AGE_SECONDS,
+  REFERRAL_QUERY_PARAM,
+  isValidReferralCode,
+} from "@/lib/referral/constants";
 
 const BOOT_VISIT_COOKIE = "__boot_visit";
 const BOOT_ID_PATTERN =
@@ -100,30 +106,67 @@ function finishDocumentResponse(
   return response;
 }
 
+/**
+ * Persist a `?ref=` referral code so it survives sign-up.
+ *
+ * It cannot simply ride along in the URL: `signInRedirectPath` returns a bare
+ * "/sign-in" for the landing page (`pathname === "/"`), dropping the query
+ * string — and that is exactly where referral links point. `sameSite: "lax"`
+ * keeps the cookie attached through the OAuth round trip, which returns as a
+ * top-level GET to our own origin.
+ *
+ * Last click wins. The code is not signed: Autumn validates it, so a forged one
+ * is worthless and a borrowed valid one is indistinguishable from clicking that
+ * person's link anyway.
+ */
+function captureReferralCode(
+  response: NextResponse,
+  request: NextRequest,
+): NextResponse {
+  const code = request.nextUrl.searchParams.get(REFERRAL_QUERY_PARAM);
+  if (!isValidReferralCode(code)) return response;
+
+  response.cookies.set(REFERRAL_COOKIE, code as string, {
+    httpOnly: true,
+    maxAge: REFERRAL_COOKIE_MAX_AGE_SECONDS,
+    path: "/",
+    sameSite: "lax",
+    secure: process.env.NODE_ENV === "production",
+  });
+
+  return response;
+}
+
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const boot = createBootDocumentContext(request);
   const next = (sessionCookiePresent: boolean | null = null) =>
-    finishDocumentResponse(
-      NextResponse.next(
-        boot ? { request: { headers: boot.requestHeaders } } : undefined,
+    captureReferralCode(
+      finishDocumentResponse(
+        NextResponse.next(
+          boot ? { request: { headers: boot.requestHeaders } } : undefined,
+        ),
+        request,
+        boot,
+        "next",
+        sessionCookiePresent,
       ),
       request,
-      boot,
-      "next",
-      sessionCookiePresent,
     );
   const redirect = (
     destination: string,
     sessionCookiePresent: boolean | null,
   ) =>
-    finishDocumentResponse(
-      NextResponse.redirect(new URL(destination, request.url)),
+    captureReferralCode(
+      finishDocumentResponse(
+        NextResponse.redirect(new URL(destination, request.url)),
+        request,
+        boot,
+        "redirect",
+        sessionCookiePresent,
+        destination,
+      ),
       request,
-      boot,
-      "redirect",
-      sessionCookiePresent,
-      destination,
     );
 
   /*
@@ -151,6 +194,14 @@ export async function middleware(request: NextRequest) {
   // Inbound webhooks authenticate via signature verification inside the
   // route handlers — they never carry a session cookie.
   if (pathname.startsWith("/api/webhooks/")) {
+    return next();
+  }
+
+  // The Navigator MCP server authenticates every request itself (a bearer API
+  // key, or a same-origin session cookie) and answers a missing credential
+  // with a 401 MCP auth challenge. A redirect to /sign-in would break every
+  // MCP client, which never carries the session cookie.
+  if (pathname === "/api/navigator-mcp") {
     return next();
   }
 

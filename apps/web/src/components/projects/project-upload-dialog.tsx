@@ -151,7 +151,6 @@ export function ProjectUploadDialog({
     setIsUploading(false);
     setProgressLabel(null);
     if (successCount > 0) {
-      toast.success(`Uploaded ${successCount} files`);
       setFiles([]);
       onUploadComplete?.();
       onClose();

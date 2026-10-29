@@ -1,21 +1,21 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
-import useSWR, { useSWRConfig } from "swr";
+import { useComposioConnections } from "@/hooks/queries/use-composio-connections";
+import { fetcher } from "lib/utils";
 import {
-  Search,
+  CheckCircle2,
   ExternalLink,
   Loader2,
-  CheckCircle2,
-  Plus,
   Plug,
+  Plus,
+  Search,
 } from "lucide-react";
-import { Input } from "ui/input";
-import { Button } from "ui/button";
-import { Badge } from "ui/badge";
+import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
-import { fetcher } from "lib/utils";
-import { useComposioConnections } from "@/hooks/queries/use-composio-connections";
+import useSWR, { useSWRConfig } from "swr";
+import { Badge } from "ui/badge";
+import { Button } from "ui/button";
+import { Input } from "ui/input";
 
 function openOAuthPopup(url: string): Promise<void> {
   return new Promise((resolve, reject) => {
@@ -117,7 +117,6 @@ export function ProjectToolPicker({
       setAttached((prev) => new Set([...prev, slug]));
       void mutateProjectTools();
       onAttached?.();
-      toast.success(`${name} added — generating widgets…`);
 
       // Fire the immediate sync. We don't block the UI on it; when it finishes
       // we refresh the workspace so the widgets update live.
@@ -128,13 +127,12 @@ export function ProjectToolPicker({
         .then(async (res) => {
           if (!res.ok) throw new Error(await res.text());
           await globalMutate(`/api/projects/${projectId}/status-snapshot`);
-          await globalMutate(`/api/projects/${projectId}/widgets`);
-          toast.success(`${name} sync started.`);
+          await globalMutate(`/api/projects/${projectId}/overview`);
         })
         .catch(() => {
           // Network/timeout before a result came back; the daily cycle retries.
-          toast.message(
-            `${name} added. First sync didn't start yet — it will retry on the next cycle.`,
+          toast.error(
+            `${name} added, but the first sync didn't start. It will retry on the next cycle.`,
           );
         });
     },

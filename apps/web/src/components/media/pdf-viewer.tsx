@@ -1,10 +1,12 @@
 "use client";
 
+import { useTranslations } from "next-intl";
 import { useState } from "react";
 import { Button } from "ui/button";
 import { cn } from "lib/utils";
 import { ExternalLink, Download, AlertTriangle, FileText } from "lucide-react";
 import { MediaResource } from "@/types/media";
+import { inlinePreviewUrl } from "lib/code-runner/artifact-media";
 
 interface PDFViewerProps {
   media: MediaResource;
@@ -17,9 +19,18 @@ export function PDFViewer({
   className,
   height = "600px",
 }: PDFViewerProps) {
+  const t = useTranslations("Chat.Tool");
   const [isLoading, setIsLoading] = useState(true);
   const [hasError, setHasError] = useState(false);
   const [thumbnailError, setThumbnailError] = useState(false);
+  const title = media.title || t("pdfDocument");
+  // Rendering must ask for the inline variant. Our storage route answers
+  // `Content-Disposition: attachment` by default, and an iframe pointed at an
+  // attachment does not render it — the browser saves the file instead, on
+  // every mount. That is what made opening a thread re-download its PDF.
+  const previewUrl = inlinePreviewUrl(media.url);
+  // Saving keeps the attachment URL, so the file arrives with its own name.
+  const downloadUrl = media.metadata?.downloadUrl ?? media.url;
 
   const handleLoad = () => {
     setIsLoading(false);
@@ -36,14 +47,15 @@ export function PDFViewer({
   };
 
   const openInNewTab = () => {
-    window.open(media.url, "_blank", "noopener,noreferrer");
+    window.open(previewUrl, "_blank", "noopener,noreferrer");
   };
 
   const downloadPDF = () => {
     const link = document.createElement("a");
-    link.href = media.url;
+    // No target="_blank": a download anchor never navigates, and the desktop
+    // shell used to get a blank window from the extra target.
+    link.href = downloadUrl;
     link.download = media.title || "document.pdf";
-    link.target = "_blank";
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -64,7 +76,7 @@ export function PDFViewer({
       >
         <AlertTriangle className="h-8 w-8 text-destructive mb-2" />
         <p className="text-sm text-muted-foreground mb-4">
-          Failed to load PDF document
+          {t("pdfLoadFailed")}
         </p>
         <div className="flex gap-2">
           <Button
@@ -74,7 +86,7 @@ export function PDFViewer({
             className="flex items-center gap-2"
           >
             <ExternalLink className="h-4 w-4" />
-            Open in New Tab
+            {t("openInNewTab")}
           </Button>
           <Button
             variant="outline"
@@ -83,7 +95,7 @@ export function PDFViewer({
             className="flex items-center gap-2"
           >
             <Download className="h-4 w-4" />
-            Download
+            {t("download")}
           </Button>
         </div>
       </div>
@@ -102,9 +114,7 @@ export function PDFViewer({
         <div className="flex items-center gap-2">
           <FileText className="h-4 w-4 text-muted-foreground" />
           <div>
-            <p className="text-sm font-medium">
-              {media.title || "PDF Document"}
-            </p>
+            <p className="text-sm font-medium">{title}</p>
             {media.description && (
               <p className="text-xs text-muted-foreground">
                 {media.description}
@@ -142,7 +152,7 @@ export function PDFViewer({
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
                 src={media.thumbnail}
-                alt={`${media.title || "Document"} preview`}
+                alt={t("pdfPreviewAlt", { title })}
                 className="max-w-full max-h-[400px] object-contain rounded shadow-lg"
                 onError={handleThumbnailError}
               />
@@ -150,13 +160,13 @@ export function PDFViewer({
                 <div className="flex flex-col items-center gap-2">
                   <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary"></div>
                   <p className="text-sm text-muted-foreground">
-                    Loading full document...
+                    {t("pdfLoadingFull")}
                   </p>
                 </div>
               )}
               {hasError && (
                 <p className="text-sm text-muted-foreground">
-                  Preview available • Full document failed to load
+                  {t("pdfPreviewOnly")}
                 </p>
               )}
             </div>
@@ -168,16 +178,16 @@ export function PDFViewer({
           <div className="absolute inset-0 flex items-center justify-center bg-muted/20">
             <div className="flex flex-col items-center gap-2">
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-              <p className="text-sm text-muted-foreground">Loading PDF...</p>
+              <p className="text-sm text-muted-foreground">{t("pdfLoading")}</p>
             </div>
           </div>
         )}
 
         {/* PDF iframe */}
         <iframe
-          src={`${media.url}#toolbar=1&navpanes=1&scrollbar=1&page=1&view=FitH`}
+          src={`${previewUrl}#toolbar=1&navpanes=1&scrollbar=1&page=1&view=FitH`}
           className="w-full h-full border-0"
-          title={media.title || "PDF Document"}
+          title={title}
           onLoad={handleLoad}
           onError={handleError}
           style={{
@@ -190,7 +200,7 @@ export function PDFViewer({
       {/* Metadata footer */}
       {media.metadata?.pages && (
         <div className="px-3 py-2 border-t bg-muted/30 text-xs text-muted-foreground">
-          {media.metadata.pages} pages
+          {t("pdfPages", { count: media.metadata.pages })}
         </div>
       )}
     </div>

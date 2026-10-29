@@ -4,14 +4,28 @@ import { ToolUIPart } from "ai";
 import type { ChatMetadata } from "app-types/chat";
 import { DefaultToolName } from "lib/ai/tools";
 import {
+  type ArtifactFile,
+  splitArtifactsForPanel,
+} from "lib/code-runner/artifact-media";
+import type { E2BArtifact } from "lib/code-runner/code-runner.interface";
+import {
   SANDBOX_BROWSER_TIMEOUT_MS,
   type SandboxApiResponse,
   type SandboxDeploymentPhase,
   isSandboxApiResponse,
 } from "lib/e2b/sandbox-contract";
 import { toAny } from "lib/utils";
-import { FileText, Loader, Monitor, RotateCw, Table2 } from "lucide-react";
-import React, { useCallback, useEffect, useRef } from "react";
+import {
+  FileText,
+  Globe,
+  ListTodo,
+  Loader,
+  Monitor,
+  RotateCw,
+  Table2,
+} from "lucide-react";
+import { useTranslations } from "next-intl";
+import React, { useCallback, useEffect, useMemo, useRef } from "react";
 import { Button } from "ui/button";
 import { TextShimmer } from "ui/text-shimmer";
 import { ArtifactType, useArtifactPanel } from "./artifact-panel-context";
@@ -42,9 +56,33 @@ const PHASE_LABELS: Record<SandboxDeploymentPhase, string> = {
   failed: "Sandbox failed",
 };
 
+/**
+ * The file a document tool produced, resolved for the panel.
+ *
+ * Reads `part.output` rather than component state so it survives a refresh:
+ * the durable URL is what was persisted with the message.
+ */
+function firstFileFromOutput(
+  output: Record<string, unknown> | null,
+): ArtifactFile | undefined {
+  const artifacts = (output as { artifacts?: unknown } | null)?.artifacts;
+  if (!Array.isArray(artifacts)) return undefined;
+
+  const [file] = splitArtifactsForPanel(
+    artifacts.filter(
+      (a): a is E2BArtifact =>
+        typeof a === "object" && a !== null && "filename" in a,
+    ),
+  ).files;
+  return file;
+}
+
 function artifactTypeFromToolName(toolName: string): ArtifactType {
   if (toolName === DefaultToolName.E2BSandbox) return "sandbox";
   if (toolName === DefaultToolName.EditDocument) return "document-edit";
+  if (toolName === DefaultToolName.CreatePlan) return "plan";
+  if (toolName === DefaultToolName.BrowserAutomation) return "browser";
+  if (toolName === DefaultToolName.CreatePdf) return "file";
   return "tabular";
 }
 
@@ -62,6 +100,7 @@ export function ArtifactChip({
 }: ArtifactChipProps) {
   const { open, updatePart, artifact, deployments, updateDeployment } =
     useArtifactPanel();
+  const tBrowser = useTranslations("Chat.Browser");
   const type = artifactTypeFromToolName(toolName);
   const input = toAny(part.input) as Record<string, unknown> | null;
   const output = toAny(part.output) as Record<string, unknown> | null;
@@ -76,12 +115,27 @@ export function ArtifactChip({
   const lastResult = useRef<SandboxApiResponse | null>(null);
   const deployGeneration = useRef(0);
 
+  // A file-producing tool carries its result in the output, not the input, so
+  // the chip has nothing to show until the render finishes.
+  const artifactFile = useMemo(
+    () => (type === "file" ? firstFileFromOutput(output) : undefined),
+    [type, output],
+  );
+
   const title =
     type === "sandbox"
       ? ((input?.title as string) ?? "Sandbox")
-      : type === "document-edit"
-        ? "Document Edit"
-        : "Tabular Review";
+      : type === "plan"
+        ? ((input?.title as string) ?? "Plan")
+        : type === "document-edit"
+          ? "Document Edit"
+          : type === "browser"
+            ? "Browser"
+            : type === "file"
+              ? (artifactFile?.filename ??
+                (input?.filename as string) ??
+                "Document")
+              : "Tabular Review";
 
   const setDeployment = useCallback(
     (next: SandboxApiResponse, syncError?: string) => {
@@ -247,9 +301,19 @@ export function ArtifactChip({
 
   useEffect(() => {
     if (hasOpened.current) return;
+    // A file chip has nothing to show until the render lands: its result is in
+    // the output, so opening at mount would put an empty panel on screen and
+    // latch `hasOpened` before the file ever arrived.
+    if (type === "file" && !artifactFile) return;
     hasOpened.current = true;
-    open({ toolCallId: part.toolCallId, type, part, onResult });
-  }, [onResult, open, part, type]);
+    open({
+      toolCallId: part.toolCallId,
+      type,
+      part,
+      onResult,
+      file: artifactFile,
+    });
+  }, [artifactFile, onResult, open, part, type]);
 
   useEffect(() => {
     if (type !== "sandbox" || !isStreaming) return;
@@ -293,8 +357,34 @@ export function ArtifactChip({
   }, [deploy, input, isInputReady, type]);
 
   const Icon =
-    type === "sandbox" ? Monitor : type === "document-edit" ? FileText : Table2;
+    type === "sandbox"
+      ? Monitor
+      : type === "document-edit"
+        ? FileText
+        : type === "plan"
+          ? ListTodo
+          : type === "browser"
+            ? Globe
+            : type === "file"
+              ? FileText
+              : Table2;
   const phase = deployment?.phase ?? (isStreaming ? "generating_code" : null);
+  // The browser tool streams its own status, so the chip reads that rather
+  // than the part state — "Waiting for you" has to be visible from the message
+  // list, or a parked run looks like a finished one.
+  const browserStatus = type === "browser" ? (output?.status as string) : null;
+  const browserLabel =
+    browserStatus === "awaiting-user"
+      ? tBrowser("statusAwaitingUser")
+      : browserStatus === "blocked"
+        ? tBrowser("statusBlocked")
+        : browserStatus === "failed"
+          ? tBrowser("statusFailed")
+          : browserStatus === "done"
+            ? tBrowser("statusDone")
+            : browserStatus === "running"
+              ? tBrowser("statusRunning")
+              : tBrowser("statusStarting");
   const statusLabel =
     type === "sandbox" && phase
       ? deployment?.syncError
@@ -302,23 +392,44 @@ export function ArtifactChip({
         : phase === "failed"
           ? `${deployment.error ?? "Sandbox failed"}`
           : PHASE_LABELS[phase]
-      : isStreaming
-        ? type === "document-edit"
-          ? "Applying edits…"
-          : "Creating table…"
-        : hasOutput && output?.error
-          ? "Error — click to view"
-          : hasOutput
-            ? "Click to view"
-            : "Opening…";
+      : type === "browser"
+        ? browserLabel
+        : isStreaming
+          ? type === "document-edit"
+            ? "Applying edits…"
+            : type === "plan"
+              ? "Drafting plan…"
+              : type === "file"
+                ? "Writing document…"
+                : "Creating table…"
+          : hasOutput && output?.error
+            ? "Error — click to view"
+            : hasOutput
+              ? "Click to view"
+              : "Opening…";
   const isBusy =
-    type === "sandbox" ? phase !== "ready" && phase !== "failed" : isStreaming;
+    type === "file"
+      ? !hasOutput
+      : type === "sandbox"
+        ? phase !== "ready" && phase !== "failed"
+        : type === "browser"
+          ? browserStatus !== "done" &&
+            browserStatus !== "failed" &&
+            browserStatus !== "blocked" &&
+            browserStatus !== "awaiting-user"
+          : isStreaming;
 
   return (
     <div className="my-1 px-4">
       <div
         onClick={() =>
-          open({ toolCallId: part.toolCallId, type, part, onResult })
+          open({
+            toolCallId: part.toolCallId,
+            type,
+            part,
+            onResult,
+            file: artifactFile,
+          })
         }
         className="py-2 pl-2 pr-4 w-full md:w-max flex items-center border rounded-xl select-none hover:bg-accent/30 dark:hover:bg-white/5 hover:cursor-pointer transition-colors gap-2"
       >

@@ -31,6 +31,7 @@ test.describe("User Name Synchronization", () => {
     // Click on User Settings directly
     const settingsOption = page.getByTestId("user-settings-menu-item");
     await settingsOption.click();
+    await page.getByTestId("user-profile-menu-item").click();
 
     // Wait for settings dialog to open
     await page.waitForSelector("[data-testid='user-name-input']", {
@@ -65,6 +66,7 @@ test.describe("User Name Synchronization", () => {
 
     // Restore original name
     await page.getByTestId("user-settings-menu-item").click();
+    await page.getByTestId("user-profile-menu-item").click();
     await page.waitForSelector("[data-testid='user-name-input']", {
       state: "visible",
       timeout: 5000,
@@ -110,6 +112,7 @@ test.describe("User Name Synchronization", () => {
     // Click on User Settings directly
     const settingsOption = page.getByTestId("user-settings-menu-item");
     await settingsOption.click();
+    await page.getByTestId("user-profile-menu-item").click();
 
     // Wait for settings dialog to open
     await page.waitForSelector("[data-testid='user-name-input']", {
@@ -144,6 +147,7 @@ test.describe("User Name Synchronization", () => {
 
     // Restore original name
     await page.getByTestId("user-settings-menu-item").click();
+    await page.getByTestId("user-profile-menu-item").click();
     await page.waitForSelector("[data-testid='user-name-input']", {
       state: "visible",
       timeout: 5000,

@@ -10,6 +10,13 @@ const ScheduleKeySchema = z
   .max(64)
   .regex(/^[\w.-]+$/, "key must be alphanumeric, dot, dash or underscore");
 
+// Which stored sign-ins a schedule may use. Validated against the caller's own
+// organization in the route before it is written: the list names a capability,
+// so a client must not be able to grant itself one by sending an alias.
+const BrowserCredentialAliasesSchema = z
+  .array(z.string().min(1).max(64))
+  .max(10);
+
 export const ScheduledTaskCreateSchema = z
   .object({
     taskType: z.literal("agent"),
@@ -20,6 +27,8 @@ export const ScheduledTaskCreateSchema = z
     cronExpression: z.string().min(1).max(100),
     timezone: z.string().min(1).max(64),
     inputPrompt: z.string().max(8000).nullish(),
+    browserAutomationEnabled: z.boolean().optional(),
+    browserCredentialAliases: BrowserCredentialAliasesSchema.nullish(),
     enabled: z.boolean().optional().default(true),
   })
   .strip();
@@ -31,6 +40,8 @@ export const ScheduledTaskUpdateSchema = z
     cronExpression: z.string().min(1).max(100).optional(),
     timezone: z.string().min(1).max(64).optional(),
     inputPrompt: z.string().max(8000).nullish(),
+    browserAutomationEnabled: z.boolean().optional(),
+    browserCredentialAliases: BrowserCredentialAliasesSchema.nullish(),
     enabled: z.boolean().optional(),
   })
   .strip();

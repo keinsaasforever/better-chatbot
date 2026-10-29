@@ -59,7 +59,6 @@ export function ScheduleStatus({
         method: "DELETE",
       });
       if (!res.ok) throw new Error("delete failed");
-      toast.success("Schedule deleted");
       onChanged?.();
     } catch {
       toast.error("Could not delete the schedule.");
@@ -79,17 +78,6 @@ export function ScheduleStatus({
         toast.error(
           data?.reason || data?.error || "The run failed. Check the logs.",
         );
-      } else {
-        toast.success("Run finished", {
-          action: data?.threadId
-            ? {
-                label: "View run",
-                onClick: () => {
-                  window.location.href = `/chat/${data.threadId}`;
-                },
-              }
-            : undefined,
-        });
       }
     } catch {
       toast.error("Could not start the run.");

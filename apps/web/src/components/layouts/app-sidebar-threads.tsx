@@ -1,7 +1,27 @@
 "use client";
 
-import { SidebarGroupLabel, SidebarMenuSub } from "ui/sidebar";
+import {
+  deleteThreadsAction,
+  deleteUnarchivedThreadsAction,
+} from "@/app/api/chat/actions";
+import { appStore } from "@/app/store";
+import { useMounted } from "@/hooks/use-mounted";
+import { fetcher } from "lib/utils";
+import { ChevronDown, ChevronUp, MoreHorizontal, Trash } from "lucide-react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useMemo, useState } from "react";
+import { toast } from "sonner";
+import useSWR, { mutate } from "swr";
+import { Button } from "ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "ui/dropdown-menu";
+import { handleErrorWithToast } from "ui/shared-toast";
+import { SidebarGroupLabel, SidebarMenuSub } from "ui/sidebar";
 import {
   SidebarMenuAction,
   SidebarMenuButton,
@@ -10,34 +30,14 @@ import {
 } from "ui/sidebar";
 import { SidebarGroupContent, SidebarMenu, SidebarMenuItem } from "ui/sidebar";
 import { SidebarGroup } from "ui/sidebar";
-import { ThreadDropdown } from "../thread-dropdown";
-import { ChevronDown, ChevronUp, MoreHorizontal, Trash } from "lucide-react";
-import { useMounted } from "@/hooks/use-mounted";
-import { appStore } from "@/app/store";
-import { Button } from "ui/button";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "ui/dropdown-menu";
-import {
-  deleteThreadsAction,
-  deleteUnarchivedThreadsAction,
-} from "@/app/api/chat/actions";
-import { fetcher } from "lib/utils";
-import { toast } from "sonner";
 import { useShallow } from "zustand/shallow";
-import { useRouter } from "next/navigation";
-import useSWR, { mutate } from "swr";
-import { handleErrorWithToast } from "ui/shared-toast";
-import { useMemo, useState } from "react";
+import { ThreadDropdown } from "../thread-dropdown";
 
+import { ChatThread } from "app-types/chat";
+import { deduplicateByKey, groupBy } from "lib/utils";
 import { useTranslations } from "next-intl";
 import { TextShimmer } from "ui/text-shimmer";
 import { Tooltip, TooltipContent, TooltipTrigger } from "ui/tooltip";
-import { deduplicateByKey, groupBy } from "lib/utils";
-import { ChatThread } from "app-types/chat";
 
 type ThreadGroup = {
   label: string;
@@ -50,13 +50,15 @@ export function AppSidebarThreads() {
   const mounted = useMounted();
   const router = useRouter();
   const t = useTranslations("Layout");
-  const [storeMutate, currentThreadId, generatingTitleThreadIds] = appStore(
-    useShallow((state) => [
-      state.mutate,
-      state.currentThreadId,
-      state.generatingTitleThreadIds,
-    ]),
-  );
+  const [storeMutate, currentThreadId, generatingTitleThreadIds, storeThreads] =
+    appStore(
+      useShallow((state) => [
+        state.mutate,
+        state.currentThreadId,
+        state.generatingTitleThreadIds,
+        state.threadList,
+      ]),
+    );
   // State to track if expanded view is active
   const [isExpanded, setIsExpanded] = useState(false);
 
@@ -101,13 +103,32 @@ export function AppSidebarThreads() {
   // Check if we have 40 or more threads to display "View All" button
   const hasExcessThreads = threadList && threadList.length >= MAX_THREADS_COUNT;
 
+  // A title the store already knows about wins over an empty fetched one: the
+  // titling request writes to the store as soon as it lands, and a thread
+  // opened with a known title seeds it on mount. Without this the sidebar would
+  // keep rendering "New Chat" until the next /api/thread revalidation.
+  const titledThreadList = useMemo(() => {
+    if (!threadList?.length) return threadList;
+    const titleById = new Map(
+      storeThreads
+        .filter((thread) => thread.title?.trim())
+        .map((thread) => [thread.id, thread.title]),
+    );
+    if (titleById.size === 0) return threadList;
+    return threadList.map((thread) =>
+      thread.title?.trim()
+        ? thread
+        : { ...thread, title: titleById.get(thread.id) ?? thread.title },
+    );
+  }, [threadList, storeThreads]);
+
   // Use either limited or full thread list based on expanded state
   const displayThreadList = useMemo(() => {
-    if (!threadList) return [];
+    if (!titledThreadList) return [];
     return !isExpanded && hasExcessThreads
-      ? threadList.slice(0, MAX_THREADS_COUNT)
-      : threadList;
-  }, [threadList, hasExcessThreads, isExpanded]);
+      ? titledThreadList.slice(0, MAX_THREADS_COUNT)
+      : titledThreadList;
+  }, [titledThreadList, hasExcessThreads, isExpanded]);
 
   const threadGroupByDate = useMemo(() => {
     if (!displayThreadList || displayThreadList.length === 0) {
@@ -284,18 +305,18 @@ export function AppSidebarThreads() {
                                       thread.id,
                                     ) || thread.status === "running" ? (
                                       <TextShimmer className="truncate min-w-0">
-                                        {thread.title || "New Chat"}
+                                        {thread.title || t("newChat")}
                                       </TextShimmer>
                                     ) : (
                                       <p className="truncate min-w-0">
-                                        {thread.title || "New Chat"}
+                                        {thread.title || t("newChat")}
                                       </p>
                                     )}
                                   </Link>
                                 </SidebarMenuButton>
                               </TooltipTrigger>
                               <TooltipContent className="max-w-[200px] p-4 break-all overflow-y-auto max-h-[200px]">
-                                {thread.title || "New Chat"}
+                                {thread.title || t("newChat")}
                               </TooltipContent>
                             </Tooltip>
 

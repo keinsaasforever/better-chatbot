@@ -58,7 +58,6 @@ export function UpdateUserPasswordDialog({
     if (result?.success) {
       setShowResetPasswordDialog(false);
       onReset?.();
-      toast.success(t("passwordUpdatedSuccessfully"));
     } else {
       const errorMsg = result?.message || t("failedToUpdatePassword");
       setErrorMessage(errorMsg);

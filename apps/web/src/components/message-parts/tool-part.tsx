@@ -10,7 +10,7 @@ import {
   VercelAIWorkflowToolStreamingResultTag,
 } from "app-types/workflow";
 import { extractMCPToolId } from "lib/ai/mcp/mcp-tool-id";
-import { DefaultToolName, ImageToolName } from "lib/ai/tools";
+import { DefaultToolName, ImageToolName, ResearchToolName } from "lib/ai/tools";
 import {
   markdownToHtmlEmail,
   markdownToPlainTextEmail,
@@ -48,9 +48,14 @@ import { TextShimmer } from "ui/text-shimmer";
 import { Tooltip, TooltipContent, TooltipTrigger } from "ui/tooltip";
 import { MCPImageGallery } from "../tool-invocation/mcp-image-gallery";
 import { WorkflowInvocation } from "../tool-invocation/workflow-invocation";
+import { normalizeRequestInputQuestions } from "@/lib/chat/request-input-questions";
 import {
+  type CreateAgentOutcome,
+  type CreateAgentProposal,
+  type RequestInputAnswer,
+  CreateAgentReviewUI,
   EmailPreviewUI,
-  HITL_TOOL_LABELS,
+  HITL_TOOL_LABEL_KEYS,
   PlanApprovalUI,
   RequestInputUI,
 } from "../tools";
@@ -164,6 +169,12 @@ const ArtifactChip = dynamic(
   { ssr: false, loading },
 );
 
+const SubagentCard = dynamic(
+  () =>
+    import("../tool-invocation/subagent-card").then((mod) => mod.SubagentCard),
+  { ssr: false, loading },
+);
+
 // Local shortcuts for tool invocation approval/rejection
 const approveToolInvocationShortcut: Shortcut = {
   description: "approveToolInvocation",
@@ -196,6 +207,7 @@ export const ToolMessagePart = memo(
     projectId,
     chatStatus,
     runStatus,
+    readonly,
   }: ToolMessagePartProps) => {
     const t = useTranslations("");
 
@@ -264,6 +276,19 @@ export const ToolMessagePart = memo(
       },
       [addToolResult, toolCallId, toolName],
     );
+
+    /**
+     * The same handler, but absent wherever a result cannot be sent back.
+     *
+     * A shared/exported transcript renders these parts with `readonly` and no
+     * `addToolResult`. `onToolCallDirect` is a `useCallback`, so it is truthy
+     * even then — and `CodeExecutor` executes on mount whenever `onResult` is
+     * truthy. Every view of a shared thread therefore re-ran the author's code
+     * in a fresh sandbox and then threw "Chat result synchronization is
+     * unavailable" as an unhandled rejection. Withholding the callback is what
+     * makes the executor render as a transcript instead of running.
+     */
+    const onToolCallLive = readonly ? undefined : onToolCallDirect;
 
     const result = useMemo(() => {
       if (state == "output-error") {
@@ -343,13 +368,13 @@ export const ToolMessagePart = memo(
             to={(input as any)?.to || ""}
             subject={(input as any)?.subject || ""}
             body={(input as any)?.body || ""}
-            onApprove={(editedBody) => {
+            onApprove={(draft) => {
               // Mail clients render neither markdown nor the model's habitual
               // `**bold**`, so the draft is resolved here: plain text for the
               // fields any email tool understands, HTML for the ones that
               // accept a formatted body.
-              const plainBody = markdownToPlainTextEmail(editedBody);
-              const htmlBody = markdownToHtmlEmail(editedBody);
+              const plainBody = markdownToPlainTextEmail(draft.body);
+              const htmlBody = markdownToHtmlEmail(draft.body);
               addToolResult?.({
                 tool: toolName,
                 toolCallId,
@@ -357,18 +382,19 @@ export const ToolMessagePart = memo(
                   emailHandle: toolCallId,
                   approved: true,
                   timestamp: new Date().toISOString(),
-                  // These are the final user-approved fields (user may have edited body).
-                  // ALWAYS use these when sending — never use the proposeEmail input fields.
-                  approvedTo: (input as any)?.to,
-                  approvedSubject: (input as any)?.subject,
+                  // Every field here is what the user approved — recipient,
+                  // subject and body are all editable in the card. ALWAYS use
+                  // these when sending, never the proposeEmail input fields.
+                  approvedTo: draft.to,
+                  approvedSubject: draft.subject,
                   approvedBody: plainBody,
                   approvedBodyHtml: htmlBody,
                   bodyFormat: "plain_text",
                   // Aliases matching common Composio/MCP field names for direct passthrough
-                  to: (input as any)?.to,
-                  subject: (input as any)?.subject,
+                  to: draft.to,
+                  subject: draft.subject,
                   body: plainBody,
-                  recipient_email: (input as any)?.to,
+                  recipient_email: draft.to,
                   message_body: plainBody,
                   body_html: htmlBody,
                 },
@@ -459,6 +485,53 @@ export const ToolMessagePart = memo(
         );
       }
 
+      // HITL Tool: createAgent - Review, edit and approve before anything is
+      // written. The card performs the agent + schedule writes itself and only
+      // then answers the parked call.
+      if (
+        toolName === "createAgent" &&
+        (state === "input-available" || state === "approval-requested")
+      ) {
+        return (
+          <CreateAgentReviewUI
+            proposal={(input ?? {}) as CreateAgentProposal}
+            threadId={threadId}
+            onCreate={(outcome) => {
+              addToolResult?.({
+                tool: toolName,
+                toolCallId,
+                output: {
+                  ...outcome,
+                  timestamp: new Date().toISOString(),
+                },
+              });
+            }}
+            onCancel={() => {
+              addToolResult?.({
+                tool: toolName,
+                toolCallId,
+                output: {
+                  created: false,
+                  rejected: true,
+                  message:
+                    "The user cancelled agent creation. Do not retry unless asked.",
+                },
+              });
+            }}
+          />
+        );
+      }
+
+      // A settled proposal keeps its card, so the thread records what was made.
+      if (toolName === "createAgent" && state === "output-available") {
+        return (
+          <CreateAgentReviewUI
+            proposal={(input ?? {}) as CreateAgentProposal}
+            outcome={(output ?? { created: false }) as CreateAgentOutcome}
+          />
+        );
+      }
+
       // HITL Tool: requestInput - Show input collection UI
       // State is "input-available" (tool called but no execute) or "approval-requested" (if needsApproval was used)
       if (
@@ -467,21 +540,34 @@ export const ToolMessagePart = memo(
       ) {
         return (
           <RequestInputUI
-            label={(input as any)?.label || "Please provide input"}
-            placeholder={(input as any)?.placeholder || ""}
-            inputType={(input as any)?.inputType || "text"}
-            onSubmit={(value) => {
+            questions={normalizeRequestInputQuestions(input)}
+            onSubmit={(answers) => {
               addToolResult?.({
                 tool: toolName,
                 toolCallId,
                 output: {
                   inputReceived: true,
-                  value: value, // User's input value
+                  answers,
+                  // One question is the common case, so expose its answer
+                  // directly too rather than making the model index in.
+                  value: answers.length === 1 ? answers[0].value : undefined,
                   requestId: toolCallId,
                   timestamp: new Date().toISOString(),
                 },
               });
             }}
+          />
+        );
+      }
+
+      // A settled request keeps its card, so the thread records what was asked
+      // and what the user answered.
+      if (toolName === "requestInput" && state === "output-available") {
+        const settled = (output ?? {}) as { answers?: RequestInputAnswer[] };
+        return (
+          <RequestInputUI
+            questions={normalizeRequestInputQuestions(input)}
+            submittedAnswers={settled.answers ?? []}
           />
         );
       }
@@ -511,7 +597,7 @@ export const ToolMessagePart = memo(
           <CodeExecutor
             part={part}
             key={part.toolCallId}
-            onResult={onToolCallDirect}
+            onResult={onToolCallLive}
             threadId={threadId}
             type="javascript"
           />
@@ -523,17 +609,24 @@ export const ToolMessagePart = memo(
           <CodeExecutor
             part={part}
             key={part.toolCallId}
-            onResult={onToolCallDirect}
+            onResult={onToolCallLive}
             threadId={threadId}
             type="python"
           />
         );
       }
 
+      if (toolName === ResearchToolName) {
+        return <SubagentCard key={part.toolCallId} part={part} />;
+      }
+
       if (
         toolName === DefaultToolName.E2BSandbox ||
         toolName === DefaultToolName.EditDocument ||
-        toolName === DefaultToolName.CreateTabularReview
+        toolName === DefaultToolName.CreateTabularReview ||
+        toolName === DefaultToolName.CreatePlan ||
+        toolName === DefaultToolName.CreatePdf ||
+        toolName === DefaultToolName.BrowserAutomation
       ) {
         return (
           <ArtifactChip
@@ -545,7 +638,7 @@ export const ToolMessagePart = memo(
             threadId={threadId}
             onResult={
               toolName === DefaultToolName.E2BSandbox
-                ? onToolCallDirect
+                ? onToolCallLive
                 : undefined
             }
           />
@@ -582,13 +675,14 @@ export const ToolMessagePart = memo(
     }, [
       toolName,
       state,
-      onToolCallDirect,
+      onToolCallLive,
       result,
       input,
       output,
       addToolResult,
       addToolApprovalResponse,
       toolCallId,
+      threadId,
       part,
       chatStatus,
       runStatus,
@@ -598,10 +692,12 @@ export const ToolMessagePart = memo(
       // HITL tools are internal plumbing the user never picked from a menu, so
       // the raw camelCase identifier only leaks implementation when one of
       // them falls through to this generic row (an errored call, say).
-      const hitlLabel = HITL_TOOL_LABELS[toolName];
-      if (hitlLabel) return { serverName: hitlLabel, toolName: "" };
+      const hitlLabelKey = HITL_TOOL_LABEL_KEYS[toolName];
+      if (hitlLabelKey) {
+        return { serverName: t(`Chat.${hitlLabelKey}`), toolName: "" };
+      }
       return extractMCPToolId(toolName);
-    }, [toolName]);
+    }, [toolName, t]);
 
     // A failed call is flagged in the header instead of springing the payload
     // open — an error dump is the most developer-facing thing on screen, and a

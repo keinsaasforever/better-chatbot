@@ -2,6 +2,7 @@ import {
   buildAssemblyAIStreamingUrl,
   preparePcmChunkForAssemblyAI,
 } from "@/lib/assemblyai/streaming-config";
+import { requireCredits } from "@/lib/billing/require-credits";
 import { useState, useRef, useCallback, useEffect } from "react";
 import { toast } from "sonner";
 
@@ -23,6 +24,14 @@ export function useAssemblyAI({ onTranscript, onCommand }: UseAssemblyAIProps) {
   const sessionStartTimeRef = useRef<number | null>(null);
   const sessionIdRef = useRef<string | null>(null);
   const lastProcessedTurnOrderRef = useRef<number | null>(null);
+  // Every start bumps the generation and every stop bumps it again, so a
+  // start that is still awaiting the mic or the token can tell it was
+  // cancelled and release what it acquired instead of resurrecting the
+  // session. `activeRef` mirrors "mic is on or being requested" without the
+  // render lag of state, so a tap while the socket is still connecting stops
+  // instead of starting a second session on top of the first.
+  const generationRef = useRef(0);
+  const activeRef = useRef(false);
 
   const getMicrophoneStream = async (): Promise<MediaStream> => {
     if (!navigator.mediaDevices?.getUserMedia) {
@@ -95,6 +104,9 @@ export function useAssemblyAI({ onTranscript, onCommand }: UseAssemblyAIProps) {
 
     const sessionId = sessionIdRef.current;
 
+    generationRef.current += 1;
+    activeRef.current = false;
+
     // Cleanup audio processing
     if (processorRef.current) {
       processorRef.current.disconnect();
@@ -112,12 +124,26 @@ export function useAssemblyAI({ onTranscript, onCommand }: UseAssemblyAIProps) {
     }
 
     if (socketRef.current) {
-      if (socketRef.current.readyState === WebSocket.OPEN) {
-        // v3 API termination message format
-        socketRef.current.send(JSON.stringify({ type: "Terminate" }));
-        socketRef.current.close();
-      }
+      const socket = socketRef.current;
       socketRef.current = null;
+      // Detach handlers first so the close does not re-enter stopRecording
+      // or surface a "connection error" toast for a stop the user asked for.
+      socket.onopen = null;
+      socket.onmessage = null;
+      socket.onerror = null;
+      socket.onclose = null;
+      if (socket.readyState === WebSocket.OPEN) {
+        // v3 API termination message format
+        socket.send(JSON.stringify({ type: "Terminate" }));
+      }
+      // Also closes a socket that is still CONNECTING; otherwise it opens
+      // later and the dictation looks alive again with no way to stop it.
+      if (
+        socket.readyState === WebSocket.CONNECTING ||
+        socket.readyState === WebSocket.OPEN
+      ) {
+        socket.close();
+      }
     }
 
     const wasRecording = !!sessionId || sessionDuration > 0;
@@ -128,7 +154,6 @@ export function useAssemblyAI({ onTranscript, onCommand }: UseAssemblyAIProps) {
       console.log(
         `AssemblyAI recording stopped (${sessionDuration.toFixed(2)}s)`,
       );
-      toast.info("Voice dictation stopped");
     }
 
     // Track usage asynchronously (fire-and-forget, don't block)
@@ -159,6 +184,11 @@ export function useAssemblyAI({ onTranscript, onCommand }: UseAssemblyAIProps) {
   }, []);
 
   const startRecording = useCallback(async () => {
+    if (activeRef.current) return;
+    activeRef.current = true;
+    const generation = ++generationRef.current;
+    const isCancelled = () => generation !== generationRef.current;
+
     try {
       // Generate unique session ID for billing tracking
       const sessionId = `assemblyai-${Date.now()}-${Math.random().toString(36).substring(7)}`;
@@ -168,13 +198,23 @@ export function useAssemblyAI({ onTranscript, onCommand }: UseAssemblyAIProps) {
       // Request microphone as the first async operation to maximize
       // mobile browser compatibility for user-gesture permission prompts.
       const stream = await getMicrophoneStream();
+      if (isCancelled()) {
+        stream.getTracks().forEach((track) => track.stop());
+        return;
+      }
       streamRef.current = stream;
+      // The mic is live from here on, so the button must already read as
+      // "stop" even though the transcript socket is still connecting.
+      setIsListening(true);
 
       // Fetch temporary token from server
       const token = await fetchToken();
-      if (!token) {
+      if (isCancelled()) {
         stream.getTracks().forEach((track) => track.stop());
-        streamRef.current = null;
+        return;
+      }
+      if (!token) {
+        stopRecording();
         return;
       }
 
@@ -185,8 +225,6 @@ export function useAssemblyAI({ onTranscript, onCommand }: UseAssemblyAIProps) {
 
       socket.onopen = () => {
         console.log("AssemblyAI WebSocket connected");
-        setIsListening(true);
-        toast.success("Voice dictation started");
       };
 
       socket.onmessage = (event) => {
@@ -194,7 +232,14 @@ export function useAssemblyAI({ onTranscript, onCommand }: UseAssemblyAIProps) {
 
         console.log("AssemblyAI message:", data);
 
-        // Universal-3.5 Pro: one formatted final transcript per turn.
+        // Universal-3.6 Pro: one formatted final transcript per turn.
+        //
+        // We deliberately commit ONLY finalized, formatted turns. U3 Pro also
+        // streams unformatted partials, but `onTranscript` appends into the
+        // chat input, so replaying partials there would require the input to
+        // own a "provisional text" region. How fast text appears is therefore
+        // governed by AssemblyAI's endpointing, not by this gate — tune
+        // ASSEMBLYAI_MIN/MAX_TURN_SILENCE_MS in lib/assemblyai/.
         if (
           data.type === "Turn" &&
           data.transcript &&
@@ -228,12 +273,16 @@ export function useAssemblyAI({ onTranscript, onCommand }: UseAssemblyAIProps) {
 
       socket.onerror = (error) => {
         console.error("AssemblyAI WebSocket Error:", error);
+        if (isCancelled()) return;
         stopRecording();
         toast.error("Voice connection error");
       };
 
       socket.onclose = () => {
-        setIsListening(false);
+        // The server ended the session: release the mic rather than leaving
+        // it captured behind a button that no longer reads as recording.
+        if (isCancelled()) return;
+        stopRecording();
       };
 
       socketRef.current = socket;
@@ -296,14 +345,16 @@ export function useAssemblyAI({ onTranscript, onCommand }: UseAssemblyAIProps) {
         toast.error("Could not start voice dictation");
       }
 
-      stopRecording();
+      if (!isCancelled()) stopRecording();
     }
   }, [onCommand, onTranscript, stopRecording]);
 
   const toggleListening = useCallback(() => {
-    if (isListening) {
+    if (isListening || activeRef.current) {
       stopRecording();
     } else {
+      // Only the start branch is gated; stopping must always work.
+      if (!requireCredits()) return;
       startRecording();
     }
   }, [isListening, startRecording, stopRecording]);

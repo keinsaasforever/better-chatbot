@@ -7,6 +7,7 @@ import { Button } from "ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "ui/dialog";
 import { Input } from "ui/input";
 import { Textarea } from "ui/textarea";
+import { requireCredits } from "@/lib/billing/require-credits";
 import type { AgentsetEmbeddingProfileId } from "@/types/project";
 import { EmbeddingModelSelector } from "./embedding-model-selector";
 
@@ -64,7 +65,16 @@ export function ProjectDialog({
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <span onClick={() => setOpen(true)}>{children}</span>
+      <span
+        onClick={() => {
+          // Gate the opener, not `createProject`: no point letting the user
+          // fill in the form and only then refusing.
+          if (!requireCredits()) return;
+          setOpen(true);
+        }}
+      >
+        {children}
+      </span>
       <DialogContent>
         <DialogHeader>
           <DialogTitle>New project</DialogTitle>

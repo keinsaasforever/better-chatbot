@@ -1,14 +1,32 @@
 "use server";
-import { ModelMessage, generateText } from "ai";
+import { ModelMessage, generateImage, generateText } from "ai";
 import logger from "logger";
 import { aiTelemetry } from "lib/ai/telemetry";
+import { resolveImageApiText } from "./fill-prompt";
+import type { ImageInput } from "./image-inputs";
+import { resolveImageModel } from "./image-models";
 
 type GenerateImageOptions = {
   messages?: ModelMessage[];
   prompt: string;
   abortSignal?: AbortSignal;
-  customerId?: string; // For token tracking
-  threadId?: string; // For token tracking
+  /**
+   * Image model id from `IMAGE_MODELS`; unknown or absent ids fall back to
+   * the default model.
+   */
+  modelId?: string;
+  /**
+   * Input images for dedicated image-API models (`api: "image"`), as URL
+   * strings or bytes (see `ImageInput`). Chat-style models read their images
+   * from `messages` instead. Oldest first; the newest is the one an edit
+   * instruction most likely refers to.
+   */
+  images?: ImageInput[];
+  /**
+   * Inpainting mask for models with `capabilities.mask`: white marks the
+   * region to regenerate, black is kept. Applies to the last of `images`.
+   */
+  mask?: ImageInput;
 };
 
 type GeneratedImage = {
@@ -26,13 +44,66 @@ export type GeneratedImageResult = {
 };
 
 /**
- * Generate images using Google Gemini 2.5 Flash Image via AI Gateway
- * This routes through AI Gateway for automatic token tracking and cost management
+ * Generate images via AI Gateway with the given image model.
+ *
+ * Multimodal chat models (Gemini image family) get the full message context so
+ * they can edit/composite existing images; dedicated image-API models
+ * (GPT Image 2, FLUX) take the latest instruction as text plus the context's
+ * images as explicit inputs — without them an "edit" silently became a fresh
+ * generation from the prompt alone.
  */
-export const generateImageWithGemini = async (
+export const generateImageWithModel = async (
   options: GenerateImageOptions,
 ): Promise<GeneratedImageResult> => {
+  const model = resolveImageModel(options.modelId);
   try {
+    if (model.api === "image") {
+      const text = resolveImageApiText({
+        prompt: options.prompt,
+        messages: options.messages,
+        hasMask: Boolean(options.mask),
+      });
+      const images = options.images ?? [];
+      const hasInputs = images.length > 0;
+
+      logger.info(
+        `[Image Gen] Generating image via AI Gateway image API with ${model.id} (${images.length} input images${options.mask ? ", mask" : ""})`,
+      );
+
+      const result = await generateImage({
+        model: model.id,
+        prompt: hasInputs
+          ? {
+              // `text` is optional on the image API. Omitting it on a masked
+              // call means "fill this region from its surroundings", which is
+              // the right answer when there is nothing useful to say; an empty
+              // string would be a prompt describing nothing.
+              ...(text ? { text } : {}),
+              images,
+              ...(options.mask ? { mask: options.mask } : {}),
+            }
+          : text,
+        n: 1,
+        // A fixed size keeps the per-image billing rate deterministic for
+        // text-to-image (see the model's entry in the billing price table, `LLM_PRICES`).
+        // Edits deliberately omit it: the output has to keep the source
+        // photo's aspect ratio, and the providers default to matching it.
+        ...(hasInputs || model.provider !== "openai"
+          ? {}
+          : { size: "1024x1024" as const }),
+        abortSignal: options.abortSignal,
+      });
+
+      return {
+        images: result.images.map((image) => ({
+          base64: image.base64,
+          mimeType: image.mediaType,
+        })),
+        // Image-API models bill per image, not per token (see llm-prices.ts).
+        usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0 },
+      };
+    }
+
     // Build messages array
     const messages: ModelMessage[] = [...(options.messages || [])];
 
@@ -45,19 +116,19 @@ export const generateImageWithGemini = async (
     }
 
     logger.info(
-      `[Image Gen] Generating image via AI Gateway with ${messages.length} messages`,
+      `[Image Gen] Generating image via AI Gateway with ${model.id} and ${messages.length} messages`,
     );
 
-    // Use AI Gateway with Gemini 2.5 Flash Image
-    // The string model ID is handled by the global AI Gateway provider
     const result = await generateText({
-      model: "google/gemini-2.5-flash-image",
+      model: model.id,
       experimental_telemetry: aiTelemetry("image.generate", {
-        modelId: "google/gemini-2.5-flash-image",
+        modelId: model.id,
       }),
       providerOptions: {
         google: {
-          responseModalities: ["IMAGE"], // Request only images
+          // Gemini image models reject image-only responses — TEXT must be
+          // requested alongside IMAGE or the call returns no image files.
+          responseModalities: ["TEXT", "IMAGE"],
         },
       },
       messages,

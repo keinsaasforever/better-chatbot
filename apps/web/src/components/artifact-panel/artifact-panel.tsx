@@ -1,12 +1,25 @@
 "use client";
 
+import { useIsIOS } from "@/hooks/use-is-ios";
 import { useSandboxKeepalive } from "@/hooks/use-sandbox-keepalive";
+import {
+  type ArtifactFile,
+  canPreviewInPanel,
+  previewKindForFile,
+} from "lib/code-runner/artifact-media";
+import {
+  BROWSER_HANDOFF_WINDOW_MS,
+  isBrowserSessionOver,
+} from "lib/kernel/browser-contract";
 import { toAny } from "lib/utils";
 import {
   ChevronsRight,
   Code2,
+  Download,
   ExternalLink,
   FileText,
+  Globe,
+  ListTodo,
   Loader,
   Monitor,
   PlayCircle,
@@ -14,14 +27,38 @@ import {
   Share2,
   Table2,
 } from "lucide-react";
+import dynamic from "next/dynamic";
+import { useTranslations } from "next-intl";
 import { useEffect, useState } from "react";
 import { Button } from "ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "ui/tabs";
 import { TextShimmer } from "ui/text-shimmer";
 import { Tooltip, TooltipContent, TooltipTrigger } from "ui/tooltip";
+import {
+  Plan,
+  PlanContent,
+  PlanDescription,
+  PlanHeader,
+  PlanStep,
+  PlanTitle,
+} from "../ai-elements/plan";
 import { DocumentEditCard } from "../tool-invocation/document-edit-card";
 import { TabularReviewCard } from "../tool-invocation/tabular-review";
 import { useArtifactPanel } from "./artifact-panel-context";
+import { FileDownloadFallback } from "./file-download-fallback";
+import { iconForFile } from "./file-kind-icon";
+
+// This panel is imported statically by `chat-bot.tsx`, so anything at module
+// scope here lands in every user's main bundle. The spreadsheet viewer is
+// only ever needed by someone who generated one.
+const SheetPreview = dynamic(
+  () => import("./sheet-preview").then((mod) => mod.SheetPreview),
+  { ssr: false },
+);
+const DocumentPreview = dynamic(
+  () => import("./document-preview").then((mod) => mod.DocumentPreview),
+  { ssr: false },
+);
 
 // ---------------------------------------------------------------------------
 // Sandbox (web) panel — ported from e2b-dev/fragments fragment-web.tsx
@@ -359,22 +396,288 @@ function TabularPanelContent() {
 }
 
 // ---------------------------------------------------------------------------
+// Plan panel — renders the createPlan tool input (the artifact IS the input)
+// ---------------------------------------------------------------------------
+function PlanPanelContent() {
+  const { artifact } = useArtifactPanel();
+  const part = artifact?.part;
+  const input = toAny(part?.input) as {
+    title?: string;
+    description?: string | null;
+    steps?: Array<{ title?: string; description?: string | null }>;
+  } | null;
+  const isStreaming = part?.state === "input-streaming";
+  const steps = Array.isArray(input?.steps) ? input.steps : [];
+
+  return (
+    <div className="overflow-auto h-full p-4">
+      <Plan>
+        <PlanHeader>
+          <PlanTitle isStreaming={isStreaming}>
+            {input?.title || (isStreaming ? "Drafting plan…" : "Plan")}
+          </PlanTitle>
+          {input?.description && (
+            <PlanDescription>{input.description}</PlanDescription>
+          )}
+        </PlanHeader>
+        <PlanContent>
+          {steps.map((step, index) => (
+            <PlanStep
+              key={`${index}-${step?.title ?? ""}`}
+              index={index + 1}
+              title={step?.title ?? ""}
+              description={step?.description ?? undefined}
+              isStreaming={isStreaming && index === steps.length - 1}
+            />
+          ))}
+        </PlanContent>
+        {isStreaming && (
+          <div className="px-4 pb-3">
+            <TextShimmer className="text-xs">Drafting steps…</TextShimmer>
+          </div>
+        )}
+      </Plan>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Kernel browser live view
+// ---------------------------------------------------------------------------
+function BrowserPanelContent() {
+  const { artifact } = useArtifactPanel();
+  const t = useTranslations("Chat.Browser");
+  const output = toAny(artifact?.part?.output) as {
+    status?: string;
+    liveViewUrl?: string;
+    error?: string;
+    reason?: string;
+    request?: string;
+  } | null;
+
+  const liveViewUrl = output?.liveViewUrl ?? null;
+  const status = output?.status;
+  const isFinished = isBrowserSessionOver(status);
+  const isBlocked = status === "blocked";
+  // Legacy: produced by the human-in-the-loop park, which no longer exists.
+  // Runs from before that change are still in the message history.
+  const isAwaitingUser = status === "awaiting-user";
+
+  // A mounted live view keeps the Kernel browser "active", so a parked run the
+  // user walks away from would never hit Kernel's inactivity timeout. Dropping
+  // the iframe after the handoff window hands that job back to Kernel.
+  const [handoffExpired, setHandoffExpired] = useState(false);
+  useEffect(() => {
+    if (!isAwaitingUser) {
+      setHandoffExpired(false);
+      return;
+    }
+    const timer = window.setTimeout(
+      () => setHandoffExpired(true),
+      BROWSER_HANDOFF_WINDOW_MS,
+    );
+    return () => window.clearTimeout(timer);
+  }, [isAwaitingUser]);
+
+  if (isAwaitingUser && handoffExpired) {
+    return (
+      <div className="flex-1 h-full flex items-center justify-center p-8 text-center">
+        <div className="max-w-xs">
+          <p className="font-medium text-sm">{t("handoffTimedOutTitle")}</p>
+          <p className="text-xs text-muted-foreground mt-1">
+            {t("handoffTimedOutBody")}
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  if (status === "failed" && !liveViewUrl) {
+    return (
+      <div className="flex-1 h-full flex items-center justify-center p-8 text-center">
+        <div className="max-w-xs">
+          <p className="font-medium text-sm">{t("couldNotStartTitle")}</p>
+          <p className="text-xs text-muted-foreground mt-1">
+            {output?.error ?? t("unknownError")}
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!liveViewUrl) {
+    return (
+      <div className="flex-1 h-full flex items-center justify-center p-8 text-center">
+        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+          <Loader className="size-4 animate-spin" />
+          {t("statusStarting")}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-col h-full">
+      {isFinished && !isBlocked && (
+        <div className="px-3 py-2 border-b bg-muted/50 text-muted-foreground text-xs">
+          {t("sessionEnded")}
+        </div>
+      )}
+      {isBlocked && (
+        <div className="px-3 py-2 border-b bg-amber-500/10 text-xs">
+          <p className="font-medium">{t("blockedTitle")}</p>
+          <p className="text-muted-foreground mt-0.5">
+            {output?.reason ?? t("blockedFallbackReason")}
+          </p>
+          <p className="text-muted-foreground mt-1">{t("blockedHint")}</p>
+        </div>
+      )}
+      {isAwaitingUser && (
+        <div className="px-3 py-2 border-b bg-amber-500/10 text-xs">
+          <p className="font-medium">{t("awaitingUserTitle")}</p>
+          <p className="text-muted-foreground mt-0.5">
+            {output?.request ?? t("awaitingUserFallbackRequest")}
+          </p>
+        </div>
+      )}
+      {/* Deliberately stays mounted for the whole run, unlike the sandbox
+          preview which unmounts to stop billing while idle. Kernel already
+          bills only active runtime (idle drops to free Standby), and
+          unmounting here would kill a sign-in the user is halfway through.
+          The handoff window above is the one thing that does unmount it. */}
+      <iframe
+        className="flex-1 w-full border-0"
+        sandbox="allow-forms allow-scripts allow-same-origin allow-popups"
+        src={liveViewUrl}
+        title="Browser live view"
+      />
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// A file: generated by a tool run, or uploaded by the user
+// ---------------------------------------------------------------------------
+function FilePanelContent() {
+  const { artifact } = useArtifactPanel();
+  const file = artifact?.file;
+
+  if (!file) return null;
+
+  // A type with no viewer, or one whose upload failed and so has no preview
+  // URL: the download is the whole offer, so say so rather than showing an
+  // empty frame.
+  if (!canPreviewInPanel(file)) return <FileDownloadFallback file={file} />;
+
+  const kind = previewKindForFile(file);
+
+  // Neither a spreadsheet nor an Office document has a browser-renderable
+  // form, so both are read server-side and drawn rather than pointed at with
+  // an iframe. A CSV goes through the sheet route too: it is a table, and the
+  // route adapts it into the same shape a workbook comes back as.
+  if (kind === "sheet" || kind === "csv") {
+    return <SheetPreview file={file} />;
+  }
+  if (kind === "document" || kind === "slides" || kind === "text") {
+    return <DocumentPreview file={file} />;
+  }
+
+  if (kind === "pdf") return <PdfPreview file={file} />;
+
+  return (
+    <div className="h-full w-full bg-muted/20">
+      <div className="h-full w-full overflow-auto p-4 flex items-start justify-center">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={file.previewUrl}
+          alt={file.filename}
+          className="max-w-full object-contain rounded"
+        />
+      </div>
+    </div>
+  );
+}
+
+/**
+ * A PDF, in an iframe everywhere except iOS.
+ *
+ * iOS Safari does not render a PDF inside an iframe — it paints a blank or
+ * unscrollable frame and fires no error, so the panel just looks broken, and
+ * it looks broken on the device most likely to be opening a chat attachment.
+ * Handing the file to Safari's own viewer instead gives a real document, with
+ * Share → Save to Files as the way to keep it. That is also the only way to
+ * save a PDF on iOS: Safari routes PDFs to its viewer regardless of the
+ * `Content-Disposition: attachment` the download route sets, which every
+ * desktop browser honours.
+ */
+function PdfPreview({ file }: { file: ArtifactFile }) {
+  const t = useTranslations("Chat.Artifact");
+  const isIOS = useIsIOS();
+
+  if (isIOS) {
+    return (
+      <div className="h-full w-full bg-muted/20 overflow-auto p-6 flex flex-col items-center justify-center text-center gap-3">
+        <FileText className="size-10 text-muted-foreground" />
+        <p className="text-sm font-medium break-all">{file.filename}</p>
+        <p className="text-xs text-muted-foreground max-w-xs">
+          {t("pdfIosHint")}
+        </p>
+        <Button asChild size="sm" className="mt-1">
+          {/* The inline URL: Safari's viewer needs to render it, not save it. */}
+          <a href={file.previewUrl} target="_blank" rel="noopener noreferrer">
+            {t("pdfOpenInViewer")}
+          </a>
+        </Button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="h-full w-full bg-muted/20">
+      <iframe
+        src={`${file.previewUrl}#toolbar=1&navpanes=1&view=FitH`}
+        className="w-full h-full border-0"
+        title={file.filename}
+      />
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Panel header
 // ---------------------------------------------------------------------------
 function PanelHeader({ onClose }: { onClose: () => void }) {
   const { artifact } = useArtifactPanel();
+  const t = useTranslations("Chat.Artifact");
   const type = artifact?.type;
   const input = toAny(artifact?.part?.input);
+  const file = artifact?.file;
 
   const title =
     type === "sandbox"
       ? (input?.title ?? "Sandbox")
-      : type === "document-edit"
-        ? "Document Edit"
-        : "Tabular Review";
+      : type === "plan"
+        ? (input?.title ?? "Plan")
+        : type === "document-edit"
+          ? "Document Edit"
+          : type === "browser"
+            ? "Browser"
+            : type === "file"
+              ? (file?.filename ?? "File")
+              : "Tabular Review";
 
   const Icon =
-    type === "sandbox" ? Monitor : type === "document-edit" ? FileText : Table2;
+    type === "sandbox"
+      ? Monitor
+      : type === "document-edit"
+        ? FileText
+        : type === "plan"
+          ? ListTodo
+          : type === "browser"
+            ? Globe
+            : type === "file"
+              ? iconForFile(file)
+              : Table2;
 
   return (
     <div className="flex items-center gap-2 px-3 py-2 border-b min-h-[44px]">
@@ -393,6 +696,30 @@ function PanelHeader({ onClose }: { onClose: () => void }) {
       </Tooltip>
       <Icon className="size-4 text-muted-foreground" />
       <span className="text-sm font-medium truncate">{title}</span>
+      {type === "file" && file && (
+        <div className="ml-auto flex items-center gap-1">
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button asChild variant="ghost" size="icon" className="h-7 w-7">
+                {/* No target="_blank": the extra target left the desktop
+                    shell with a blank window.
+
+                    `download` only binds same-origin, and this route 302s to
+                    the storage provider — so for the signed-URL driver the
+                    save comes from the provider's Content-Disposition, not
+                    from here. It is kept for the streaming driver, which does
+                    respond same-origin. Desktop browsers honour the header;
+                    iOS Safari ignores it for PDFs and shows its viewer, which
+                    is why PdfPreview hands iOS the viewer deliberately. */}
+                <a href={file.url} download={file.filename}>
+                  <Download className="h-4 w-4" />
+                </a>
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>{t("download")}</TooltipContent>
+          </Tooltip>
+        </div>
+      )}
     </div>
   );
 }
@@ -415,6 +742,9 @@ export function ArtifactPanel({ onShare }: ArtifactPanelProps = {}) {
         )}
         {artifact.type === "document-edit" && <DocumentEditPanelContent />}
         {artifact.type === "tabular" && <TabularPanelContent />}
+        {artifact.type === "plan" && <PlanPanelContent />}
+        {artifact.type === "browser" && <BrowserPanelContent />}
+        {artifact.type === "file" && <FilePanelContent />}
       </div>
     </div>
   );

@@ -11,6 +11,7 @@ export type {
   BillingContext,
   CreatedUser,
   Feature,
+  NotificationEmail,
   OrganizationInvitation,
   PasswordResetEmail,
   UsageEvent,
@@ -19,11 +20,11 @@ export { CreditsExhaustedError } from "./errors";
 export {
   assertCreditsAvailable,
   checkFeature,
-  getBilledTokenTotal,
   getBillingContext,
   onUserCreated,
   requireBillingContext,
   requireFeature,
+  sendNotificationEmail,
   sendOrgInvitationEmail,
   sendPasswordResetEmail,
 } from "./impl";

@@ -17,10 +17,12 @@ import Link from "next/link";
 import { useState } from "react";
 import { toast } from "sonner";
 import { safe } from "ts-safe";
+import { useCaptcha } from "./use-captcha";
 
 export default function ForgotPassword() {
   const t = useTranslations("Auth.ForgotPassword");
 
+  const captcha = useCaptcha();
   const [loading, setLoading] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [email, setEmail] = useState("");
@@ -38,6 +40,7 @@ export default function ForgotPassword() {
           redirectTo: "/reset-password",
         },
         {
+          headers: captcha.headers,
           onError(ctx) {
             toast.error(ctx.error.message || ctx.error.statusText);
           },
@@ -49,7 +52,11 @@ export default function ForgotPassword() {
         },
       ),
     )
-      .watch(() => setLoading(false))
+      .watch(() => {
+        setLoading(false);
+        // Single-use token: the next attempt needs a fresh one.
+        captcha.reset();
+      })
       .unwrap();
   };
 
@@ -89,10 +96,11 @@ export default function ForgotPassword() {
                   required
                 />
               </div>
+              {captcha.widget}
               <Button
                 className="w-full"
                 onClick={requestReset}
-                disabled={loading}
+                disabled={loading || !captcha.ready}
                 data-testid="forgot-password-submit-button"
               >
                 {loading ? (

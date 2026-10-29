@@ -60,6 +60,47 @@ describe("mapToolkitsWithAccounts", () => {
     );
     expect(mapped.map((t) => t.slug)).toEqual(["hackernews"]);
   });
+
+  it("emits a toolkit the listing never returned but an account exists for", () => {
+    // The disappearing-app bug: the reconcile could only enrich a toolkit the
+    // listing already handed back, so a connected app missing from `items`
+    // vanished from the UI entirely.
+    const mapped = mapToolkitsWithAccounts(
+      [toolkit()],
+      undefined,
+      new Map([
+        ["gmail", "ca_gmail"],
+        ["google_sheets", "ca_sheets"],
+      ]),
+    );
+
+    const sheets = mapped.find((t) => t.slug === "google_sheets");
+    expect(sheets).toMatchObject({
+      isConnected: true,
+      connectedAccountId: "ca_sheets",
+      // Only the slug is known for a toolkit the listing skipped.
+      name: "Google Sheets",
+    });
+  });
+
+  it("does not duplicate a toolkit the listing did return", () => {
+    const mapped = mapToolkitsWithAccounts(
+      [toolkit()],
+      undefined,
+      new Map([["gmail", "ca_gmail"]]),
+    );
+    expect(mapped.filter((t) => t.slug === "gmail")).toHaveLength(1);
+  });
+
+  it("omits unlisted connections when asked to, for pages after the first", () => {
+    const mapped = mapToolkitsWithAccounts(
+      [toolkit()],
+      undefined,
+      new Map([["google_sheets", "ca_sheets"]]),
+      { includeUnlisted: false },
+    );
+    expect(mapped.map((t) => t.slug)).toEqual(["gmail"]);
+  });
 });
 
 describe("resolveComposioAccount", () => {

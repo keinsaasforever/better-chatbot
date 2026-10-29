@@ -14,7 +14,21 @@ and give agents a place to work — on infrastructure you control.
 
 ---
 
-## Quick start
+## Deploy to Vercel
+
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fkeinsaasforever%2Fbetter-chatbot&project-name=better-chatbot&repository-name=better-chatbot&root-directory=apps%2Fweb&env=BETTER_AUTH_SECRET&envDescription=Session%20signing%20key%3A%20any%20long%20random%20string%2C%20e.g.%20the%20output%20of%20%60openssl%20rand%20-base64%2032%60.&envLink=https%3A%2F%2Fgithub.com%2Fkeinsaasforever%2Fbetter-chatbot%2Fblob%2Fmain%2Fdocs%2Fself-hosting.md%23vercel&stores=%5B%7B%22type%22%3A%22integration%22%2C%22integrationSlug%22%3A%22neon%22%2C%22productSlug%22%3A%22neon%22%2C%22protocol%22%3A%22storage%22%7D%5D)
+
+One click, one value. The button clones the repository, provisions a Neon
+Postgres database, and asks for a single secret — any long random string
+(`openssl rand -base64 32`). The schema is created during the build, and models
+run through the Vercel AI Gateway on your Vercel account with no API key. Open
+the deployment and create an account; the first one becomes the administrator.
+
+Details and optional features: [docs/self-hosting.md](docs/self-hosting.md#vercel).
+
+---
+
+## Quick start (Docker)
 
 Three variables. That is the whole configuration to get chatting:
 
@@ -110,9 +124,14 @@ local provider.
 
 ## Setup
 
+### Vercel
+
+The [Deploy button](#deploy-to-vercel) above. Setting up an existing clone by
+hand is described in [docs/self-hosting.md](docs/self-hosting.md#vercel).
+
 ### Docker Compose
 
-The [quick start](#quick-start) above. The bundled stack includes Postgres with
+The [quick start](#quick-start-docker) above. The bundled stack includes Postgres with
 pgvector. Add `--profile redis` if you want resumable chat streams.
 
 ### Local development
@@ -155,7 +174,7 @@ features are disabled at startup, so you always know why something is missing.
 | Web search | `EXA_API_KEY` | The web search tool is unavailable |
 | Voice transcription | `ASSEMBLYAI_API_KEY` | Realtime voice still works; transcription does not |
 | Browser notifications | `NEXT_PUBLIC_VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY` | No notifications while the app is closed |
-| Connected tools | `COMPOSIO_API_KEY` | Projects cannot connect third-party accounts |
+| Connected apps | `COMPOSIO_API_KEY` | Users cannot connect Gmail, Slack, GitHub and other apps |
 | Observability | `SUPERLOG_PUBLIC_TOKEN` | Traces and logs stay local |
 
 **Running without Inngest.** Scheduled tasks and the sandbox reaper are plain

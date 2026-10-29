@@ -14,6 +14,38 @@ export const maxDuration = 300;
 
 const NO_STREAM = () => new Response(null, { status: 204 });
 
+/**
+ * Non-consuming existence check.
+ *
+ * `resumeExistingStream` attaches a real consumer to the live buffer, so a GET
+ * issued only to read the status code hands the run a reader that is then
+ * cancelled. Callers that just want to know whether there is anything to resume
+ * use HEAD, which answers the same 200/204 from the Redis pointer alone and
+ * touches no stream. A pointer that outlived its buffer yields a 200 here where
+ * GET would have said 204; the caller's `resumeStream()` then finds nothing,
+ * which costs a request and loses nothing.
+ */
+export async function HEAD(
+  request: Request,
+  { params }: { params: Promise<{ id: string }> },
+) {
+  const { id } = await params;
+
+  const sessionOrResponse = await resolveChatSession(request);
+  if (sessionOrResponse instanceof Response) return sessionOrResponse;
+  const { session } = sessionOrResponse;
+
+  const thread = await chatRepository.selectThread(id);
+  if (!thread || thread.userId !== session.user.id) {
+    return new Response(null, { status: 403 });
+  }
+
+  if (!getStreamContext()) return NO_STREAM();
+  if (!(await getActiveStream(id))) return NO_STREAM();
+
+  return new Response(null, { status: 200 });
+}
+
 export async function GET(
   request: Request,
   { params }: { params: Promise<{ id: string }> },
@@ -22,7 +54,7 @@ export async function GET(
 
   const sessionOrResponse = await resolveChatSession(request);
   if (sessionOrResponse instanceof Response) return sessionOrResponse;
-  const session = sessionOrResponse;
+  const { session } = sessionOrResponse;
 
   const thread = await chatRepository.selectThread(id);
   if (!thread || thread.userId !== session.user.id) {

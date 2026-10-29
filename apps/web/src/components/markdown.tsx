@@ -1,16 +1,30 @@
 "use client";
 
-import React, { memo, PropsWithChildren, useContext, useMemo } from "react";
+import React, {
+  type ComponentPropsWithoutRef,
+  memo,
+  PropsWithChildren,
+  useContext,
+  useMemo,
+} from "react";
 import ReactMarkdown, { type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
 import remarkMath from "remark-math";
 import rehypeKatex from "rehype-katex";
 import { PreBlock } from "./pre-block";
 import { MarkdownStreamingContext } from "./markdown-streaming-context";
+import { MessageArtifactsContext } from "./message-artifacts-context";
+import {
+  isAppDownloadHref,
+  isSandboxLikeHref,
+  markdownUrlTransform,
+  resolveArtifactLink,
+} from "lib/code-runner/artifact-links";
+import { inlinePreviewUrl } from "lib/code-runner/artifact-media";
 import { parseMarkdownIntoBlocks } from "lib/markdown-blocks";
 import { isJson, isString, toAny } from "lib/utils";
 import JsonView from "ui/json-view";
-import { LinkIcon } from "lucide-react";
+import { DownloadIcon, LinkIcon } from "lucide-react";
 import {
   Table,
   TableHeader,
@@ -38,6 +52,90 @@ export const WordByWordFadeIn = memo(({ children }: PropsWithChildren) => {
   );
 });
 WordByWordFadeIn.displayName = "WordByWordFadeIn";
+
+type MarkdownAnchorProps = ComponentPropsWithoutRef<"a"> & { node?: unknown };
+
+const DownloadAnchor = ({
+  href,
+  filename,
+  children,
+}: PropsWithChildren<{ href: string; filename?: string }>) => (
+  // A plain download anchor: no target="_blank", so the click never opens a
+  // tab, and on the desktop shell never a window.
+  <a
+    className="text-primary hover:underline inline-flex gap-1.5 items-center"
+    href={href}
+    download={filename ?? true}
+  >
+    <DownloadIcon className="size-3.5" />
+    <WordByWordFadeIn>{children}</WordByWordFadeIn>
+  </a>
+);
+
+/**
+ * Links in assistant text. Beyond an ordinary external link:
+ * - an empty href renders as text. react-markdown blanks unsafe schemes
+ *   rather than dropping the link, and an empty href points at the current
+ *   page — on the desktop shell that opened a second window;
+ * - a sandbox-style link to a generated file (sandbox:/home/user/report.xlsx,
+ *   report.xlsx) becomes that file's real download when this message produced
+ *   it, and plain text when it did not;
+ * - the app's own download route renders as a download anchor.
+ */
+export const MarkdownAnchor = ({
+  node,
+  children,
+  ...props
+}: MarkdownAnchorProps) => {
+  const artifacts = useContext(MessageArtifactsContext);
+  const { href } = props;
+  if (!href) {
+    return <span>{children}</span>;
+  }
+  if (isSandboxLikeHref(href)) {
+    const match = resolveArtifactLink(href, artifacts);
+    if (!match?.url) return <span>{children}</span>;
+    return (
+      <DownloadAnchor href={match.url} filename={match.filename}>
+        {children}
+      </DownloadAnchor>
+    );
+  }
+  if (isAppDownloadHref(href)) {
+    return <DownloadAnchor href={href}>{children}</DownloadAnchor>;
+  }
+  return (
+    <a
+      className="text-primary hover:underline flex gap-1.5 items-center"
+      target="_blank"
+      rel="noreferrer"
+      {...toAny(props)}
+    >
+      <LinkIcon className="size-3.5" />
+      <WordByWordFadeIn>{children}</WordByWordFadeIn>
+    </a>
+  );
+};
+
+type MarkdownImageProps = ComponentPropsWithoutRef<"img"> & { node?: unknown };
+
+/** Images; a sandbox-style src resolves to the generated file's inline URL. */
+const MarkdownImage = ({ node, ...props }: MarkdownImageProps) => {
+  const artifacts = useContext(MessageArtifactsContext);
+  const { src, alt, ...rest } = props;
+  if (typeof src !== "string" || src.length === 0) return null;
+
+  let resolved: string | undefined = src;
+  if (isSandboxLikeHref(src)) {
+    const match = resolveArtifactLink(src, artifacts);
+    resolved = match?.url ? inlinePreviewUrl(match.url) : undefined;
+  }
+  return resolved ? (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img className="mx-auto rounded-lg" src={resolved} alt={alt} {...rest} />
+  ) : null;
+};
+
 const components: Partial<Components> = {
   table: ({ node, children, ...props }) => {
     return (
@@ -127,19 +225,7 @@ const components: Partial<Components> = {
       </span>
     );
   },
-  a: ({ node, children, ...props }) => {
-    return (
-      <a
-        className="text-primary hover:underline flex gap-1.5 items-center"
-        target="_blank"
-        rel="noreferrer"
-        {...toAny(props)}
-      >
-        <LinkIcon className="size-3.5" />
-        <WordByWordFadeIn>{children}</WordByWordFadeIn>
-      </a>
-    );
-  },
+  a: MarkdownAnchor,
   h1: ({ node, children, ...props }) => {
     return (
       <h1 className="text-3xl font-semibold mt-6 mb-2" {...props}>
@@ -182,14 +268,7 @@ const components: Partial<Components> = {
       </h6>
     );
   },
-  img: ({ node, children, ...props }) => {
-    const { src, alt, ...rest } = props;
-
-    return src ? (
-      // eslint-disable-next-line @next/next/no-img-element
-      <img className="mx-auto rounded-lg" src={src} alt={alt} {...rest} />
-    ) : null;
-  },
+  img: MarkdownImage,
 };
 
 const MarkdownBlock = memo(
@@ -199,6 +278,7 @@ const MarkdownBlock = memo(
         components={components}
         remarkPlugins={[remarkGfm, remarkMath]}
         rehypePlugins={[rehypeKatex]}
+        urlTransform={markdownUrlTransform}
       >
         {content}
       </ReactMarkdown>

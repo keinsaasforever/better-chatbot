@@ -17,6 +17,16 @@ type DesktopUpdateState =
   | { status: "downloaded"; version: string }
   | { status: "error"; message: string };
 
+type DesktopBrowserSignInInput = {
+  page: "sign-in" | "sign-up";
+  provider: string;
+  callbackUrl?: string;
+};
+
+type DesktopBrowserSignInFailure = {
+  reason: "expired" | "mismatch" | "verify_failed" | "network";
+};
+
 contextBridge.exposeInMainWorld("desktop", {
   platform: process.platform,
   getVersion: () => ipcRenderer.invoke("desktop:get-version"),
@@ -56,6 +66,19 @@ contextBridge.exposeInMainWorld("desktop", {
   audit: {
     log: (event: unknown) => ipcRenderer.invoke("audit:log", event),
   },
+  billing: {
+    /**
+     * Fires when the in-app Stripe window closes, so the renderer can refetch
+     * the customer instead of sitting on a stale credit balance.
+     */
+    onCheckoutClosed: (callback: () => void) => {
+      const listener = () => callback();
+      ipcRenderer.on("billing:checkout-closed", listener);
+      return () => {
+        ipcRenderer.removeListener("billing:checkout-closed", listener);
+      };
+    },
+  },
   notifications: {
     show: (payload: {
       kind: "complete" | "needs_approval" | "needs_input" | "error";
@@ -79,12 +102,38 @@ contextBridge.exposeInMainWorld("desktop", {
       ipcRenderer.invoke("updates:get-state") as Promise<DesktopUpdateState>,
     downloadAndInstall: () =>
       ipcRenderer.invoke("updates:download-and-install") as Promise<void>,
+    checkNow: () => ipcRenderer.invoke("updates:check") as Promise<void>,
+    restartAndInstall: () =>
+      ipcRenderer.invoke("updates:restart-and-install") as Promise<void>,
     onStateChange: (callback: (state: DesktopUpdateState) => void) => {
       const listener = (_event: unknown, state: DesktopUpdateState) =>
         callback(state);
       ipcRenderer.on("updates:state-changed", listener);
       return () => {
         ipcRenderer.removeListener("updates:state-changed", listener);
+      };
+    },
+  },
+  auth: {
+    /**
+     * Identity providers refuse OAuth inside embedded web views, so social
+     * sign-in runs in the system browser and returns through a keinsaas://
+     * deep link (see main/desktop-auth.ts).
+     */
+    startBrowserSignIn: (input: DesktopBrowserSignInInput) =>
+      ipcRenderer.invoke("auth:start-browser-sign-in", input) as Promise<{
+        ok: boolean;
+      }>,
+    onBrowserSignInFailed: (
+      callback: (failure: DesktopBrowserSignInFailure) => void,
+    ) => {
+      const listener = (
+        _event: unknown,
+        failure: DesktopBrowserSignInFailure,
+      ) => callback(failure);
+      ipcRenderer.on("auth:browser-sign-in-failed", listener);
+      return () => {
+        ipcRenderer.removeListener("auth:browser-sign-in-failed", listener);
       };
     },
   },
@@ -126,6 +175,9 @@ declare global {
       audit: {
         log: (event: unknown) => Promise<void>;
       };
+      billing: {
+        onCheckoutClosed: (callback: () => void) => () => void;
+      };
       notifications: {
         show: (payload: {
           kind: "complete" | "needs_approval" | "needs_input" | "error";
@@ -141,8 +193,18 @@ declare global {
       updates: {
         getState: () => Promise<DesktopUpdateState>;
         downloadAndInstall: () => Promise<void>;
+        checkNow: () => Promise<void>;
+        restartAndInstall: () => Promise<void>;
         onStateChange: (
           callback: (state: DesktopUpdateState) => void,
+        ) => () => void;
+      };
+      auth: {
+        startBrowserSignIn: (
+          input: DesktopBrowserSignInInput,
+        ) => Promise<{ ok: boolean }>;
+        onBrowserSignInFailed: (
+          callback: (failure: DesktopBrowserSignInFailure) => void,
         ) => () => void;
       };
     };

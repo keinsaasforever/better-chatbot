@@ -3,6 +3,7 @@ import type {
   BillingContext,
   CreatedUser,
   Feature,
+  NotificationEmail,
   OrganizationInvitation,
   PasswordResetEmail,
 } from "./types";
@@ -57,13 +58,6 @@ export async function requireFeature(
   _input: { customerId?: string | null; entityId?: string } = {},
 ): Promise<void> {}
 
-/** No billing record of usage, so callers fall back to database counts. */
-export async function getBilledTokenTotal(
-  _customerId: string,
-): Promise<number | null> {
-  return null;
-}
-
 /** No CRM to sync new accounts into. */
 export async function onUserCreated(_user: CreatedUser): Promise<void> {}
 
@@ -73,6 +67,11 @@ export async function onUserCreated(_user: CreatedUser): Promise<void> {}
  */
 export async function sendOrgInvitationEmail(
   _invitation: OrganizationInvitation,
+): Promise<void> {}
+
+/** Likewise for operator notifications such as problem reports. */
+export async function sendNotificationEmail(
+  _email: NotificationEmail,
 ): Promise<void> {}
 
 /**

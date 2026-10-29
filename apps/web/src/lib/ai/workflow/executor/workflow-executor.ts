@@ -1,5 +1,9 @@
 import { NodeKind } from "../workflow.interface";
-import { createGraphStore, WorkflowRuntimeState } from "./graph-store";
+import {
+  createGraphStore,
+  type WorkflowCaller,
+  WorkflowRuntimeState,
+} from "./graph-store";
 import { createStateGraph, graphNode, StateGraphRegistry } from "ts-edge";
 import {
   conditionNodeExecutor,
@@ -68,11 +72,14 @@ export const createWorkflowExecutor = (workflow: {
   nodes: DBNode[];
   edges: DBEdge[];
   logger?: ConsolaInstance;
+  /** Required for MCP tool nodes; they run with this user's access. */
+  caller?: WorkflowCaller;
 }) => {
   // Create runtime state store for the workflow
   const store = createGraphStore({
     nodes: workflow.nodes,
     edges: workflow.edges,
+    caller: workflow.caller,
   });
 
   const logger =

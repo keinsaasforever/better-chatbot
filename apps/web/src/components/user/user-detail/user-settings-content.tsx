@@ -5,30 +5,21 @@ import { fetcher } from "lib/utils";
 import useSWR from "swr";
 import { UserDetail } from "./user-detail";
 import { UserDetailContentSkeleton } from "./user-detail-content-skeleton";
-import { UserStatisticsCard } from "./user-statistics-card";
 
 type SettingsContext = {
   currentUserId: string;
   user: BasicUserWithLastLogin;
   userAccountInfo: { hasPassword: boolean; oauthProviders: string[] };
-  stats: {
-    threadCount: number;
-    messageCount: number;
-    modelStats: Array<{
-      model: string;
-      messageCount: number;
-      totalTokens: number;
-      provider: string;
-    }>;
-    totalTokens: number;
-    period: string;
-  };
 };
 
 /**
- * Client-side self-view settings content. Fetches user, accounts and stats in a
- * single request the first time it mounts (which only happens when the settings
- * drawer opens), replacing the layout's eager per-page-load server render.
+ * Client-side self-view settings content. Fetches user and accounts in a single
+ * request the first time it mounts (which only happens when the settings drawer
+ * opens), replacing the layout's eager per-page-load server render.
+ *
+ * Usage deliberately lives on `/usage` only. It used to be rendered here as
+ * well, which meant the same numbers in two places and a 30-day aggregation on
+ * every drawer open.
  */
 export function UserSettingsContent({
   view = "user",
@@ -50,12 +41,6 @@ export function UserSettingsContent({
       user={data.user}
       currentUserId={data.currentUserId}
       userAccountInfo={data.userAccountInfo}
-      userStatsSlot={
-        <UserStatisticsCard
-          stats={{ ...data.stats, period: "Last 30 Days" }}
-          view={view}
-        />
-      }
     />
   );
 }

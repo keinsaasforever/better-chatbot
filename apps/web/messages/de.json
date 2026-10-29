@@ -41,11 +41,16 @@
     "failedToGenerateInput": "Eingabegenerierung fehlgeschlagen",
     "createWithExample": "Mit Beispiel erstellen",
     "resultsFound": "{count} Ergebnisse gefunden",
-    "youAreAnExpertIn": "Du bist ein Experte für {role}",
     "sharedBy": "Geteilt von {userName}",
-    "changeVisibility": "Sichtbarkeit ändern"
+    "changeVisibility": "Sichtbarkeit ändern",
+    "copy": "Kopieren",
+    "deleteMessage": "Nachricht löschen"
   },
-  "Error": {},
+  "Error": {
+    "title": "Auf dieser Seite ist ein Fehler aufgetreten.",
+    "description": "Die Seite ist auf einen unerwarteten Fehler gestoßen. Dein Chat ist gespeichert — versuche es erneut.",
+    "retry": "Erneut versuchen"
+  },
   "Info": {
     "mcpAddingDisabled": "Das Hinzufügen von MCP-Servern wurde vom Administrator deaktiviert."
   },
@@ -206,10 +211,61 @@
       "emailAlreadyExists": "E-Mail existiert bereits",
       "nameRequired": "Name ist erforderlich",
       "passwordRequired": "Passwort ist erforderlich",
-      "createAccount": "Konto erstellen"
+      "createAccount": "Konto erstellen",
+      "accountCreated": "Konto erstellt"
     },
     "Intro": {
       "description": "Willkommen bei keinsaas navigator. Melden Sie sich an, um eine neue Art des Arbeitens zu erleben."
+    },
+    "Desktop": {
+      "continueInBrowser": "Im Browser fortfahren",
+      "continueInBrowserDescription": "Wir haben Ihren Browser geöffnet, um die Anmeldung abzuschließen. Dieses Fenster aktualisiert sich, sobald Sie fertig sind.",
+      "openBrowserAgain": "Browser erneut öffnen",
+      "back": "Zurück",
+      "handoffFailed": "Die Anmeldung konnte in der App nicht abgeschlossen werden. Bitte versuchen Sie es erneut.",
+      "handoffExpired": "Der Anmeldelink ist abgelaufen. Bitte starten Sie erneut aus der App.",
+      "handoffTitle": "Zurück zu Keinsaas Navigator",
+      "handoffDescription": "Sie sind angemeldet. Kehren Sie zur App zurück, um fortzufahren. Diesen Tab können Sie anschließend schließen.",
+      "returnToApp": "Keinsaas Navigator öffnen",
+      "handoffHint": "Nichts passiert? Verwenden Sie die Schaltfläche oben oder starten Sie die Anmeldung erneut aus der App.",
+      "invalidLinkTitle": "Dieser Anmeldelink ist ungültig",
+      "invalidLinkDescription": "Starten Sie die Anmeldung erneut aus der Keinsaas Navigator App."
+    },
+    "Captcha": {
+      "failed": "Die Sicherheitsprüfung konnte nicht geladen werden. Ihre Anfrage wird möglicherweise abgelehnt – laden Sie die Seite neu."
+    }
+  },
+  "Invitation": {
+    "joinedTitle": "Willkommen an Bord!",
+    "joinedDescription": "Ihr Arbeitsbereich wird eingerichtet, einen Moment…",
+    "failedTitle": "Etwas ist schiefgelaufen",
+    "failedFallback": "Wir konnten Sie diesem Arbeitsbereich nicht hinzufügen. Es wurde nichts geändert — bitte versuchen Sie es erneut.",
+    "tryAgain": "Erneut versuchen",
+    "continueToWorkspace": "Weiter zu Ihrem Arbeitsbereich",
+    "pending": {
+      "title": "Sie wurden eingeladen!",
+      "descriptionWithInviter": "<em>{inviter}</em> hat Sie eingeladen, <em>{organization}</em> beizutreten.",
+      "description": "Sie wurden eingeladen, <em>{organization}</em> beizutreten.",
+      "accept": "Annehmen und {organization} beitreten",
+      "joining": "Beitreten…",
+      "decline": "Ablehnen"
+    },
+    "alreadyMember": {
+      "title": "Sie sind bereits Mitglied",
+      "description": "Diese Einladung zu <em>{organization}</em> wurde bereits angenommen.",
+      "continue": "Weiter zu {organization}"
+    },
+    "wrongAccount": {
+      "title": "Diese Einladung gilt einem anderen Konto",
+      "description": "Sie wurde an <em>{email}</em> gesendet. Melden Sie sich mit dieser Adresse an, um sie anzunehmen.",
+      "switchAccount": "Abmelden und Konto wechseln"
+    },
+    "unavailable": {
+      "title": "Einladung nicht verfügbar",
+      "expired": "Diese Einladung zu {organization} ist abgelaufen. Bitten Sie um eine neue.",
+      "declined": "Sie haben diese Einladung zu {organization} abgelehnt. Bitten Sie um eine neue, falls das ein Versehen war.",
+      "revoked": "Diese Einladung zu {organization} wurde zurückgezogen.",
+      "notFound": "Dieser Einladungslink ist nicht mehr gültig."
     }
   },
   "Chat": {
@@ -223,6 +279,52 @@
     "imageSizeMustBeLessThan10MB": "Bildgröße muss unter 10MB sein",
     "failedToUploadImage": "Bild-Upload fehlgeschlagen",
     "imageUploadFailedUsingBase64": "Bild-Upload fehlgeschlagen. Verwende Base64-Kodierung als Ausweichlösung.",
+    "imageModelAuto": "Automatisch",
+    "imageModelAutoHint": "Wählt das passende Modell für Bearbeitungen oder neue Bilder",
+    "attachmentOpenImage": "Bild öffnen",
+    "attachmentDownload": "Herunterladen",
+    "MaskEditor": {
+      "title": "Bereich zum Ändern markieren",
+      "hint": "Übermalen Sie den Teil des Fotos, den das Modell verändern darf. Alles andere bleibt exakt so, wie es ist.",
+      "canvasLabel": "Maskenbereich zum Malen",
+      "brushSize": "Pinselgröße",
+      "undo": "Rückgängig",
+      "clear": "Löschen",
+      "apply": "Maske anwenden",
+      "applying": "Maske wird gespeichert...",
+      "open": "Bereich maskieren",
+      "edit": "Maske bearbeiten",
+      "remove": "Maske entfernen",
+      "badge": "Maskiert",
+      "uploadFailed": "Die Maske konnte nicht gespeichert werden. Bitte versuchen Sie es erneut."
+    },
+    "KnowledgeBase": {
+      "menuLabel": "Wissensdatenbank",
+      "addDocuments": "Dokumente hinzufügen",
+      "attachHint": "Hinzufügen, damit das Modell in diesem Chat darin suchen kann.",
+      "knowledgeBases": "Wissensdatenbanken",
+      "empty": "Noch keine Wissensdatenbank vorhanden.",
+      "chipDescription": "Wird in diesem Chat nach Kontext durchsucht",
+      "createTitle": "Neue Wissensdatenbank",
+      "uploadTitle": "Dokumente hinzufügen",
+      "dialogDescription": "Dokumente in einer Wissensdatenbank werden nach relevantem Kontext durchsucht, sobald sie einem Chat hinzugefügt oder an einen Agenten gebunden ist.",
+      "targetLabel": "Wissensdatenbank",
+      "createNew": "+ Neue Wissensdatenbank erstellen",
+      "nameLabel": "Name",
+      "namePlaceholder": "z. B. Deutsches Baurecht",
+      "filesLabel": "Dateien",
+      "filesOptional": "Optional. Dokumente können später hinzugefügt werden.",
+      "upload": "Hochladen",
+      "submitting": "Wird hochgeladen...",
+      "errorNoName": "Bitte die neue Wissensdatenbank benennen.",
+      "errorNoFile": "Bitte mindestens eine Datei auswählen.",
+      "errorCreate": "Wissensdatenbank konnte nicht erstellt werden. Bitte erneut versuchen.",
+      "errorUpload": "Upload fehlgeschlagen. Bitte erneut versuchen.",
+      "createSuccess": "\"{name}\" erstellt und diesem Chat hinzugefügt.",
+      "uploadSuccess": "{count, plural, one {# Datei} other {# Dateien}} hochgeladen. Wird in \"{name}\" verarbeitet.",
+      "errorAttach": "Die Wissensdatenbanken dieses Chats konnten nicht gespeichert werden. Bitte erneut versuchen.",
+      "errorTooMany": "In einem Chat können bis zu {count} Wissensdatenbanken durchsucht werden."
+    },
     "Greeting": {
       "goodMorning": "Guten Morgen, {name}",
       "goodAfternoon": "Guten Tag, {name}",
@@ -248,7 +350,26 @@
     "stopGenerating": "Generierung stoppen",
     "voiceDictation": "Spracheingabe",
     "stopDictation": "Diktat stoppen",
+    "sendMessage": "Nachricht senden",
     "Tool": {
+      "generatedFiles": "Erstellte Dateien",
+      "download": "Herunterladen",
+      "downloadFile": "{filename} herunterladen",
+      "fileUnavailable": "Datei nicht verfügbar",
+      "codeGenerating": "Code wird generiert...",
+      "codeWorking": "In Arbeit",
+      "codeCompleted": "Abgeschlossen",
+      "codeError": "Fehler",
+      "run": "Ausführen",
+      "copy": "Kopieren",
+      "openInNewTab": "In neuem Tab öffnen",
+      "pdfDocument": "PDF-Dokument",
+      "pdfLoading": "PDF wird geladen...",
+      "pdfLoadingFull": "Vollständiges Dokument wird geladen...",
+      "pdfLoadFailed": "PDF-Dokument konnte nicht geladen werden",
+      "pdfPreviewOnly": "Vorschau verfügbar. Das vollständige Dokument konnte nicht geladen werden.",
+      "pdfPreviewAlt": "Vorschau von {title}",
+      "pdfPages": "{count, plural, one {# Seite} other {# Seiten}}",
       "toolCalls": "Tool-Aufrufe",
       "toolCallCount": "{count, plural, one {# Tool-Aufruf} other {# Tool-Aufrufe}}",
       "webSearching": "Durchsuche das Web...",
@@ -258,6 +379,7 @@
       "autoToolModeDescription": "Entscheidet, wann Werkzeuge und Skills verwendet werden, ohne Sie zu fragen",
       "manualToolModeDescription": "Fragt um Erlaubnis, bevor Werkzeuge verwendet werden",
       "noneToolModeDescription": "Keine Werkzeuge verwenden. @Erwähnung ist weiterhin verfügbar.",
+      "planToolModeDescription": "Recherchiert zuerst mit parallelen Agenten und liefert dann einen Schritt-für-Schritt-Plan als Artefakt. Es wird nichts ausgeführt oder verändert — ideal, um ein Vorgehen zu prüfen, bevor die Arbeit beginnt.",
       "toolsSetup": "Werkzeug-Einrichtung",
       "preset": "Voreinstellung",
       "toolPresets": "Werkzeug-Voreinstellungen",
@@ -276,13 +398,15 @@
         "http": "HTTP-Anfrage",
         "code": "Code-Ausführung",
         "document": "Dokumentenanalyse",
-        "tabular": "Tabellarische Überprüfung"
+        "tabular": "Tabellarische Überprüfung",
+        "browserAutomation": "Browser-Automatisierung"
       }
     },
     "VoiceChat": {
       "title": "Sprach-Chat-Modus",
       "compactDisplayMode": "Kompakte Anzeigemode",
       "conversationDisplayMode": "Gesprächsanzeigemode",
+      "openInChat": "Im Chat öffnen",
       "pleaseCloseTheVoiceChatAndTryAgain": "Bitte schließen Sie den Sprach-Chat und versuchen Sie es erneut.",
       "startConversation": "Gespräch starten",
       "closeMic": "Mikrofon schließen",
@@ -293,6 +417,12 @@
       "yourMicIsOff": "Ihr Mikrofon ist aus.",
       "preparing": "Vorbereitung...",
       "startVoiceChat": "Sprach-Chat starten?",
+      "Browser": {
+        "title": "Browser",
+        "hide": "Ausblenden",
+        "watchOnly": "Nur Ansicht – der Assistent steuert",
+        "steps": "Schritt {count}"
+      },
       "Devices": {
         "menuLabel": "Sprachgeräte",
         "title": "Sprachgeräte",
@@ -341,6 +471,45 @@
         "historyIgnored": "Ignoriert",
         "historyStored": "Gespeichert",
         "historyActionsCount": "{count} Aktionen"
+      },
+      "stopAnswer": "Antwort stoppen",
+      "Settings": {
+        "title": "Spracheinstellungen",
+        "reset": "Zurücksetzen",
+        "voice": "Stimme",
+        "voiceNextSession": "Die neue Stimme gilt ab dem nächsten Gespräch.",
+        "speed": "Sprechtempo",
+        "speedValue": "{value, number}×",
+        "speedHint": "Wiedergabetempo der Antwort. Eine Änderung während einer Antwort gilt ab der nächsten.",
+        "interruptions": "Unterbrechen erlauben",
+        "interruptionsOnHint": "Sprich in die Antwort hinein, um sie zu unterbrechen. Über Lautsprecher kann sich der Assistent selbst hören, Kopfhörer funktionieren am besten.",
+        "interruptionsOffHint": "Das Mikrofon pausiert, solange der Assistent spricht. Am sichersten mit Lautsprechern.",
+        "turnDetection": "Satzende-Erkennung",
+        "turnSemantic": "Semantisch (erkennt, wann du fertig bist)",
+        "turnServer": "Stille (pausenbasiert)",
+        "eagerness": "Antwortzeitpunkt",
+        "eagernessOption": {
+          "low": "Geduldig (mehr Zeit zum Nachdenken)",
+          "medium": "Ausgewogen",
+          "high": "Schnell",
+          "auto": "Automatisch"
+        },
+        "silenceDuration": "Pause vor der Antwort",
+        "threshold": "Empfindlichkeitsschwelle",
+        "thresholdValue": "{value, number}",
+        "prefixPadding": "Audio-Vorlauf vor dem Sprechen",
+        "milliseconds": "{value, number} ms",
+        "noiseReduction": "Rauschunterdrückung",
+        "noiseOption": {
+          "near_field": "Headset oder nahes Mikrofon",
+          "far_field": "Laptop- oder Raummikrofon",
+          "off": "Aus"
+        },
+        "statusPending": "Wird nach der aktuellen Antwort übernommen.",
+        "statusConfirmed": "Vom Server bestätigt.",
+        "statusMismatch": "Vom Server nicht bestätigt: {fields}",
+        "statusUnverifiable": "Der Server hat diese Einstellungen nicht zurückgemeldet, sie lassen sich nicht prüfen.",
+        "statusWaiting": "Warte auf Bestätigung durch den Server…"
       }
     },
     "Thread": {
@@ -400,8 +569,139 @@
       "linkCopied": "Link in Zwischenablage kopiert",
       "confirmDeleteExport": "Sind Sie sicher, dass Sie diesen Export löschen möchten? Diese Aktion kann nicht rückgängig gemacht werden.",
       "exportDeleted": "Export erfolgreich gelöscht",
-      "failedToDeleteExport": "Export-Löschung fehlgeschlagen"
-    }
+      "failedToDeleteExport": "Export-Löschung fehlgeschlagen",
+      "notificationSettings": {
+        "title": "Benachrichtigungseinstellungen",
+        "description": "Erhalte eine Desktop-Benachrichtigung, wenn ein Agent fertig ist oder deine Aufmerksamkeit braucht.",
+        "desktopAlerts": "Desktop-Benachrichtigungen",
+        "desktopAlertsDescription": "Benachrichtigungen anzeigen, wenn Agenten fertig sind, eine Freigabe brauchen oder auf einen Fehler stoßen.",
+        "onlyWhenAway": "Nur wenn ich abwesend bin",
+        "onlyWhenAwayDescription": "Keine Benachrichtigungen, während du Navigator aktiv nutzt.",
+        "hideTaskDetails": "Aufgabendetails ausblenden",
+        "hideTaskDetailsDescription": "Benachrichtigungen melden nur, dass ein Agent dich braucht, ohne Aufgabennamen zu zeigen.",
+        "weeklyReminders": "Wöchentliche Erinnerungen",
+        "weeklyRemindersDescription": "Erhalte montags einen sanften Hinweis, zu Navigator zurückzukehren.",
+        "permissionTitle": "Systemberechtigung",
+        "permissionDefaultStatus": "Dieser Browser hat Benachrichtigungen noch nicht erlaubt.",
+        "permissionGrantedStatus": "Dieser Browser darf Benachrichtigungen anzeigen.",
+        "permissionDeniedStatus": "Dieser Browser blockiert Benachrichtigungen. Aktiviere sie in den Browsereinstellungen.",
+        "permissionUnsupported": "Dieser Browser unterstützt keine Desktop-Benachrichtigungen.",
+        "permissionDesktop": "Desktop-Benachrichtigungen nutzen die Systemhinweise von macOS oder Windows.",
+        "enableNotifications": "Benachrichtigungen aktivieren",
+        "sendTest": "Test senden",
+        "testSent": "Testbenachrichtigung gesendet",
+        "permissionGranted": "Benachrichtigungen aktiviert",
+        "permissionDenied": "Benachrichtigungen wurden blockiert",
+        "saved": "Benachrichtigungseinstellungen gespeichert",
+        "saveFailed": "Benachrichtigungseinstellungen konnten nicht gespeichert werden"
+      }
+    },
+    "connectionInterrupted": "Die Verbindung wurde unterbrochen, bevor die Antwort fertig war.",
+    "recoveringAnswer": "Prüfe, ob die Antwort fertig ist…",
+    "answerStillRunning": "Die Antwort wird noch auf dem Server erstellt. Sie erscheint hier, sobald sie fertig ist, auch wenn Sie die App schließen.",
+    "creditsExhausted": "Sie haben alle in Ihrem Tarif enthaltenen Credits verbraucht. Führen Sie ein Upgrade durch, um weiterzumachen.",
+    "creditsExhaustedHasPro": "Sie haben alle in Ihrem Tarif enthaltenen Credits verbraucht. Kaufen Sie weitere Credits, um weiterzumachen.",
+    "Artifact": {
+      "fileReady": "Zum Ansehen klicken",
+      "download": "Herunterladen",
+      "previewUnavailable": "Dieser Dateityp kann hier nicht angezeigt werden.",
+      "sheetLoading": "Arbeitsmappe wird gelesen…",
+      "sheetLoadFailed": "Diese Arbeitsmappe konnte nicht gelesen werden.",
+      "sheetTooLarge": "Diese Arbeitsmappe ist zu groß für eine Vorschau.",
+      "sheetEmpty": "Dieses Blatt ist leer.",
+      "sheetTruncated": "{rows} von {totalRows} Zeilen und {columns} von {totalColumns} Spalten werden angezeigt.",
+      "attachmentOpen": "Zum Ansehen klicken",
+      "attachmentDownload": "Zum Herunterladen klicken",
+      "attachmentSharedNotice": "Nur die Inhaberin oder der Inhaber dieses Chats kann sie öffnen",
+      "openAttachment": "Anhang öffnen",
+      "documentLoading": "Dokument wird gelesen…",
+      "documentLoadFailed": "Dieses Dokument konnte nicht gelesen werden.",
+      "documentTooLarge": "Dieses Dokument ist zu groß für eine Vorschau.",
+      "slidesEmpty": "Aus dieser Datei konnten keine Folien gelesen werden.",
+      "slidesPartial": "Nur Text. Diagramme, SmartArt, eingebettete Dateien und Notizen werden nicht angezeigt.",
+      "slideHidden": "Ausgeblendet",
+      "textTruncated": "Es wird nur der Anfang dieser Datei angezeigt.",
+      "textDecodeWarning": "Einige Bytes waren kein gültiges UTF-8 und wurden ersetzt.",
+      "pdfOpenInViewer": "PDF öffnen",
+      "pdfIosHint": "Safari zeigt PDFs in der eigenen Vorschau. Dort öffnen und mit Teilen → In Dateien sichern speichern."
+    },
+    "Browser": {
+      "statusStarting": "Browser wird gestartet…",
+      "statusRunning": "Arbeitet im Browser…",
+      "statusDone": "Zum Ansehen klicken",
+      "statusFailed": "Browser fehlgeschlagen — zum Ansehen klicken",
+      "statusBlocked": "Benötigt eine Person — zum Ansehen klicken",
+      "statusAwaitingUser": "Wartet auf dich — zum Fortfahren öffnen",
+      "sessionEnded": "Diese Browsersitzung ist beendet. Die Ansicht unten ist nicht mehr live.",
+      "blockedTitle": "Gestoppt — diese Seite benötigt eine Person",
+      "blockedFallbackReason": "Die Seite hat etwas verlangt, das keine Automatisierung liefern kann.",
+      "blockedHint": "Der Browser wurde geschlossen. Um an einer solchen Prüfung vorbeizukommen, verbinde die Website in den Organisationseinstellungen und melde dich einmal von Hand an.",
+      "couldNotStartTitle": "Browser konnte nicht starten",
+      "unknownError": "Unbekannter Fehler.",
+      "handoffTimedOutTitle": "Browser-Übergabe abgelaufen",
+      "handoffTimedOutBody": "Niemand hat den Lauf fortgesetzt, daher wurde der Browser freigegeben. Bitte den Chat, die Aufgabe erneut zu starten.",
+      "awaitingUserTitle": "Du bist dran — der Agent wartet",
+      "awaitingUserFallbackRequest": "Erledige unten, was die Seite verlangt."
+    },
+    "CreateAgent": {
+      "title": "Agent erstellen",
+      "nameLabel": "Name",
+      "descriptionLabel": "Beschreibung",
+      "promptLabel": "Anweisungen",
+      "toolsLabel": "Werkzeuge",
+      "filesLabel": "Dateien",
+      "scheduleLabel": "Zeitplan",
+      "noSchedule": "Kein Zeitplan",
+      "addSchedule": "Zeitplan hinzufügen",
+      "editSchedule": "Bearbeiten",
+      "create": "Agent erstellen",
+      "creating": "Wird erstellt…",
+      "cancel": "Abbrechen",
+      "created": "„{name}\" wurde erstellt.",
+      "createdBadge": "Erstellt",
+      "cancelledBadge": "Abgebrochen",
+      "createFailed": "Der Agent konnte nicht erstellt werden.",
+      "scheduleFailed": "Der Agent wurde erstellt, aber sein Zeitplan konnte nicht gespeichert werden.",
+      "noPermission": "Sie haben keine Berechtigung, Agenten zu erstellen.",
+      "nameAndPromptRequired": "Name und Anweisungen sind erforderlich."
+    },
+    "Hitl": {
+      "email": {
+        "title": "E-Mail-Editor",
+        "to": "An",
+        "toPlaceholder": "empfaenger@beispiel.de",
+        "subject": "Betreff",
+        "subjectPlaceholder": "Betreffzeile…",
+        "bodyPlaceholder": "E-Mail-Text…",
+        "generating": "E-Mail-Text wird erstellt…",
+        "preview": "Vorschau",
+        "edit": "Bearbeiten",
+        "reject": "Ablehnen",
+        "approve": "Freigeben & senden",
+        "approvedBadge": "E-Mail freigegeben",
+        "rejectedBadge": "E-Mail abgelehnt",
+        "invalidRecipient": "Gültige Empfängeradresse eingeben"
+      },
+      "plan": {
+        "title": "Plan-Freigabe erforderlich",
+        "taskPlaceholder": "Aufgabenbeschreibung…",
+        "deleteTask": "Aufgabe löschen",
+        "commentPlaceholder": "Diesen Plan kommentieren oder ein anderes Vorgehen beschreiben…",
+        "commentLabel": "Diesen Plan kommentieren",
+        "sendComment": "Kommentar senden",
+        "reject": "Plan ablehnen",
+        "approve": "Freigeben & fortfahren"
+      },
+      "input": {
+        "title": "Eingabe erforderlich",
+        "submitted": "Gesendet",
+        "submit": "Senden",
+        "answerPlaceholder": "Antwort eingeben…",
+        "otherPlaceholder": "Oder eigene Antwort eingeben…",
+        "hint": "Wähle eine Option oder gib eine eigene Antwort ein."
+      }
+    },
+    "modelPriceTooltip": "{price} pro 1 Mio. Tokens (Eingabe / Ausgabe)"
   },
   "Layout": {
     "workflow": "Workflow",
@@ -460,7 +760,34 @@
     "reportAnIssue": "Problem melden",
     "joinDiscord": "Discord beitreten",
     "manageOrganization": "Verwalten",
-    "switchWorkspace": "Arbeitsbereich wechseln"
+    "switchWorkspace": "Arbeitsbereich wechseln",
+    "personalWorkspaceTag": "Persönlich",
+    "userSettings": "Benutzereinstellungen",
+    "profile": "Profil",
+    "usage": "Verbrauch",
+    "inviteFriends": "Freunde einladen, Credits verdienen",
+    "switchWorkspaceFailed": "Arbeitsbereich konnte nicht gewechselt werden",
+    "workspaceMode": {
+      "work": "Arbeiten",
+      "cockpit": "Cockpit",
+      "label": "Arbeitsmodus"
+    }
+  },
+  "ProblemReport": {
+    "title": "Problem melden",
+    "description": "Beschreibe, was schiefgelaufen ist. Diktiere oder tippe es und hänge bei Bedarf Screenshots an.",
+    "placeholder": "Was ist passiert? Was hättest du stattdessen erwartet?",
+    "dictate": "Problem diktieren",
+    "stopDictation": "Diktat beenden",
+    "addScreenshot": "Screenshot hinzufügen",
+    "pasteHint": "oder Bild einfügen",
+    "removeScreenshot": "Screenshot {name} entfernen",
+    "tooManyScreenshots": "Du kannst höchstens {max} Screenshots anhängen.",
+    "unsupportedFile": "{name} ist kein Bild und wurde übersprungen.",
+    "screenshotTooLarge": "{name} ist größer als 10 MB und wurde übersprungen.",
+    "cancel": "Abbrechen",
+    "submit": "Meldung senden",
+    "submitFailed": "Meldung konnte nicht gesendet werden. Bitte versuche es erneut."
   },
   "Billing": {
     "title": "Wählen Sie Ihren Plan",
@@ -469,9 +796,12 @@
     "orgOwnerCanManage": "Als Inhaber oder Administrator können Sie unten Zahlung und Abonnement verwalten.",
     "orgContactAdmin": "Wenden Sie sich an einen Organisationsinhaber oder Administrator, um Zahlungsdaten oder den Plan zu ändern.",
     "currentPlan": "Aktueller Plan: {plan}",
+    "currentPlanBadge": "Aktueller Plan",
+    "purchasedBadge": "Gekauft",
+    "packRemaining": "Insgesamt {remaining} Credits übrig",
     "planFree": "Free",
     "planPro": "Pro",
-    "creditsUsedThisMonth": "{used} / {included} Credits in diesem Monat genutzt",
+    "creditsUsedCycle": "{used} / {included} Credits in dieser Abrechnungsperiode genutzt",
     "billingManagedByOrgAdmin": "Die Abrechnung wird von einem Organisationsinhaber oder Administrator verwaltet.",
     "manageBilling": "Abrechnung verwalten",
     "memberAllowanceTitle": "Dein monatliches KI-Guthaben",
@@ -482,7 +812,6 @@
     "memberAllowanceLoading": "Guthaben wird geladen…",
     "free": {
       "description": "Ideal für den Einstieg in KI-gestützte Gespräche",
-      "buttonWhenHasPro": "Zurück zur manuellen Arbeit 🥲",
       "feature1Primary": "100.000 Credits pro Monat",
       "feature1Secondary": "Reicht für ~200 Gespräche",
       "feature2Primary": "Websuche",
@@ -524,6 +853,56 @@
       "feature2Secondary": "Individuelle Konfiguration von MCP, Workflows und Agenten",
       "feature3Primary": "Premium-Support",
       "feature3Secondary": "Wir besorgen die besten Integrationen für Ihre Aufgaben & Sie haben dedizierte KI-Lösungsingenieure für Ihre Fragen"
+    },
+    "usageLimit": {
+      "title": "Nutzungslimit erreicht",
+      "titleWhenHasPro": "Keine Credits mehr",
+      "description": "Sie haben alle {included, number} Credits Ihres Plans verbraucht.",
+      "upgradePrompt": "Wechseln Sie zu Pro, um weiterzuarbeiten.",
+      "purchasePrompt": "Kaufen Sie weitere Credits, um weiterzumachen.",
+      "currentUsage": "Aktuelle Nutzung",
+      "currentUsageValue": "{used, number} / {included, number} Credits",
+      "personalWorkspaceTitle": "Das ist Ihr persönlicher Arbeitsbereich",
+      "personalWorkspaceBody": "Persönliche Arbeitsbereiche haben ein eigenes, getrenntes Guthaben. Credits, die für {workspace} gekauft wurden, werden dort abgerechnet, nicht hier.",
+      "personalWorkspaceBodyMultiple": "Persönliche Arbeitsbereiche haben ein eigenes, getrenntes Guthaben. Credits, die Ihr Team gekauft hat, werden im Arbeitsbereich des Teams abgerechnet, nicht hier.",
+      "upgrade": "Auf Pro upgraden",
+      "switchToWorkspace": "Zu {workspace} wechseln",
+      "dismiss": "Weiter erkunden"
+    },
+    "checkoutFailed": "Der Bezahlvorgang konnte nicht gestartet werden. Bitte versuchen Sie es erneut.",
+    "checkout": {
+      "confirm": "Bestätigen",
+      "save": "Speichern",
+      "price": "Preis",
+      "subscription": "Abonnement",
+      "viewDetails": "Details anzeigen",
+      "totalDueToday": "Heute fällig",
+      "plusUsagePrices": "+ Nutzungspreise",
+      "dueNextCycle": "Fällig im nächsten Zyklus ({date})",
+      "oneOffTitle": "{productName} kaufen",
+      "oneOffMessage": "Mit dem Bestätigen kaufen Sie {productName} und Ihre Karte wird sofort belastet.",
+      "updateTitle": "Plan aktualisieren",
+      "updateMessage": "Aktualisieren Sie Ihre im Voraus bezahlte Menge. Die anteilige Differenz wird Ihnen basierend auf Ihrem aktuellen Abrechnungszeitraum berechnet oder gutgeschrieben.",
+      "trialTitle": "Testphase für {productName} starten",
+      "trialMessage": "Mit dem Bestätigen starten Sie eine kostenlose Testphase von {productName}, die am {date} endet.",
+      "scheduledTitle": "{productName} ist bereits geplant",
+      "scheduledMessage": "Sie nutzen derzeit {currentProductName} und der Wechsel zu {productName} ist für den {date} geplant.",
+      "activeTitle": "Produkt bereits aktiv",
+      "activeMessage": "Sie haben dieses Produkt bereits abonniert.",
+      "enableTitle": "{productName} aktivieren",
+      "enableMessage": "Mit dem Bestätigen wird {productName} sofort aktiviert.",
+      "subscribeTitle": "{productName} abonnieren",
+      "subscribeMessage": "Mit dem Bestätigen abonnieren Sie {productName} und Ihre Karte wird sofort belastet.",
+      "renewTitle": "Verlängern",
+      "renewMessage": "Mit dem Bestätigen verlängern Sie Ihr Abonnement von {productName}.",
+      "upgradeTitle": "Upgrade auf {productName}",
+      "upgradeMessage": "Mit dem Bestätigen wechseln Sie auf {productName} und Ihre Zahlungsmethode wird sofort belastet.",
+      "downgradeTitle": "Downgrade auf {productName}",
+      "downgradeMessage": "Mit dem Bestätigen wird Ihr aktuelles Abonnement von {currentProductName} gekündigt und ein neues Abonnement von {productName} beginnt am {date}.",
+      "cancelTitle": "Kündigen",
+      "cancelMessage": "Mit dem Bestätigen endet Ihr Abonnement von {currentProductName} am {date}.",
+      "defaultTitle": "Abonnement ändern",
+      "defaultMessage": "Sie sind dabei, Ihr Abonnement zu ändern."
     }
   },
   "Archive": {
@@ -560,9 +939,6 @@
     "agentDescriptionLabel": "Fügen Sie eine kurze Beschreibung hinzu, was dieser Agent tut.",
     "agentDescriptionPlaceholder": "Dies ist nur eine Beschreibung des Agenten, nicht kritisch.",
     "agentSettingsDescription": "Hier sind Einstellungen, die den Agenten beeinflussen können.",
-    "thisAgentIs": "Dieser Agent ist ein Experte für",
-    "expertIn": "",
-    "agentRolePlaceholder": "Aktienanalyse",
     "agentInstructionsLabel": "Schreiben Sie gerne die Rolle, Persönlichkeit, Richtlinien, Wissen usw. des Agenten.",
     "agentInstructionsPlaceholder": "Dieser Agent hilft bei der Aktienanalyse. Er verwendet Web-Such-Werkzeuge, um Aktieninformationen zu erhalten...",
     "agentToolsLabel": "Fügen Sie Werkzeuge hinzu, die dieser Agent verwenden kann.",
@@ -602,7 +978,15 @@
     "public": "Öffentlich",
     "privateDescription": "Nur Sie können diesen Agenten anzeigen, bearbeiten und verwenden.",
     "readOnlyDescription": "Andere können ihn anzeigen und als Werkzeug verwenden, aber nur Sie können ihn bearbeiten.",
-    "publicDescription": "Jeder kann diesen Agenten anzeigen, bearbeiten und als Werkzeug verwenden."
+    "publicDescription": "Jeder kann diesen Agenten anzeigen, bearbeiten und als Werkzeug verwenden.",
+    "scheduleBrowser": {
+      "enable": "Browser-Automatisierung erlauben",
+      "enableDescription": "Dieser Lauf darf einen echten Browser steuern, ohne dass jemand zusieht. Browserzeit wird sekundengenau abgerechnet.",
+      "credentials": "Websites, bei denen sich dieser Lauf anmelden darf",
+      "noCredentials": "Noch keine gespeicherten Anmeldungen. Füge eine in den Organisationseinstellungen hinzu.",
+      "credentialsWarning": "Der Agent meldet sich damit selbstständig an. Er stoppt und meldet einen Fehler, wenn eine Seite eine Person benötigt."
+    },
+    "toolsNotAvailable": "Nicht verknüpft — diese Tools sind in deinem Workspace nicht verfügbar: {tools}"
   },
   "KeyboardShortcuts": {
     "title": "Tastenkombinationen",
@@ -766,7 +1150,8 @@
         "userDetailsCardTitle": "Benutzerdetails",
         "usageStatistics": "Nutzungsstatistiken",
         "noAiActivityYet": "Noch keine KI-Aktivität",
-        "totalTokens": "Gesamt-Tokens",
+        "totalTokens": "Modell-Tokens",
+        "totalTokensNote": "Rohe Tokens aus deinen eigenen Chats, keine Abrechnungs-Credits.",
         "models": "Modelle",
         "messages": "Nachrichten",
         "topModelsByTokenUsage": "Top-Modelle nach Token-Nutzung",
@@ -774,7 +1159,7 @@
         "avgTokensPerMessage": "Durchschn. Tokens/Nachricht",
         "topModel": "Top-Modell",
         "summary": "Zusammenfassung",
-        "tokensAcross": "{tokens} Tokens über {count} Modell{count, plural, =1 {} other {e}} in {period}.",
+        "tokensAcross": "{tokens} Tokens in {period}, verteilt auf {count, plural, =1 {dein meistgenutztes Modell} other {deine {count} meistgenutzten Modelle}}.",
         "mostActive": "Am aktivsten: {model} ({tokens} Tokens).",
         "summaryPrefix": "📊 Zusammenfassung: ",
         "uploadPhoto": "Foto hochladen",
@@ -980,6 +1365,850 @@
     "step1": "Besuchen Sie Smithery.ai und durchsuchen Sie die verfügbaren MCP-Server",
     "step2": "Wählen Sie einen Server aus und klicken Sie, um die Details anzuzeigen",
     "step3": "Kopieren Sie die Server-URL und fügen Sie sie hier ein",
-    "setupInSmithery": "In Smithery einrichten"
+    "setupInSmithery": "In Smithery einrichten",
+    "connectTools": "Tools verbinden",
+    "searchApps": "250+ Apps durchsuchen…",
+    "connect": "Verbinden",
+    "disconnect": "Trennen",
+    "loadMore": "Mehr laden",
+    "loading": "Wird geladen…",
+    "noToolsConnected": "Noch keine Tools verbunden",
+    "noToolsConnectedHint": "Verbinde Gmail, GitHub, Slack und 250+ weitere Apps. Deine KI nutzt sie automatisch.",
+    "connectFirstTool": "Erstes Tool verbinden",
+    "connectedApps": "Verbundene Apps",
+    "addMore": "Mehr hinzufügen",
+    "developerSection": "Entwicklerbereich",
+    "failedToLoadApps": "Apps konnten nicht geladen werden",
+    "failedToConnectApp": "App konnte nicht verbunden werden",
+    "failedToDisconnect": "Trennen fehlgeschlagen"
+  },
+  "Organization": {
+    "title": "Organisationen",
+    "subtitle": "Verwalte deine Organisationen und Teammitglieder",
+    "newOrganization": "Neue Organisation",
+    "personalWorkspace": "Persönlicher Arbeitsbereich",
+    "teamOrganization": "Team-Organisation",
+    "settings": "Einstellungen",
+    "members": "Mitglieder",
+    "noOrganizationsTitle": "Noch keine Organisationen",
+    "noOrganizationsDescription": "Erstelle deine erste Organisation, um mit anderen zusammenzuarbeiten",
+    "createOrganization": "Organisation erstellen",
+    "loading": "Wird geladen…",
+    "noActiveOrganization": "Keine aktive Organisation",
+    "organizationSettings": "Organisationseinstellungen",
+    "roles": {
+      "owner": "Inhaber",
+      "admin": "Admin",
+      "member": "Mitglied",
+      "memberDescription": "Kann Ressourcen der Organisation nutzen",
+      "adminDescription": "Kann Mitglieder einladen und Einstellungen verwalten"
+    },
+    "create": {
+      "title": "Organisation erstellen",
+      "description": "Erstelle eine Team-Organisation, um mit anderen zusammenzuarbeiten",
+      "nameLabel": "Name der Organisation",
+      "namePlaceholder": "Acme GmbH",
+      "slugLabel": "URL-Slug",
+      "slugPlaceholder": "acme-gmbh",
+      "slugHint": "Wird in URLs und Verweisen verwendet. Muss eindeutig sein.",
+      "submit": "Organisation erstellen",
+      "submitting": "Wird erstellt…",
+      "cancel": "Abbrechen",
+      "success": "Organisation „{name}“ erstellt",
+      "failed": "Organisation konnte nicht erstellt werden",
+      "createdButSwitchFailed": "Organisation erstellt, aber der Wechsel ist fehlgeschlagen"
+    },
+    "detail": {
+      "backToOrganizations": "Organisationen",
+      "back": "Zurück",
+      "settingsSuffix": "Einstellungen",
+      "organizationDetails": "Organisationsdetails",
+      "name": "Name",
+      "slug": "Slug",
+      "type": "Typ",
+      "billingId": "Abrechnungs-ID",
+      "membersDescription": "Verwalte, wer Zugriff auf diese Organisation hat",
+      "manageMembers": "Mitglieder verwalten",
+      "currentMembers": "Aktuelle Mitglieder",
+      "memberCount": "{count, plural, =1 {# Mitglied} other {# Mitglieder}}",
+      "inviteMember": "Mitglied einladen",
+      "inviteSomeone": "Lade jemanden zu {name} ein",
+      "inviteRestricted": "Nur Inhaber und Admins der Organisation können Einladungen versenden.",
+      "inviteRestrictedHint": "Bitte einen Inhaber oder Admin, Personen einzuladen, oder fordere eine Rollenänderung in dieser Organisation an."
+    },
+    "tabs": {
+      "members": "Mitglieder",
+      "invite": "Einladen",
+      "usage": "Nutzung",
+      "aiPolicy": "KI-Richtlinie",
+      "settings": "Einstellungen"
+    },
+    "membersTab": {
+      "empty": "Noch keine Mitglieder",
+      "roleUpdated": "Rolle aktualisiert",
+      "roleUpdateFailed": "Rolle konnte nicht aktualisiert werden",
+      "memberRemoved": "Mitglied entfernt",
+      "memberRemoveFailed": "Mitglied konnte nicht entfernt werden"
+    },
+    "inviteTab": {
+      "restricted": "Nur Inhaber und Admins der Organisation können Einladungen versenden. Bitte eine dieser Personen, andere einzuladen oder deine Rolle anzuheben.",
+      "emailNotConfigured": "Automatische Einladungs-E-Mails sind in dieser Installation nicht eingerichtet. Einladungen funktionieren trotzdem — kopiere die Links unten und schicke sie selbst.",
+      "emailLabel": "E-Mail-Adresse",
+      "emailPlaceholder": "kollege@beispiel.de",
+      "roleLabel": "Rolle",
+      "importCsv": "CSV importieren",
+      "csvFormatTitle": "CSV-Format",
+      "csvFormatFirstRow": "Erste Zeile: <code>email,role</code> — oder einfach eine E-Mail-Adresse pro Zeile ohne Kopfzeile.",
+      "csvFormatRole": "<code>role</code> ist optional und muss <code>member</code> oder <code>admin</code> sein; leere Felder verwenden die unten gewählte Rolle.",
+      "csvFormatLimit": "Bis zu {max} Zeilen pro Datei. Du siehst eine Vorschau, bevor etwas versendet wird.",
+      "send": "Einladung senden",
+      "sending": "Wird gesendet…",
+      "emailSent": "Einladungs-E-Mail an {email} gesendet",
+      "createdNoEmail": "Einladung für {email} erstellt. Der E-Mail-Versand ist nicht konfiguriert — kopiere den Link unten und sende ihn manuell.",
+      "sendFailed": "Einladung konnte nicht gesendet werden",
+      "resent": "Einladung erneut an {email} gesendet",
+      "refreshed": "Einladung für {email} erneuert — kopiere den Link zum Teilen",
+      "resendFailed": "Einladung konnte nicht erneut gesendet werden",
+      "canceled": "Einladung an {email} storniert",
+      "cancelFailed": "Einladung konnte nicht storniert werden",
+      "linkCopied": "Einladungslink kopiert",
+      "linkCopyFailed": "Link konnte nicht kopiert werden",
+      "copyLink": "Link kopieren",
+      "copyInviteLink": "Einladungslink kopieren",
+      "resendEmail": "E-Mail erneut senden",
+      "refreshInvitation": "Einladung erneuern",
+      "cancelInvitation": "Einladung stornieren",
+      "pendingInvitations": "Ausstehende Einladungen",
+      "csv": {
+        "fileTooLarge": "Diese Datei ist zu groß (max. {maxKb} KB).",
+        "noEmailsFound": "In dieser Datei wurden keine E-Mail-Adressen gefunden.",
+        "unreadable": "Diese Datei konnte nicht gelesen werden.",
+        "previewTitle": "Einladungen importieren",
+        "resultsTitle": "Importergebnisse",
+        "addressesFound": "{count, plural, =1 {# Adresse} other {# Adressen}} gefunden",
+        "ready": "{count} bereit",
+        "alreadyInvited": "{count} bereits eingeladen",
+        "alreadyMembers": "{count} bereits Mitglieder",
+        "problems": "{count, plural, =1 {# Problem} other {# Probleme}}",
+        "truncated": "Es werden nur die ersten {max} Zeilen importiert. Teile die Datei auf und importiere den Rest danach.",
+        "statusReady": "Bereit",
+        "statusAlreadyInvited": "Bereits eingeladen",
+        "statusAlreadyMember": "Bereits Mitglied",
+        "line": "Zeile {number}",
+        "emptyRow": "(leer)",
+        "issueInvalidEmail": "Ungültige E-Mail",
+        "issueInvalidRole": "Ungültige Rolle",
+        "issueDuplicateInFile": "Duplikat in der Datei",
+        "outcomeSent": "Eingeladen",
+        "outcomeResent": "Erneut gesendet",
+        "outcomeSkipped": "Übersprungen",
+        "outcomeFailed": "Fehlgeschlagen",
+        "outcomeNotAttempted": "Nicht versucht",
+        "resendToggle": "Auch {count, plural, =1 {die # bereits ausstehende Einladung} other {die # bereits ausstehenden Einladungen}} erneut senden",
+        "resendToggleHint": "Dadurch wird ein neuer Link erzeugt, sodass bereits geteilte Links für diese Personen nicht mehr funktionieren.",
+        "noEmailDelivery": "Der E-Mail-Versand ist nicht konfiguriert — kopiere jeden Einladungslink aus der Liste unten und sende ihn selbst.",
+        "close": "Schließen",
+        "cancel": "Abbrechen",
+        "inviting": "Einladung {current} von {total}…",
+        "sendCount": "{count, plural, =1 {# Einladung} other {# Einladungen}} senden",
+        "inviteFailed": "Einladung fehlgeschlagen",
+        "rateLimited": "Rate-Limit erreicht — versuche es in einer Minute erneut.",
+        "partialSuccess": "{succeeded} eingeladen · {failed} fehlgeschlagen — Details siehe Liste",
+        "allSucceeded": "{count, plural, =1 {# Person} other {# Personen}} eingeladen"
+      }
+    },
+    "settingsTab": {
+      "nameLabel": "Name der Organisation",
+      "save": "Änderungen speichern",
+      "saving": "Wird gespeichert…",
+      "updated": "Organisation aktualisiert",
+      "updateFailed": "Organisation konnte nicht aktualisiert werden",
+      "dangerZone": "Gefahrenzone",
+      "leave": "Organisation verlassen",
+      "left": "Du hast die Organisation verlassen",
+      "leaveFailed": "Organisation konnte nicht verlassen werden"
+    },
+    "usageTab": {
+      "loading": "Nutzungsdaten werden geladen…",
+      "loadFailed": "Nutzungsdaten konnten nicht geladen werden",
+      "noData": "Keine Nutzungsdaten verfügbar"
+    },
+    "aiPolicyTab": {
+      "loading": "KI-Richtlinie wird geladen…",
+      "loadFailed": "KI-Richtlinie konnte nicht geladen werden",
+      "retry": "Erneut versuchen",
+      "automaticRouting": "Automatisches Routing",
+      "automaticRoutingDescription": "Wählt das beste verfügbare Modell aus der festen Aufgaben-Eignungstabelle.",
+      "availableModels": "Verfügbare Modelle",
+      "availableModelsDescription": "Mitarbeitende können nur aktivierte Deployments auswählen.",
+      "retention": "{retention} Aufbewahrung",
+      "tools": "Tools",
+      "vision": "Vision",
+      "pricePerMillion": "{input} $ / {output} $ pro 1 Mio. Eingabe-/Ausgabe-Token",
+      "pricingRequired": "Die Preise müssen konfiguriert werden, bevor dieses Deployment genutzt werden kann.",
+      "inputPriceLabel": "Eingabepreis pro 1 Mio. für {model}",
+      "outputPriceLabel": "Ausgabepreis pro 1 Mio. für {model}",
+      "inputPricePlaceholder": "Eingabe $ / 1 Mio.",
+      "outputPricePlaceholder": "Ausgabe $ / 1 Mio.",
+      "monthlyAllowance": "Monatliches Budget pro Mitarbeitendem",
+      "monthlyAllowanceDescription": "Monatliches Ausgabenlimit pro Mitglied in Euro (neue Mitglieder starten mit 15 €). Leer lassen für kein Limit. Dies ändert nie, welches Modell das automatische Routing wählt.",
+      "monthlyAllowanceLabel": "Monatliches Budget für {name}",
+      "noCap": "Kein Limit",
+      "hardStop": "Harte Grenze",
+      "save": "KI-Richtlinie speichern",
+      "saving": "Wird gespeichert…",
+      "saved": "KI-Richtlinie gespeichert",
+      "saveFailed": "KI-Richtlinie konnte nicht gespeichert werden",
+      "browserAutomation": "Browser-Automatisierung",
+      "browserAutomationDescription": "Mitglieder können einen KI-Agenten in einem echten Cloud-Browser laufen lassen. Abrechnung pro Browser-Sekunde.",
+      "browserAutomationUnattended": "Unbeaufsichtigte Browserläufe",
+      "browserAutomationUnattendedDescription": "Geplante Agenten dürfen einen Browser steuern, ohne dass jemand zusieht. Sie melden sich mit gespeicherten Zugangsdaten an und stoppen, wenn eine Seite eine Person benötigt."
+    },
+    "invitation": {
+      "welcomeTitle": "Willkommen an Bord!",
+      "welcomeDescription": "Dein Arbeitsbereich wird eingerichtet, einen Moment…",
+      "errorTitle": "Etwas ist schiefgelaufen",
+      "genericError": "Wir konnten dich diesem Arbeitsbereich nicht hinzufügen. Es wurde nichts geändert — bitte versuche es erneut.",
+      "tryAgain": "Erneut versuchen",
+      "continueToWorkspace": "Weiter zu deinem Arbeitsbereich",
+      "pendingTitle": "Du wurdest eingeladen!",
+      "invitedBy": "<strong>{email}</strong> hat dich eingeladen, <strong>{organization}</strong> beizutreten.",
+      "invitedAnonymous": "Du wurdest eingeladen, <strong>{organization}</strong> beizutreten.",
+      "accept": "Annehmen und {organization} beitreten",
+      "joining": "Beitritt läuft…",
+      "decline": "Ablehnen",
+      "alreadyMemberTitle": "Du bist bereits Mitglied",
+      "alreadyMemberDescription": "Diese Einladung zu <strong>{organization}</strong> wurde bereits angenommen.",
+      "continueTo": "Weiter zu {organization}",
+      "wrongAccountTitle": "Diese Einladung ist für ein anderes Konto",
+      "wrongAccountDescription": "Sie wurde an <strong>{email}</strong> gesendet. Melde dich mit dieser Adresse an, um sie anzunehmen.",
+      "switchAccount": "Abmelden und Konto wechseln",
+      "unavailableTitle": "Einladung nicht verfügbar",
+      "expiredDescription": "Diese Einladung zu {organization} ist abgelaufen. Bitte um eine neue.",
+      "declinedDescription": "Du hast diese Einladung zu {organization} abgelehnt. Bitte um eine neue, falls das ein Versehen war.",
+      "revokedDescription": "Diese Einladung zu {organization} wurde zurückgezogen.",
+      "notFoundDescription": "Dieser Einladungslink ist nicht mehr gültig."
+    },
+    "browserCredentials": {
+      "title": "Gespeicherte Anmeldungen",
+      "description": "Websites, bei denen sich deine Agenten anmelden dürfen. Passwörter liegen im Secret-Speicher und werden dem Modell nie gezeigt.",
+      "add": "Website hinzufügen",
+      "loading": "Gespeicherte Anmeldungen werden geladen…",
+      "empty": "Noch keine Websites.",
+      "secretStoreUnavailable": "Der Secret-Speicher ist nicht konfiguriert, daher können keine Anmeldungen gespeichert werden.",
+      "signInStored": "Meldet sich an als {username}",
+      "noSignInStored": "Kein Passwort gespeichert",
+      "sessionSaved": "Sitzung gespeichert am {date}",
+      "noSessionSaved": "Keine gespeicherte Sitzung",
+      "connect": "Verbinden",
+      "reconnect": "Neu verbinden",
+      "delete": "Löschen",
+      "deleted": "Anmeldung entfernt.",
+      "deleteFailed": "Diese Anmeldung konnte nicht entfernt werden.",
+      "addTitle": "Website hinzufügen",
+      "addDescription": "Das Passwort wird im Secret-Speicher abgelegt und kann nur auf der hier eingetragenen Domain verwendet werden.",
+      "aliasLabel": "Kurzname",
+      "aliasHelp": "So spricht der Agent diese Website an, z. B. emta. Kleinbuchstaben, Zahlen, Bindestriche.",
+      "domainLabel": "Domain",
+      "domainHelp": "Die Zugangsdaten funktionieren nur auf dieser Domain. Nichts anderes kann sie verwenden.",
+      "labelLabel": "Anzeigename",
+      "usernameLabel": "Benutzername oder E-Mail",
+      "passwordLabel": "Passwort",
+      "cancel": "Abbrechen",
+      "save": "Speichern",
+      "saved": "Anmeldung gespeichert.",
+      "saveFailed": "Diese Anmeldung konnte nicht gespeichert werden.",
+      "connectTitle": "Anmelden, um die Sitzung zu speichern",
+      "connectDescription": "Melde dich unten wie gewohnt an, inklusive Code- oder Ausweisprüfung. Wähle danach Fertig, dann wird die Sitzung für spätere Läufe gespeichert.",
+      "connectStarting": "Browser wird geöffnet…",
+      "connectDone": "Fertig, Sitzung speichern",
+      "connectFailed": "Für diese Website konnte kein Browser geöffnet werden.",
+      "sessionStored": "Sitzung gespeichert."
+    }
+  },
+  "Referral": {
+    "pageTitle": "Freunde einladen, Credits verdienen",
+    "pageDescription": "Teile deinen Link. Wenn jemand, den du eingeladen hast, upgradet, bekommt ihr beide Credits.",
+    "headline": "{credits} Credits für euch beide",
+    "explainer": "Teile deinen Einladungslink. Wenn jemand, der sich darüber angemeldet hat, auf einen bezahlten Plan wechselt, bekommt ihr beide je {credits} Credits.",
+    "copy": "Kopieren",
+    "copied": "Kopiert",
+    "linkCopied": "Einladungslink kopiert",
+    "copyFailed": "Link konnte nicht kopiert werden",
+    "loading": "Einladungslink wird geladen…",
+    "unavailable": "Das Empfehlungsprogramm ist noch nicht eingerichtet. Sobald es steht, erscheint hier dein Einladungslink.",
+    "statInvited": "Eingeladen",
+    "statRewarded": "Upgegradet",
+    "statCreditsEarned": "Verdiente Credits",
+    "listTitle": "Von dir eingeladen",
+    "listEmpty": "Noch niemand. Teile deinen Link, um loszulegen.",
+    "anonymousInvitee": "Neues Mitglied",
+    "statusRewarded": "+{credits} Credits",
+    "statusPending": "Credits beim Upgrade",
+    "redeemed": "Einladung angenommen — ihr bekommt beide Credits, sobald du upgradest.",
+    "redeemedByName": "{name} hat dich eingeladen — ihr bekommt beide Credits, sobald du upgradest.",
+    "billingTeaser": "Mehr Credits nötig? <link>Lade einen Freund ein</link> — ihr bekommt beide welche.",
+    "orgInviteTeaser": "Kennst du ein anderes Team, das Navigator gebrauchen könnte? <link>Empfiehl uns weiter</link> — ihr bekommt beide Credits."
+  },
+  "Usage": {
+    "title": "Verbrauch",
+    "description": "Dein Credit-Verbrauch in dieser Abrechnungsperiode.",
+    "descriptionForWorkspace": "Credit-Verbrauch von {workspace} in dieser Abrechnungsperiode.",
+    "manageBilling": "Abrechnung verwalten",
+    "planTitle": "{plan}-Plan",
+    "creditsUsed": "{used} von {included} Credits in dieser Abrechnungsperiode verbraucht",
+    "creditsRemaining": "Noch {remaining} Credits übrig",
+    "creditsScopeNote": "Credits gelten für den gesamten Workspace und decken alle KI-Funktionen ab, nicht nur den Chat. Sie sind nicht dasselbe wie Modell-Tokens.",
+    "unavailable": "Verbrauchsdaten sind derzeit nicht verfügbar.",
+    "allowanceTitle": "Dein monatliches Budget",
+    "allowanceUsed": "{used} von {cap} verbraucht",
+    "allowanceUsedNoCap": "{used} verbraucht",
+    "allowanceRemaining": "Noch {remaining} übrig",
+    "allowanceNote": "Deine Organisation legt dieses Budget fest. Wende dich an einen Admin, um es zu ändern.",
+    "inviteHint": "Wird knapp? <link>Lade einen Freund ein</link> und verdiene zusätzliche Credits.",
+    "historyTitle": "Credit-Verbrauch im Zeitverlauf",
+    "breakdownTitle": "Wofür die Credits draufgingen",
+    "creditsAxis": "Credits",
+    "scopePersonal": "Letzte 30 Tage",
+    "scopeWorkspace": "Letzte 30 Tage · gesamter Workspace {workspace}",
+    "featureTokens": "KI-Modelle",
+    "featureWebSearch": "Websuche",
+    "featureVoice": "Sprachtranskription",
+    "featureDocuments": "Dokumentenverarbeitung",
+    "featureCodeExecution": "Code-Ausführung",
+    "featureBrowserAutomation": "Browser-Automatisierung"
+  },
+  "Projects": {
+    "statusTitle": "Status",
+    "todosTitle": "Aufgaben",
+    "health": {
+      "green": "Im Plan",
+      "yellow": "Gefährdet",
+      "red": "Hinter Plan",
+      "unknown": "Noch kein Status"
+    },
+    "priority": {
+      "critical": "kritisch",
+      "high": "hoch",
+      "normal": "normal",
+      "low": "niedrig"
+    },
+    "progress": "Fortschritt",
+    "blockers": "Blocker",
+    "noStatus": "Verbinde ein Tool oder füge ein Dokument hinzu und synchronisiere das Projekt, um einen Status zu erhalten.",
+    "noTodos": "Gerade braucht nichts deine Aufmerksamkeit.",
+    "updatedAt": "Aktualisiert {time}",
+    "connectorIssue": "{name} braucht Aufmerksamkeit",
+    "reconnect": "Neu verbinden",
+    "markDone": "Als erledigt markieren",
+    "reopen": "Wieder öffnen",
+    "dismiss": "Verwerfen",
+    "due": "Fällig {date}",
+    "from": "aus {source}",
+    "todoUpdateFailed": "Die Aufgabe konnte nicht aktualisiert werden.",
+    "openCount": "{count, plural, =0 {keine offen} one {# offen} other {# offen}}",
+    "showDone": "Kürzlich erledigte anzeigen ({count})",
+    "hideDone": "Kürzlich erledigte ausblenden",
+    "graph": {
+      "title": "Wissensgraph",
+      "empty": "Füge ein Dokument, ein Transkript oder ein verbundenes Tool hinzu und synchronisiere das Projekt.",
+      "searchPlaceholder": "Knoten suchen…",
+      "showAll": "Alle anzeigen",
+      "truncated": "Es werden die am stärksten vernetzten Seiten gezeigt.",
+      "focus": "Fokus",
+      "selectNode": "Wähle einen Knoten, um Fakten, Verknüpfungen und Quellen zu sehen.",
+      "aliases": "Auch bekannt als",
+      "mergedFrom": "Zusammengeführt aus",
+      "links": "Verknüpfungen",
+      "backlinks": "Rückverweise",
+      "facts": "Fakten",
+      "kinds": {
+        "project": "Projekt",
+        "person": "Personen",
+        "organization": "Organisationen",
+        "meeting": "Meetings",
+        "task": "Aufgaben",
+        "decision": "Entscheidungen",
+        "document": "Dokumente",
+        "topic": "Themen",
+        "tool": "Tools",
+        "agent": "Agenten",
+        "voice": "Sprache"
+      }
+    },
+    "contradictions": {
+      "title": "Widersprüchliche Informationen",
+      "empty": "Keine Widersprüche zwischen deinen Quellen gefunden.",
+      "resolve": "Geklärt",
+      "dismiss": "Verwerfen",
+      "updateFailed": "Der Widerspruch konnte nicht aktualisiert werden."
+    },
+    "run": {
+      "stale": "Die letzte Synchronisierung wurde nicht abgeschlossen. Starte sie erneut.",
+      "failedGeneric": "Die letzte Synchronisierung ist fehlgeschlagen. Versuche es erneut oder prüfe die verbundenen Tools.",
+      "failed": {
+        "connection_not_active": "Ein verbundenes Tool muss neu verbunden werden, bevor das Projekt synchronisieren kann.",
+        "credential_owner_removed": "Das Mitglied, das ein Tool verbunden hat, ist nicht mehr im Projekt. Verbinde das Tool neu.",
+        "no_read_actions": "Ein verbundenes Tool liefert keine lesbaren Daten. Entferne es oder verbinde es neu.",
+        "no_data_returned": "Ein verbundenes Tool hat keine Daten geliefert. Prüfe die Einstellungen und synchronisiere erneut.",
+        "budget_exhausted": "Die Synchronisierung hat zu lange gedauert und wurde abgebrochen. Versuche es erneut.",
+        "generation_aborted": "Die Analyse ist in ein Timeout gelaufen. Versuche es erneut.",
+        "schema_constraint": "Die Synchronisierung ist an einem Datenbank-Schema-Konflikt gescheitert. Ein Administrator muss die ausstehenden Migrationen einspielen.",
+        "db_timeout": "Die Datenbank hat während der Synchronisierung ein Timeout gemeldet. Versuche es erneut."
+      }
+    }
+  },
+  "Desktop": {
+    "Updates": {
+      "availableTitle": "Update verfügbar",
+      "availableDescription": "Version {version} wird im Hintergrund heruntergeladen.",
+      "legacyAvailableDescription": "Version {version} steht zum Download bereit.",
+      "updateNow": "Jetzt aktualisieren",
+      "downloadingTitle": "Update {version} wird heruntergeladen",
+      "downloadingDescription": "{percent}% heruntergeladen. Sie werden zum Neustart aufgefordert, sobald es bereit ist.",
+      "readyTitle": "Update {version} ist bereit",
+      "readyDescription": "Starten Sie jetzt neu, um es zu übernehmen. Andernfalls wird es beim nächsten Beenden der App installiert.",
+      "restartNow": "Jetzt neu starten",
+      "later": "Später",
+      "installingTitle": "Update wird installiert",
+      "installingDescription": "Die App wird neu gestartet…",
+      "failedTitle": "Update fehlgeschlagen"
+    }
+  },
+  "Cockpit": {
+    "loading": "Instrumente werden hochgefahren…",
+    "meta": {
+      "title": "Cockpit",
+      "description": "Flight Deck für dein Unternehmen: Marketing, Produktstatus, Finanzen und Updates auf einen Blick."
+    },
+    "header": {
+      "title": "Cockpit",
+      "utcLabel": "UTC",
+      "callsign": "KEINSAAS",
+      "flight": "KS001",
+      "range": "Letzte {days} Tage",
+      "internalTraffic": "Dieser Browser ist als interner Traffic markiert"
+    },
+    "a11y": {
+      "windshield": "Windschutzscheibe",
+      "glareshield": "Blendschutz",
+      "channelShare": "Kanalanteil"
+    },
+    "status": {
+      "live": "LIVE",
+      "inop": "INOP",
+      "noData": "KEINE DATEN",
+      "updated": "Aktualisiert",
+      "notConnected": "Nicht verbunden",
+      "on": "EIN",
+      "fault": "FEHLER",
+      "off": "AUS",
+      "new": "NEU"
+    },
+    "fcu": {
+      "visits": "BESUCHE",
+      "leads": "LEADS",
+      "conversion": "CONV %",
+      "topChannel": "TOP KANAL",
+      "deploys": "DEPLOY",
+      "deploysOk": "{ok}/{total} OK",
+      "mrr": "MRR"
+    },
+    "overhead": {
+      "title": "Business-Systeme",
+      "marketing": {
+        "label": "MARKETING",
+        "detail": "Besuche · Leads · Kanäle"
+      },
+      "sales": {
+        "label": "VERTRIEB",
+        "detail": "Pipeline · Abschlussquote"
+      },
+      "finance": {
+        "label": "FINANZEN",
+        "detail": "MRR · Cash · Runway"
+      },
+      "product": {
+        "label": "PRODUKT",
+        "detail": "Incidents · Releases"
+      },
+      "customers": {
+        "label": "KUNDEN",
+        "detail": "Churn · Tickets · NPS"
+      },
+      "operations": {
+        "label": "OPS",
+        "detail": "Kosten · Dienstleister"
+      },
+      "people": {
+        "label": "TEAM",
+        "detail": "Hiring · Kapazität"
+      },
+      "legal": {
+        "label": "RECHT",
+        "detail": "Verträge · Compliance"
+      },
+      "connect": {
+        "label": "CONNECT",
+        "detail": "Datenquellen · Schlüssel"
+      }
+    },
+    "console": {
+      "title": "Marketing",
+      "openHint": "Marketing-Konsole öffnen",
+      "close": "Schließen",
+      "visitsLabel": "Besuche",
+      "leadsLabel": "Leads",
+      "total": "Gesamt",
+      "empty": "Noch keine Daten im Zeitraum",
+      "inopTitle": "Marketing-Daten nicht verfügbar",
+      "tabs": {
+        "channel": "Kanal",
+        "referrer": "Referrer",
+        "campaign": "Kampagne",
+        "keyword": "Keyword",
+        "country": "Land",
+        "region": "Region",
+        "city": "Stadt",
+        "page": "Seite",
+        "entry": "Einstiegsseite",
+        "hostname": "Hostname",
+        "browser": "Browser",
+        "os": "OS",
+        "device": "Gerät"
+      }
+    },
+    "pfd": {
+      "title": "Marketing PFD",
+      "visits": "Besuche",
+      "visitors": "Tägl. Besucher",
+      "pageviews": "Seitenaufrufe",
+      "leads": "Leads",
+      "bookingClicks": "Termin-Klicks",
+      "vsPrevious": "ggü. Vorperiode",
+      "chartLegendVisits": "Besuche",
+      "chartLegendLeads": "Leads"
+    },
+    "nd": {
+      "title": "Kanal ND",
+      "caption": "Richtung = Kanal · Länge = Anteil an Besuchen",
+      "leadsSuffix": "Leads"
+    },
+    "pages": {
+      "title": "Landingpages",
+      "campaignsTitle": "Kampagnen",
+      "empty": "Keine Seitenaufrufe im Zeitraum"
+    },
+    "leadsDisplay": {
+      "title": "Lead-Log",
+      "empty": "Keine Leads im Zeitraum",
+      "formLabels": {
+        "research_demo": "Gratis-Sample",
+        "shop_leads_sample": "Shop-Leads-Sample"
+      }
+    },
+    "engines": {
+      "title": "Produkte",
+      "deploy": "Deploy",
+      "failed7d": "Fehlg. 7T",
+      "incidents": "Incidents",
+      "errors24h": "Fehler 24h",
+      "spend": "Kosten MTD",
+      "margin": "Marge",
+      "openIncidents": "Offene Incidents",
+      "incidents24h": "Neu 24h",
+      "firingAlerts": "Aktive Alerts",
+      "superlog": "Superlog"
+    },
+    "finance": {
+      "title": "Finanzen",
+      "mrr": "MRR",
+      "cash": "Cash",
+      "payments30d": "Zahlungen 30T",
+      "inflow30d": "Eingänge 30T",
+      "outflow30d": "Ausgänge 30T",
+      "burn": "Burn / Mon.",
+      "runway": "Runway",
+      "runwayMonths": "{months} Mon.",
+      "failed7d": "Fehlg. 7T",
+      "nextPayout": "Nächste Auszahlung",
+      "noPayout": "Keine geplant",
+      "positiveFlow": "Cashflow positiv",
+      "otherCash": "Außerdem {amounts}"
+    },
+    "mcdu": {
+      "todos": {
+        "title": "TODOS",
+        "line1": "Todo-Feed nicht verbunden",
+        "line2": "Geplant: Todoist / Board-Sync"
+      },
+      "updates": {
+        "title": "UPDATES"
+      }
+    },
+    "updates": {
+      "empty": "Noch keine Updates",
+      "severity": {
+        "info": "Info",
+        "warn": "Warnung",
+        "alert": "Alarm"
+      }
+    },
+    "reasons": {
+      "notConnected": "Nicht verbunden",
+      "disabled": "Verbindung deaktiviert",
+      "secretsUnavailable": "Verschlüsselte Verbindungen nicht verfügbar (APP_SECRETS_KEY fehlt)",
+      "unauthorized": "Zugangsdaten abgelehnt: Schlüssel in CONNECT prüfen",
+      "wrongKey": "Falscher Schlüsseltyp: {detail}-Schlüssel verwenden",
+      "reauthorize": "Autorisierung abgelaufen: in CONNECT neu autorisieren",
+      "rateLimited": "Vom Anbieter gedrosselt",
+      "timeout": "Anbieter hat nicht rechtzeitig geantwortet",
+      "http": "Anbieterfehler (HTTP {detail})",
+      "unreachable": "Anbieter nicht erreichbar",
+      "invalidResponse": "Unerwartete Antwort vom Anbieter",
+      "invalidConfig": "Verbindungseinstellungen unvollständig",
+      "noDeployments": "Keine Produktions-Deployments",
+      "noProjects": "Keine Projekte konfiguriert",
+      "toolMissing": "MCP-Tool fehlt: {detail}",
+      "mcpServerMissing": "Kein nutzbarer MCP-Server: in CONNECT einen verbundenen auswählen",
+      "mcpAuthorize": "Der MCP-Server muss autorisiert werden: unter MCP-Server autorisieren",
+      "queryFailed": "Abfrage fehlgeschlagen: {detail}",
+      "spendSource": "Kostenquelle nicht verbunden",
+      "marginSource": "Umsatz- und Kostenquellen nicht verbunden",
+      "serviceUnmatched": "Kein Superlog-Service passt zu diesem Projekt"
+    },
+    "connect": {
+      "title": "Verbindungen",
+      "subtitle": "Zugangsdaten werden verschlüsselt und mit diesem Workspace geteilt",
+      "openHint": "Verbindungskonsole öffnen",
+      "readOnly": "Nur Owner und Admins des Workspace können Verbindungen ändern.",
+      "workspace": "Gespeichert für Workspace: {name}",
+      "personalWorkspace": "Persönlich",
+      "elsewhere": "Keine Verbindungen in diesem Workspace. {count, plural, one {# Verbindung ist} other {# Verbindungen sind}} in „{name}“ gespeichert. Wechsle in diesen Workspace, um {count, plural, one {sie} other {sie}} zu nutzen.",
+      "configure": "Bearbeiten",
+      "connect": "Verbinden",
+      "ok": "OK",
+      "saved": "Gespeichert, noch nicht geprüft",
+      "secretKept": "Gespeichert. Leer lassen, um ihn zu behalten.",
+      "mcpServerNone": "Keiner",
+      "mcpServerNeedsAuth": "{name} (Autorisierung nötig)",
+      "mcpServersLink": "MCP-Server verwalten",
+      "testOk": "Verbindung funktioniert.",
+      "savedOk": "Gespeichert.",
+      "failed": "Etwas ist schiefgelaufen. Bitte erneut versuchen.",
+      "remove": "Entfernen",
+      "test": "Testen",
+      "save": "Speichern",
+      "providers": {
+        "website": {
+          "name": "Website-Analytics",
+          "help": "Liest die Tabelle site_events, die der Collector deiner Marketing-Website in ihr Supabase-Projekt schreibt.",
+          "fields": {
+            "supabaseUrl": {
+              "label": "Supabase-Projekt-URL",
+              "help": "Das Projekt der Marketing-Website, z. B. https://xyz.supabase.co"
+            },
+            "supabaseSecretKey": {
+              "label": "Secret Key",
+              "help": "Server-Secret-Key (sb_secret_… oder Service Role). Gelesen wird nur site_events."
+            },
+            "rangeDays": {
+              "label": "Zeitraum (Tage)",
+              "help": "Standard 30."
+            }
+          }
+        },
+        "vercel": {
+          "name": "Vercel",
+          "help": "Status der Produktions-Deployments für bis zu sechs Projekte.",
+          "fields": {
+            "token": {
+              "label": "Access Token",
+              "help": "Vercel → Account Settings → Tokens. Lesezugriff genügt."
+            },
+            "teamId": {
+              "label": "Team-ID",
+              "help": "Leer lassen, um das Team über den Token zu ermitteln. Sonst die Team-ID (team_…) oder den Slug aus der Vercel-URL."
+            },
+            "projects": {
+              "label": "Projekte",
+              "help": "Eins pro Zeile: LABEL = prj_…, oder nur Projekt-ID bzw. -Name (bis zu sechs). Das Label benennt das Triebwerk und wird mit den Superlog-Service-Namen abgeglichen."
+            }
+          }
+        },
+        "stripe": {
+          "name": "Stripe",
+          "help": "Guthaben, MRR, Zahlungen, fehlgeschlagene Zahlungen und die nächste Auszahlung. Nutze einen Restricted Key, nie den Secret Key.",
+          "fields": {
+            "restrictedKey": {
+              "label": "Restricted Key",
+              "help": "rk_live_… oder rk_test_… mit Lesezugriff auf Balance, Subscriptions, Charges und Payouts."
+            }
+          }
+        },
+        "revolut": {
+          "name": "Revolut Business",
+          "help": "Kontostände, Cashflow und letzte Transaktionen. In Revolut Business → APIs das öffentliche Zertifikat hochladen, die Redirect-URI setzen und den Zugriff aktivieren, dann den Autorisierungscode hier einmal einfügen.",
+          "fields": {
+            "clientId": {
+              "label": "Client-ID"
+            },
+            "privateKeyPem": {
+              "label": "Privater Schlüssel (PEM)",
+              "help": "Der Schlüssel, dessen öffentliches Zertifikat du bei Revolut hochgeladen hast."
+            },
+            "authorizationCode": {
+              "label": "Autorisierungscode",
+              "help": "Nach dem Aktivieren leitet Revolut mit ?code=… weiter. Einfügen und speichern: Er wird einmal gegen ein Refresh Token getauscht und nicht gespeichert."
+            },
+            "refreshToken": {
+              "label": "Refresh Token",
+              "help": "Wird aus dem Autorisierungscode befüllt. Im Freelancer-Tarif läuft es nach 90 Tagen ab."
+            },
+            "issuer": {
+              "label": "Domain der Redirect-URI",
+              "help": "Domain der in Revolut gesetzten Redirect-URI (JWT-Issuer). Standard ist die Domain dieser App."
+            },
+            "sandbox": {
+              "label": "Sandbox"
+            },
+            "largeTransactionThreshold": {
+              "label": "Alarmschwelle",
+              "help": "Transaktionen ab diesem Betrag erscheinen als Alarm in UPDATES. Standard 5000."
+            }
+          }
+        },
+        "superlog": {
+          "name": "Superlog",
+          "help": "Offene Incidents, aktive Alerts und Fehler-Logs, gelesen über den MCP-Server von Superlog.",
+          "fields": {
+            "mcpUrl": {
+              "label": "MCP-Server-URL",
+              "help": "Der gehostete MCP-Endpunkt von Superlog: https://api.superlog.sh/mcp"
+            },
+            "token": {
+              "label": "MCP-Token",
+              "help": "Persönlicher Zugriffstoken (superlog_pat_…) aus Superlog → Settings → MCP tokens. Der Ingest-Schlüssel (sl_public_…) funktioniert hier nicht."
+            }
+          }
+        },
+        "seo": {
+          "name": "SEO (OpenSEO / DataForSEO)",
+          "help": "Organischer Traffic, Keyword-Rankings und verweisende Domains über einen SEO-MCP-Server.",
+          "fields": {
+            "kind": {
+              "label": "Anbieter"
+            },
+            "domain": {
+              "label": "Domain",
+              "help": "Nur die Domain, z. B. keinsaas.com"
+            },
+            "mcpServerId": {
+              "label": "MCP-Server",
+              "help": "OpenSEO meldet sich nur per OAuth an: https://app.openseo.so/mcp unter MCP-Server hinzufügen, autorisieren und hier auswählen."
+            },
+            "mcpUrl": {
+              "label": "MCP-Server-URL",
+              "help": "Nur für DataForSEO ohne MCP-Server. Leer lassen für den Standard-Endpunkt."
+            },
+            "login": {
+              "label": "Login",
+              "help": "Nur DataForSEO."
+            },
+            "password": {
+              "label": "Passwort",
+              "help": "Nur DataForSEO."
+            },
+            "locationName": {
+              "label": "Suchmarkt",
+              "help": "z. B. Germany. Standard United States."
+            },
+            "languageCode": {
+              "label": "Sprachcode",
+              "help": "z. B. de. Standard en."
+            }
+          }
+        }
+      }
+    },
+    "financeConsole": {
+      "title": "Finanzen",
+      "openHint": "Finanz-Konsole öffnen",
+      "balanceAvailable": "Verfügbares Guthaben",
+      "balancePending": "Ausstehendes Guthaben",
+      "activeSubscriptions": "Aktive Abos",
+      "failedPayments": "Fehlgeschlagene Zahlungen (7 Tage)",
+      "noFailed": "Keine fehlgeschlagenen Zahlungen",
+      "balanceIn": "Kontostand {currency}",
+      "inflowIn": "Eingänge 30T {currency}",
+      "outflowIn": "Ausgänge 30T {currency}",
+      "recent": "Letzte Transaktionen"
+    },
+    "productConsole": {
+      "title": "Produktstatus",
+      "openHint": "Produkt-Konsole öffnen",
+      "incidents": "Offene Incidents",
+      "noIncidents": "Keine offenen Incidents",
+      "services": "Services",
+      "servicesLegend": "Offene Incidents · Fehler der letzten 24 h",
+      "inopTitle": "Superlog-Daten nicht verfügbar"
+    },
+    "seo": {
+      "tab": "SEO",
+      "organicTraffic": "Organischer Traffic (gesch.)",
+      "keywords": "Rankende Keywords",
+      "referringDomains": "Verweisende Domains",
+      "topKeywords": "Top-Keywords",
+      "position": "Pos.",
+      "volume": "Volumen",
+      "inopTitle": "SEO-Daten nicht verfügbar",
+      "noKeywords": "Keine Keyword-Daten"
+    },
+    "com": {
+      "label": "COM 1",
+      "detail": "PTT",
+      "action": "Mit dem Cockpit-Copiloten sprechen",
+      "state": {
+        "off": "Sprache aus",
+        "standby": "Bereit",
+        "connecting": "Verbinde",
+        "connected": "Verbunden",
+        "speaking": "Hört zu"
+      },
+      "orb": {
+        "label": "Sprach-Copilot",
+        "hint": "Zum Verschieben ziehen oder die Pfeiltasten nutzen.",
+        "end": "Sprachchat beenden",
+        "state": {
+          "connecting": "Verbinde",
+          "listening": "Hört zu",
+          "user": "Du sprichst",
+          "assistant": "Copilot spricht"
+        }
+      }
+    }
+  },
+  "WorkflowGenerator": {
+    "sourceUrlLabel": "GitHub-Repository oder Link",
+    "sourceUrlPlaceholder": "https://github.com/owner/repo",
+    "sourceUrlHint": "Wir lesen README, Konfiguration und Code und bauen daraus die Automatisierung. Nur öffentliche Repositories.",
+    "sourceUrlInvalid": "Gib eine GitHub-Repository-URL oder einen Link mit https:// ein",
+    "sourceErrors": {
+      "invalid_url": "Dieser Link kann nicht gelesen werden. Nutze eine GitHub-Repository-URL oder einen Link mit https://",
+      "not_found": "Repository nicht gefunden. Prüfe den Link. Es werden nur öffentliche Repositories unterstützt.",
+      "rate_limited": "GitHub begrenzt gerade die Anfragen. Versuche es in ein paar Minuten erneut.",
+      "empty": "Unter diesem Link wurde nichts Lesbares gefunden.",
+      "fetch_failed": "Der Link konnte nicht gelesen werden. Versuche es erneut."
+    },
+    "documentReadFailed": "Das Dokument konnte nicht gelesen werden. Versuche eine andere Datei oder füge den Text ein.",
+    "documentNoText": "In diesem Dokument wurde kein Text gefunden. Gescannte PDFs werden nicht unterstützt; füge den Text stattdessen ein.",
+    "documentTooLarge": "Das Dokument ist zu groß. Das Limit liegt bei 10 MB.",
+    "apiKeyLabel": "{tool} API-Schlüssel (gespeichert als {envVar})",
+    "apiKeyPlaceholder": "API-Schlüssel einfügen",
+    "apiBaseUrl": "Der Workflow ruft {baseUrl} auf",
+    "secretStoreUnavailable": "Der sichere Schlüsselspeicher ist gerade nicht verfügbar, daher wurde der Schlüssel nicht gespeichert. Versuche es später erneut oder kontaktiere den Support.",
+    "derivedFrom": "Vorausgefüllt aus {path}",
+    "openDashboard": "Dashboard öffnen",
+    "openDashboardFailed": "Das Dashboard konnte nicht geöffnet werden. Versuche es gleich noch einmal."
   }
 }

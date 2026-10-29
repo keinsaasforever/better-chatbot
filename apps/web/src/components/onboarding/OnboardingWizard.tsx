@@ -283,7 +283,6 @@ function ConnectAppsStep({
               : t,
           ),
         );
-        toast.success(copy.disconnectedToast);
       } catch (error: any) {
         toast.error(error.message ?? copy.disconnectError);
       }

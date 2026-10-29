@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { VOICE_THREAD_MAX_TURNS_PER_FLUSH } from "./session-thread-contract";
 import { VOICE_DEVICE_TYPES } from "./types";
 
 export const CreatePairingCodeSchema = z.object({
@@ -20,9 +21,56 @@ export const RevokeVoiceDeviceSchema = z.object({
   deviceId: z.string().uuid(),
 });
 
+/**
+ * A browser run started from the voice session.
+ *
+ * `task` is capped well below what the model could emit: a spoken instruction
+ * is a sentence or two, and the cap is the outer bound on what reaches an inner
+ * agent's prompt from a channel the user only speaks into.
+ */
+export const VoiceBrowserRunRequestSchema = z.object({
+  task: z.string().trim().min(1).max(2000),
+  /** The realtime function call id; the billing `runId` for this run. */
+  callId: z.string().min(1).max(128),
+  credentialAlias: z.string().trim().min(1).max(64).optional(),
+});
+
+/**
+ * A batch of completed voice turns to file into the session's chat thread.
+ *
+ * `parts` stays `unknown`: they are `UIMessage` parts produced by the realtime
+ * store and rendered by the same chat components, so validating their shape
+ * here would only duplicate what the renderer already tolerates. Size is what
+ * matters, and that is capped — by part count here and by serialized length in
+ * `capVoiceTurnParts`.
+ */
+export const VoiceSessionThreadRequestSchema = z.object({
+  threadId: z.string().uuid(),
+  voiceSessionId: z.string().trim().min(1).max(120),
+  title: z.string().trim().max(200).optional(),
+  agentId: z.string().uuid().optional(),
+  turns: z
+    .array(
+      z.object({
+        id: z.string().trim().min(1).max(200),
+        role: z.enum(["user", "assistant"]),
+        parts: z.array(z.unknown()).max(60),
+      }),
+    )
+    .min(1)
+    .max(VOICE_THREAD_MAX_TURNS_PER_FLUSH),
+});
+
 export const VoiceToolRequestSchema = z
   .object({
     toolName: z.string().min(1).max(124),
+    /**
+     * Which executor handles this call. Sent explicitly rather than inferred
+     * from the name: a Composio tool is neither app-allowlisted nor shaped
+     * like an MCP tool id, so sniffing would route it to the MCP path and fail
+     * with a misleading "MCP server not found".
+     */
+    kind: z.enum(["mcp", "app", "composio"]).optional(),
     mcpServerId: z.string().uuid().optional(),
     mcpToolName: z.string().min(1).max(256).optional(),
     arguments: z.unknown().optional(),

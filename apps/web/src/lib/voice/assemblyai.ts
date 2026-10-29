@@ -1,144 +1,182 @@
-const DEFAULT_ASSEMBLYAI_BASE_URL = "https://api.eu.assemblyai.com";
+/**
+ * Dictation via AssemblyAI's Dictation API.
+ *
+ * This replaced the async batch pipeline (`POST /v2/upload` -> `POST
+ * /v2/transcript` -> poll `GET /v2/transcript/{id}` every 1.5s until
+ * `completed`). That was three-plus round trips and a polling loop for what is
+ * almost always a few seconds of speech, and its 45s ceiling failed outright on
+ * anything longer. The Dictation API answers in a single call.
+ *
+ * It also cleans the dictation up by default: filler removed, self-corrections
+ * resolved to what the speaker landed on, punctuation and capitalisation
+ * applied. The verbatim transcript comes back alongside it, so callers that
+ * need the raw words still have them.
+ *
+ * Docs: https://www.assemblyai.com/docs/dictation
+ */
 
-const ASSEMBLYAI_POLL_INTERVAL_MS = 1500;
-const ASSEMBLYAI_TIMEOUT_MS = 45000;
+/**
+ * The Dictation API is a separate service from Pre-recorded and Streaming, on
+ * its own hostname, so this is not the `api.eu.assemblyai.com` the batch
+ * pipeline used.
+ *
+ * NOTE ON DATA RESIDENCY: the batch pipeline this replaced was deliberately
+ * pinned to the EU zone. The default below is the global endpoint. If audio
+ * must stay in the EU, set ASSEMBLYAI_DICTATION_BASE_URL to the EU dictation
+ * host — see "Cloud endpoints & data residency" in the docs above.
+ */
+const DEFAULT_DICTATION_BASE_URL = "https://dictation.assemblyai.com";
 
-type AssemblyAIUploadResponse = {
-  upload_url?: string;
-};
+/**
+ * Typical short clips answer in well under a second. The rewrite has its own
+ * 5s server-side deadline after which the transcription returns regardless, so
+ * this only has to cover a slow upload. The docs recommend 90s.
+ */
+const DICTATION_TIMEOUT_MS = 90_000;
 
-type AssemblyAISubmitResponse = {
-  id?: string;
-  error?: string;
-};
+/**
+ * Languages to consider when the caller does not name one.
+ *
+ * `language_codes` is an input here, not something the service reports back —
+ * unlike the batch API, which did its own detection and returned
+ * `language_code`. Leaving it unset would default to English alone and quietly
+ * mis-transcribe German dictation, so the product's two working languages are
+ * the default. Override with ASSEMBLYAI_DICTATION_LANGUAGES (comma-separated).
+ */
+const DEFAULT_DICTATION_LANGUAGES = ["en", "de"];
 
-type AssemblyAIPollResponse = {
-  status?: "queued" | "processing" | "completed" | "error";
+type DictationResponse = {
+  /** The verbatim transcript. Never altered by the LLM. */
   text?: string | null;
-  language_code?: string | null;
-  language_confidence?: number | null;
+  /** The cleaned-up text, or null when the rewrite failed. */
+  llm_response?: string | null;
+  /** "timeout" or "error" when the rewrite failed. Not a request failure. */
+  llm_error?: string | null;
   confidence?: number | null;
-  error?: string | null;
+  audio_duration_ms?: number | null;
+  session_id?: string | null;
 };
 
 export type AssemblyAITranscriptionResult = {
+  /**
+   * What to show the user: the cleaned-up dictation, falling back to the
+   * verbatim transcript when the rewrite failed or was declined.
+   */
   text: string;
+  /** The words exactly as spoken, before any cleanup. */
+  verbatimText: string;
   language?: string;
   confidence?: number;
   transcriptId: string;
 };
 
-function getAssemblyAIConfig() {
+function getDictationConfig() {
   const apiKey = process.env.ASSEMBLYAI_API_KEY?.trim();
   if (!apiKey) {
     throw new Error("ASSEMBLYAI_API_KEY is not configured");
   }
 
   const baseUrl = (
-    process.env.ASSEMBLYAI_API_BASE_URL ?? DEFAULT_ASSEMBLYAI_BASE_URL
+    process.env.ASSEMBLYAI_DICTATION_BASE_URL ?? DEFAULT_DICTATION_BASE_URL
   ).replace(/\/$/, "");
 
-  return { apiKey, baseUrl };
+  const configured = process.env.ASSEMBLYAI_DICTATION_LANGUAGES?.trim();
+  const defaultLanguages = configured
+    ? configured
+        .split(",")
+        .map((code) => code.trim())
+        .filter(Boolean)
+    : DEFAULT_DICTATION_LANGUAGES;
+
+  return { apiKey, baseUrl, defaultLanguages };
 }
 
-async function readJsonResponse<T>(response: Response): Promise<T> {
+/**
+ * Dictation reports failures in two shapes: `{status, title, detail}` for auth
+ * and config validation, and `{error, error_code}` for errors it raises while
+ * parsing the request itself. Read both.
+ */
+async function readDictationError(response: Response): Promise<string> {
   const body = await response.text();
-  let parsed: unknown = {};
-  if (body) {
-    try {
-      parsed = JSON.parse(body);
-    } catch {
-      parsed = { error: body };
+  if (!body) return `AssemblyAI dictation failed with ${response.status}`;
+
+  try {
+    const parsed = JSON.parse(body) as {
+      detail?: unknown;
+      title?: unknown;
+      error?: unknown;
+    };
+    for (const field of [parsed.error, parsed.detail, parsed.title]) {
+      if (typeof field === "string" && field) return field;
     }
+  } catch {
+    // Not JSON — fall through to the raw body.
   }
-
-  if (!response.ok) {
-    const message =
-      typeof parsed === "object" &&
-      parsed &&
-      "error" in parsed &&
-      typeof parsed.error === "string"
-        ? parsed.error
-        : `AssemblyAI request failed with ${response.status}`;
-    throw new Error(message);
-  }
-
-  return parsed as T;
-}
-
-function sleep(ms: number) {
-  return new Promise((resolve) => setTimeout(resolve, Math.max(0, ms)));
+  return body.slice(0, 500);
 }
 
 export async function transcribeAudioWithAssemblyAI({
   audio,
   language,
+  keyterms,
+  instruction,
 }: {
   audio: ArrayBuffer;
   language?: string | null;
+  /** Names and jargon to bias the transcript toward (max 100 terms). */
+  keyterms?: string[];
+  /**
+   * Replaces the default cleanup task. Omit to keep the default, which is what
+   * dictation into a text field wants.
+   */
+  instruction?: string;
 }): Promise<AssemblyAITranscriptionResult> {
-  const { apiKey, baseUrl } = getAssemblyAIConfig();
-  const headers = { Authorization: apiKey };
-
-  const upload = await fetch(`${baseUrl}/v2/upload`, {
-    method: "POST",
-    headers: {
-      ...headers,
-      "Content-Type": "application/octet-stream",
-    },
-    body: audio,
-  });
-  const uploadJson = await readJsonResponse<AssemblyAIUploadResponse>(upload);
-  if (!uploadJson.upload_url) {
-    throw new Error("AssemblyAI upload did not return upload_url");
-  }
+  const { apiKey, baseUrl, defaultLanguages } = getDictationConfig();
 
   const normalizedLanguage = language?.trim();
-  const submit = await fetch(`${baseUrl}/v2/transcript`, {
+  const config: Record<string, unknown> = {
+    language_codes: normalizedLanguage
+      ? [normalizedLanguage]
+      : defaultLanguages,
+  };
+  if (keyterms?.length) config.keyterms_prompt = keyterms;
+  if (instruction?.trim()) config.llm_instruction = instruction.trim();
+
+  // The config part must arrive before the first audio byte: the server starts
+  // transcribing as the body streams in and cannot begin without it. An audio
+  // part that arrives first is rejected with 400.
+  const form = new FormData();
+  form.append(
+    "config",
+    new Blob([JSON.stringify(config)], { type: "application/json" }),
+  );
+  form.append("audio", new Blob([audio], { type: "audio/wav" }), "audio.wav");
+
+  const response = await fetch(`${baseUrl}/v1/transcribe/live`, {
     method: "POST",
-    headers: {
-      ...headers,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      audio_url: uploadJson.upload_url,
-      speech_models: ["universal-3-pro", "universal-2"],
-      language_detection: !normalizedLanguage,
-      ...(normalizedLanguage ? { language_code: normalizedLanguage } : {}),
-      format_text: true,
-      punctuate: true,
-    }),
+    // The raw key, with no "Bearer " prefix.
+    headers: { Authorization: apiKey },
+    body: form,
+    signal: AbortSignal.timeout(DICTATION_TIMEOUT_MS),
   });
-  const submitJson = await readJsonResponse<AssemblyAISubmitResponse>(submit);
-  if (!submitJson.id) {
-    throw new Error(
-      submitJson.error || "AssemblyAI did not return transcript id",
-    );
+
+  if (!response.ok) {
+    throw new Error(await readDictationError(response));
   }
 
-  const startedAt = Date.now();
-  while (Date.now() - startedAt < ASSEMBLYAI_TIMEOUT_MS) {
-    const poll = await fetch(`${baseUrl}/v2/transcript/${submitJson.id}`, {
-      headers,
-    });
-    const transcript = await readJsonResponse<AssemblyAIPollResponse>(poll);
+  const result = (await response.json()) as DictationResponse;
+  const verbatim = result.text?.trim() ?? "";
+  // A failed rewrite still returns 200 with the transcription intact, so
+  // `llm_error` is never a request failure — fall back and carry on.
+  const cleaned = result.llm_response?.trim() || verbatim;
 
-    if (transcript.status === "completed") {
-      return {
-        text: transcript.text?.trim() ?? "",
-        language: transcript.language_code ?? undefined,
-        confidence:
-          transcript.confidence ?? transcript.language_confidence ?? undefined,
-        transcriptId: submitJson.id,
-      };
-    }
-
-    if (transcript.status === "error") {
-      throw new Error(transcript.error || "AssemblyAI transcription failed");
-    }
-
-    await sleep(ASSEMBLYAI_POLL_INTERVAL_MS);
-  }
-
-  throw new Error("AssemblyAI transcription timed out");
+  return {
+    text: cleaned,
+    verbatimText: verbatim,
+    // Dictation takes languages as input and does not report a detected one,
+    // so this is only set when the caller told us which language to expect.
+    language: normalizedLanguage || undefined,
+    confidence: result.confidence ?? undefined,
+    transcriptId: result.session_id ?? "",
+  };
 }

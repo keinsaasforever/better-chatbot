@@ -5,8 +5,15 @@ import { DBEdge, DBNode } from "app-types/workflow";
 import { ObjectJsonSchema7 } from "app-types/util";
 import { defaultObjectJsonSchema } from "../shared.workflow";
 
+/** Who the workflow runs as; tool nodes act with this identity's access. */
+export interface WorkflowCaller {
+  userId: string;
+  organizationId?: string | null;
+}
+
 export interface WorkflowRuntimeState {
   query: Record<string, unknown>;
+  caller?: WorkflowCaller;
   inputs: {
     [nodeId: string]: any;
   };
@@ -24,10 +31,12 @@ export interface WorkflowRuntimeState {
 export const createGraphStore = (params: {
   nodes: DBNode[];
   edges: DBEdge[];
+  caller?: WorkflowCaller;
 }) => {
   return graphStore<WorkflowRuntimeState>((set, get) => {
     return {
       query: {},
+      caller: params.caller,
       outputs: {},
       inputs: {},
       nodes: params.nodes,

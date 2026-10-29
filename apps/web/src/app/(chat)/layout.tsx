@@ -1,4 +1,5 @@
 import { AppShell } from "@/components/layouts/app-shell";
+import { UsageLimitGate } from "@/components/gate/usage-limit";
 import { getSession } from "lib/auth/server";
 import { userRepository } from "lib/db/repository";
 import { cookies } from "next/headers";
@@ -38,9 +39,23 @@ export default async function ChatLayout({
     }
   }
 
+  // The credit nudge belongs to this surface, not to `AppShell` — mounting it
+  // in the shell also covered `/accept-invitation/:id`, where the dialog
+  // stopped invited users from ever joining the organization whose credits
+  // would have replaced the exhausted personal allowance being reported.
+  // `tests/auth/invite-callback.spec.ts` locks that down; keep both components
+  // here rather than moving them into the shell.
+  //
+  // The modal itself is dismissible for the browser session: it is a nudge, and
+  // actual spend enforcement is server-side (the credit guard, plus the 402
+  // `CREDITS_EXHAUSTED` the chat routes return).
+  //
+  // Rendered after the onboarding gate so the `/onboarding` redirect path still
+  // does not pay for the billing round trip.
   return (
     <AppShell user={session.user} syncOnboardingCookie={syncOnboardingCookie}>
       {children}
+      <UsageLimitGate />
     </AppShell>
   );
 }

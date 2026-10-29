@@ -88,9 +88,9 @@ export function UserInstructionsContent() {
       )
       .ifOk(() => fetchPreferences())
       .watch((result) => {
-        if (result.isOk)
-          toast.success(t("Chat.ChatPreferences.preferencesSaved"));
-        else toast.error(t("Chat.ChatPreferences.failedToSavePreferences"));
+        if (!result.isOk) {
+          toast.error(t("Chat.ChatPreferences.failedToSavePreferences"));
+        }
       })
       .watch(() => setIsSaving(false));
   };
@@ -334,7 +334,6 @@ export function ExportsManagementContent() {
         throw new Error("Failed to delete export");
       }
 
-      toast.success(t("Chat.ChatPreferences.exportDeleted"));
       refetchExports();
     } catch (_error) {
       toast.error(t("Chat.ChatPreferences.failedToDeleteExport"));
@@ -346,7 +345,6 @@ export function ExportsManagementContent() {
   const handleCopyLink = (exportId: string) => {
     const link = `${window.location.origin}/export/${exportId}`;
     navigator.clipboard.writeText(link);
-    toast.success(t("Chat.ChatPreferences.linkCopied"));
   };
 
   return (

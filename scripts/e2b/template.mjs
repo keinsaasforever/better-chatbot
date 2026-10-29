@@ -1,5 +1,10 @@
 /**
- * Custom E2B templates built by this repo.
+ * Custom E2B templates this repo defines.
+ *
+ * Defines, not builds: `e2b/build/build.ts` reads this list and builds one with
+ * the v2 SDK, and the **Build E2B template** GitHub Action runs it. Nothing
+ * builds automatically on push — an image that takes minutes and costs build
+ * minutes does not belong in the path of every commit.
  *
  * This was a set of single scalars, and the build command in package.json
  * re-typed every value by hand — so the two could silently drift, and there was
@@ -37,15 +42,29 @@ export const CUSTOM_TEMPLATES = [
     ],
   },
   {
-    name: "navigator-html-render",
-    dockerfile: "./e2b.render.Dockerfile",
-    // No dev server — this template is driven through the SDK, so the start
-    // command just has to keep the sandbox alive.
-    startCommand: "sleep infinity",
-    readyCommand: 'python -c "import weasyprint"',
+    name: "navigator-python-docs",
+    dockerfile: "./e2b.docs.Dockerfile",
+    kind: "execution",
+    // Copied verbatim from the upstream code-interpreter template's own docker
+    // branch (e2b-dev/code-interpreter template/template.py). `runCode` talks
+    // to the code-interpreter server this script starts on port 49999, so
+    // replacing it with anything else — `sleep infinity` included — yields a
+    // sandbox that boots and then fails every execution.
+    startCommand: "sudo --preserve-env=E2B_LOCAL /root/.jupyter/start-up.sh",
+    // The health check is what makes `runCode` safe to call. The library
+    // imports used to be ANDed onto this, and moved into the Dockerfile as a
+    // RUN: a ready command runs in a loop until it exits 0, so a broken
+    // package hung the build to its one-hour limit instead of failing.
+    readyCommand:
+      "curl --fail --silent --show-error http://localhost:49999/health",
     port: null,
-    entrypoint: "render.py",
-    packages: ["weasyprint==63.1", "pypdf==5.1.0"],
+    entrypoint: "script.py",
+    packages: [
+      "reportlab==4.2.5",
+      "fpdf2==2.8.2",
+      "weasyprint==63.1",
+      "pypdf==5.1.0",
+    ],
   },
 ];
 
@@ -69,44 +88,10 @@ export const ALL_TEMPLATE_NAMES = [
   ...CUSTOM_TEMPLATES.map((template) => template.name),
 ];
 
-export function buildCommandFor(template) {
-  return [
-    "e2b template build",
-    `--name ${template.name}`,
-    `--dockerfile ${template.dockerfile}`,
-    `--cmd ${JSON.stringify(template.startCommand)}`,
-    `--ready-cmd ${JSON.stringify(template.readyCommand)}`,
-  ].join(" ");
-}
-
 export function getCustomTemplate(name) {
   return CUSTOM_TEMPLATES.find((template) => template.name === name);
 }
 
 if (process.argv[1]?.endsWith("template.mjs")) {
-  const [, , command, name] = process.argv;
-
-  // `build <name>` prints just the CLI invocation so package.json can exec it
-  // instead of duplicating the flags.
-  if (command === "build") {
-    const target = name ? getCustomTemplate(name) : CUSTOM_TEMPLATES[0];
-    if (!target) {
-      console.error(
-        `Unknown template "${name}". Known: ${CUSTOM_TEMPLATES.map((t) => t.name).join(", ")}`,
-      );
-      process.exit(1);
-    }
-    console.log(buildCommandFor(target));
-  } else {
-    console.log(
-      JSON.stringify(
-        CUSTOM_TEMPLATES.map((template) => ({
-          ...template,
-          buildCommand: buildCommandFor(template),
-        })),
-        null,
-        2,
-      ),
-    );
-  }
+  console.log(JSON.stringify(CUSTOM_TEMPLATES, null, 2));
 }

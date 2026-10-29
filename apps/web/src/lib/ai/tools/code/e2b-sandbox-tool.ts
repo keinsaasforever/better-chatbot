@@ -57,7 +57,7 @@ export const e2bSandboxTool = createTool({
 Images and files the user uploaded are already hosted at public URLs — reference them straight from your markup (\`<img src="THE_URL">\`). Never base64-encode them into the code and never try to write them into the sandbox filesystem: the payload limit below applies to your arguments, and a URL keeps working after the sandbox is gone.
 
 Do NOT use this for calculations, data analysis, or one-off scripts — use javascript-execution or python-execution.
-Do NOT use this to produce a downloadable file (PDF, CSV, Excel, image) with no web UI — use python-execution; it returns saved files as downloads. Only route document generation to external integrations if the user names one.
+Do NOT use this to produce a downloadable file (PDF, CSV, Excel, image) with no web UI — use create-pdf for a prose document, or python-execution for anything computed; both return the file as a download. Only route document generation to external integrations if the user names one.
 
 Templates — pick one, then write the entrypoint below. Each ships the listed tooling PRE-INSTALLED (don't reinstall it):
 ${describeEnabledPreviewTemplates()}

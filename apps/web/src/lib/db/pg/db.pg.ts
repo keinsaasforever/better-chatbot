@@ -10,9 +10,10 @@ declare global {
 // Reuse one client per warm serverless instance. Supabase's transaction pooler
 // is shared across every concurrent instance — keep max low (default 1) so
 // instance count × max stays within the pooler limit. Override via env if needed.
+// DATABASE_URL is the name the Neon integration on Vercel provisions.
 export const pgClient =
   globalThis._pgClient ??
-  postgres(process.env.POSTGRES_URL!, {
+  postgres((process.env.POSTGRES_URL || process.env.DATABASE_URL)!, {
     prepare: false,
     max: process.env.POSTGRES_POOL_MAX
       ? Number(process.env.POSTGRES_POOL_MAX)

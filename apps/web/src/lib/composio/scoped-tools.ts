@@ -9,7 +9,8 @@ import { aiTelemetry } from "lib/ai/telemetry";
 
 const logger = globalLogger.withDefaults({ message: "Composio Scoped: " });
 
-const DERIVE_MODEL = { provider: "moonshotai", model: "kimi-k2.6" } as const;
+/** Navigator base model, by alias so a base-model swap carries here. */
+const DERIVE_MODEL = { provider: "Navigator", model: "Base model" } as const;
 
 type ToolkitRef = { slug: string; name?: string };
 

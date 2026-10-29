@@ -31,10 +31,14 @@ const apiKey = sanitize(
 );
 
 /**
- * Only configure AI Gateway if at least one environment variable is set.
+ * Only configure AI Gateway if at least one environment variable is set, or
+ * when deployed on Vercel: there the gateway authenticates with the
+ * deployment's OIDC token, so no key is needed.
  * This allows fallback to direct provider usage when gateway is not configured.
  */
-const shouldConfigureGateway = Boolean(baseURL || apiKey);
+const shouldConfigureGateway = Boolean(
+  baseURL || apiKey || process.env.VERCEL === "1",
+);
 
 if (shouldConfigureGateway) {
   // Create gateway provider instance with proper settings

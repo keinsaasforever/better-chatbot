@@ -6,6 +6,7 @@ import {
   CodeWorkerRequest,
   CodeWorkerResponse,
 } from "./code-runner.interface";
+import { CLIENT_EXECUTION_REQUEST_TIMEOUT_MS } from "./timeouts";
 
 /**
  * Try E2B server-side execution.
@@ -19,6 +20,16 @@ async function callE2BApi(
   type: "javascript" | "python",
   option: CodeRunnerOptions,
 ): Promise<CodeRunnerResult | null> {
+  // Without this the browser waits out the route's own `maxDuration` (300 s):
+  // `option.timeout` is only a hint carried in the body for the sandbox, never
+  // a deadline on the request. A run that never answers then holds the tool
+  // call open with nothing to cancel it, which on iOS — where the tab can be
+  // frozen mid-flight — is indistinguishable from a hang.
+  const controller = new AbortController();
+  const deadline = setTimeout(
+    () => controller.abort(),
+    CLIENT_EXECUTION_REQUEST_TIMEOUT_MS,
+  );
   try {
     const response = await fetch("/api/code-execution/e2b", {
       method: "POST",
@@ -28,13 +39,33 @@ async function callE2BApi(
         type,
         timeout: option.timeout,
         threadId: option.threadId,
+        agentId: option.agentId,
       }),
+      signal: controller.signal,
     });
     if (!response.ok) return null;
-    return response.json() as Promise<CodeRunnerResult>;
+    return (await response.json()) as CodeRunnerResult;
   } catch {
+    // A timeout is not the same failure as an unreachable route, and the model
+    // can act on the difference. Returning null for both would report "the
+    // sandbox could not be reached" for a run that was simply too slow.
+    if (controller.signal.aborted) return executionTimedOutResult();
     return null;
+  } finally {
+    clearTimeout(deadline);
   }
+}
+
+/** Shown when the run outlived the client's deadline. */
+function executionTimedOutResult(): CodeRunnerResult {
+  const message =
+    "Code execution timed out before the sandbox returned a result. The run may have been too slow, or the connection was interrupted — try again, or simplify the code.";
+  return {
+    success: false,
+    logs: [{ type: "error", args: [{ type: "data", value: message }] }],
+    error: message,
+    backend: "e2b",
+  };
 }
 
 /** Shown when E2B is the configured backend but couldn't be reached. */

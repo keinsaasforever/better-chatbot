@@ -1,10 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useShallow } from "zustand/shallow";
 import { toast } from "sonner";
-import { X, Plus, ArrowUpRight, Loader2 } from "lucide-react";
+import { X, Plus, ArrowUpRight, Loader2, Search } from "lucide-react";
 import {
   Drawer,
   DrawerContent,
@@ -13,6 +13,7 @@ import {
   DrawerTitle,
 } from "ui/drawer";
 import { Button } from "ui/button";
+import { Input } from "ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "ui/tabs";
 import {
   Card,
@@ -32,7 +33,26 @@ import type { AgentSummary } from "app-types/agent";
 import { fetcher } from "lib/utils";
 import useSWR from "swr";
 
-const CATEGORIES: PresetCategory[] = ["Sales", "Marketing", "Admin", "Finance"];
+/** Display order. Not every category necessarily has presets. */
+const CATEGORY_ORDER: PresetCategory[] = [
+  "Sales",
+  "Marketing",
+  "Admin",
+  "Finance",
+  "Legal",
+];
+
+/**
+ * Only categories that actually have presets get a tab.
+ *
+ * The list used to be hardcoded and had drifted from the data: "Legal" was
+ * missing, so those presets could not be reached through the library at all,
+ * while "Marketing" and "Finance" showed permanently empty tabs. Deriving it
+ * keeps the two in step as presets are added.
+ */
+const CATEGORIES = CATEGORY_ORDER.filter((category) =>
+  PRESET_AGENTS.some((preset) => preset.category === category),
+);
 
 // ── Individual preset card ─────────────────────────────────────────────────
 
@@ -62,7 +82,6 @@ function PresetCard({
       if (!res.ok) throw new Error("Failed to add agent");
       const { agentId: newAgentId } = await res.json();
       onAdded(preset.presetId, newAgentId);
-      toast.success(`${preset.name} added to your agents`);
     } catch {
       toast.error("Failed to add agent");
     } finally {
@@ -132,24 +151,36 @@ function PresetCard({
   );
 }
 
-// ── Category grid ──────────────────────────────────────────────────────────
+// ── Grids ──────────────────────────────────────────────────────────────────
 
-function CategoryGrid({
-  category,
+/** Name and description are what someone browsing the library reads. */
+export function matchesPresetQuery(preset: PresetAgent, query: string) {
+  const needle = query.trim().toLowerCase();
+  if (!needle) return true;
+  return (
+    preset.name.toLowerCase().includes(needle) ||
+    preset.description.toLowerCase().includes(needle)
+  );
+}
+
+function PresetGrid({
+  presets,
   presetIdToAgentId,
   onAdded,
+  emptyTitle,
+  emptyHint,
 }: {
-  category: PresetCategory;
+  presets: PresetAgent[];
   presetIdToAgentId: Map<string, string>;
   onAdded: (presetId: string, agentId: string) => void;
+  emptyTitle: string;
+  emptyHint: string;
 }) {
-  const presets = PRESET_AGENTS.filter((p) => p.category === category);
-
   if (presets.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-20 text-muted-foreground gap-2">
-        <p className="text-sm">No agents in this category yet.</p>
-        <p className="text-xs">Check back soon — more are on the way.</p>
+        <p className="text-sm">{emptyTitle}</p>
+        <p className="text-xs">{emptyHint}</p>
       </div>
     );
   }
@@ -168,6 +199,26 @@ function CategoryGrid({
   );
 }
 
+function CategoryGrid({
+  category,
+  presetIdToAgentId,
+  onAdded,
+}: {
+  category: PresetCategory;
+  presetIdToAgentId: Map<string, string>;
+  onAdded: (presetId: string, agentId: string) => void;
+}) {
+  return (
+    <PresetGrid
+      presets={PRESET_AGENTS.filter((p) => p.category === category)}
+      presetIdToAgentId={presetIdToAgentId}
+      onAdded={onAdded}
+      emptyTitle="No agents in this category yet."
+      emptyHint="Check back soon — more are on the way."
+    />
+  );
+}
+
 // ── Drawer ─────────────────────────────────────────────────────────────────
 
 export function AgentLibraryDrawer() {
@@ -181,26 +232,44 @@ export function AgentLibraryDrawer() {
   );
 
   // Build a map of presetId -> agentId from the user's existing agents
-  const serverMap = new Map(
+  // The tuple annotation matters: without it `.map` yields string[][], which
+  // does not match Map's entries overload, and both this map and the merged
+  // one below fall back to Map<unknown, unknown>.
+  const serverMap = new Map<string, string>(
     (myAgents ?? [])
       .filter((a): a is AgentSummary & { presetId: string } => !!a.presetId)
-      .map((a) => [a.presetId, a.id]),
+      .map((a): [string, string] => [a.presetId, a.id]),
   );
 
   // Track locally added presets so the UI updates instantly without a full refetch
   const [locallyAdded, setLocallyAdded] = useState<Map<string, string>>(
     new Map(),
   );
-  const presetIdToAgentId = new Map([...serverMap, ...locallyAdded]);
+  const presetIdToAgentId = new Map<string, string>([
+    ...serverMap,
+    ...locallyAdded,
+  ]);
+
+  const [query, setQuery] = useState("");
+  const isSearching = query.trim().length > 0;
+  const searchResults = useMemo(
+    () => PRESET_AGENTS.filter((preset) => matchesPresetQuery(preset, query)),
+    [query],
+  );
 
   const handleAdded = (presetId: string, agentId: string) => {
     setLocallyAdded((prev) => new Map([...prev, [presetId, agentId]]));
     mutateAgents();
   };
 
+  const reset = () => {
+    setLocallyAdded(new Map());
+    setQuery("");
+  };
+
   const handleClose = () => {
     appStoreMutate({ openAgentLibrary: false });
-    setLocallyAdded(new Map());
+    reset();
   };
 
   return (
@@ -210,7 +279,7 @@ export function AgentLibraryDrawer() {
       direction="top"
       onOpenChange={(isOpen) => {
         appStoreMutate({ openAgentLibrary: isOpen });
-        if (!isOpen) setLocallyAdded(new Map());
+        if (!isOpen) reset();
       }}
     >
       <DrawerPortal>
@@ -239,29 +308,59 @@ export function AgentLibraryDrawer() {
           <DrawerTitle className="sr-only">Agent Library</DrawerTitle>
           <DrawerDescription className="sr-only" />
 
+          {/* Search spans the whole library: an agent someone is looking for is
+              rarely in the category tab they happen to be on, and the tabs were
+              the only way to browse. A query therefore replaces the tabs with a
+              flat result grid rather than filtering within one category. */}
+          <div className="relative mb-6 max-w-sm">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground pointer-events-none" />
+            <Input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search agents"
+              aria-label="Search agents"
+              className="pl-9"
+            />
+          </div>
+
           {/* Content */}
           <div className="flex-1 flex flex-col min-h-0">
-            <Tabs defaultValue="Sales" className="flex-1 flex flex-col min-h-0">
-              <TabsList className="w-fit mb-6">
-                {CATEGORIES.map((cat) => (
-                  <TabsTrigger key={cat} value={cat}>
-                    {cat}
-                  </TabsTrigger>
-                ))}
-              </TabsList>
-
+            {isSearching ? (
               <div className="flex-1 overflow-y-auto">
-                {CATEGORIES.map((cat) => (
-                  <TabsContent key={cat} value={cat} className="mt-0">
-                    <CategoryGrid
-                      category={cat}
-                      presetIdToAgentId={presetIdToAgentId}
-                      onAdded={handleAdded}
-                    />
-                  </TabsContent>
-                ))}
+                <PresetGrid
+                  presets={searchResults}
+                  presetIdToAgentId={presetIdToAgentId}
+                  onAdded={handleAdded}
+                  emptyTitle={`No agents match "${query.trim()}".`}
+                  emptyHint="Try a different word, or clear the search to browse by category."
+                />
               </div>
-            </Tabs>
+            ) : (
+              <Tabs
+                defaultValue={CATEGORIES[0]}
+                className="flex-1 flex flex-col min-h-0"
+              >
+                <TabsList className="w-fit mb-6">
+                  {CATEGORIES.map((cat) => (
+                    <TabsTrigger key={cat} value={cat}>
+                      {cat}
+                    </TabsTrigger>
+                  ))}
+                </TabsList>
+
+                <div className="flex-1 overflow-y-auto">
+                  {CATEGORIES.map((cat) => (
+                    <TabsContent key={cat} value={cat} className="mt-0">
+                      <CategoryGrid
+                        category={cat}
+                        presetIdToAgentId={presetIdToAgentId}
+                        onAdded={handleAdded}
+                      />
+                    </TabsContent>
+                  ))}
+                </div>
+              </Tabs>
+            )}
           </div>
         </DrawerContent>
       </DrawerPortal>

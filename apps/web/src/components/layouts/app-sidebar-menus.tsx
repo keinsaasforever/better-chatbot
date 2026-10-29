@@ -4,23 +4,23 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "ui/tooltip";
 import { SidebarMenu, SidebarMenuItem } from "ui/sidebar";
 import { SidebarGroupContent } from "ui/sidebar";
 
+import { requireCredits } from "@/lib/billing/require-credits";
 import { SidebarGroup } from "ui/sidebar";
 import Link from "next/link";
 import { getShortcutKeyList, Shortcuts } from "lib/keyboard-shortcuts";
-import { usePathname, useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { MCPIcon } from "ui/mcp-icon";
 import { WriteIcon } from "ui/write-icon";
 import { FolderSearchIcon, PlusIcon, Waypoints } from "lucide-react";
 import { useState } from "react";
 import { ProjectDialog } from "../projects/project-dialog";
+import { useStartNewChat } from "@/hooks/use-start-new-chat";
 import { getIsUserAdmin } from "lib/user/utils";
 import { BasicUser } from "app-types/user";
 import { AppSidebarAdmin } from "./app-sidebar-menu-admin";
 
 export function AppSidebarMenus({ user }: { user?: BasicUser }) {
-  const router = useRouter();
-  const pathname = usePathname();
+  const startNewChat = useStartNewChat();
   const t = useTranslations("");
   const { setOpenMobile } = useSidebar();
   const [addProjectDialogOpen, setAddProjectDialogOpen] = useState(false);
@@ -36,15 +36,7 @@ export function AppSidebarMenus({ user }: { user?: BasicUser }) {
                 onClick={(e) => {
                   e.preventDefault();
                   setOpenMobile(false);
-                  // Only call refresh when already on "/": push already generates
-                  // a fresh UUID server-side, so calling both would render the
-                  // page twice with two different UUIDs and make the chat window
-                  // visibly reload.
-                  if (pathname === "/") {
-                    router.refresh();
-                  } else {
-                    router.push("/");
-                  }
+                  startNewChat();
                 }}
               >
                 <SidebarMenuButton className="flex font-semibold group/new-chat bg-input/20 border border-border/40">
@@ -101,7 +93,12 @@ export function AppSidebarMenus({ user }: { user?: BasicUser }) {
               </Link>
               <SidebarMenuAction
                 className="group-hover/project:opacity-100 opacity-0 transition-opacity"
-                onClick={() => setAddProjectDialogOpen(true)}
+                onClick={() => {
+                  // Controlled trigger: it bypasses ProjectDialog's own opener,
+                  // so the gate has to be repeated here.
+                  if (!requireCredits()) return;
+                  setAddProjectDialogOpen(true);
+                }}
               >
                 <Tooltip>
                   <TooltipTrigger asChild>

@@ -7,6 +7,10 @@ import {
   MemberAiUsagePeriodTable,
 } from "@/lib/db/pg/schema.pg";
 import { and, eq, sql } from "drizzle-orm";
+import {
+  resolveCacheRatios,
+  weightInputTokens,
+} from "@/lib/ai/cache-weighted-tokens";
 import type { RoutingCandidate } from "./types";
 
 const MICROS_PER_MILLION = 1_000_000;
@@ -19,13 +23,36 @@ export class MemberBudgetExceededError extends Error {
   }
 }
 
+/**
+ * The €15 member caps run on a second, parallel cost model. It has to weigh
+ * cached input the same way `trackCostBasedTokens` does, or a capped member is
+ * charged against their allowance at a rate the invoice never sees - stricter
+ * than the billing they can actually check.
+ *
+ * `cacheReadTokens` / `cacheWriteTokens` are optional: the reservation made
+ * before a run has no usage to read, so it estimates on gross tokens as
+ * before, and only the finalisation after the run passes the breakdown.
+ */
 export function estimateCostMicros(input: {
   inputTokens: number;
   outputTokens: number;
   candidate: RoutingCandidate;
+  cacheReadTokens?: number;
+  cacheWriteTokens?: number;
+  noCacheTokens?: number;
 }): number {
+  const { effectiveInputTokens } = weightInputTokens(
+    {
+      promptTokens: input.inputTokens,
+      cacheReadTokens: input.cacheReadTokens,
+      cacheWriteTokens: input.cacheWriteTokens,
+      noCacheTokens: input.noCacheTokens,
+    },
+    resolveCacheRatios(),
+  );
+
   const inputCost =
-    (input.inputTokens * input.candidate.inputPriceMicrosPerMillion) /
+    (effectiveInputTokens * input.candidate.inputPriceMicrosPerMillion) /
     MICROS_PER_MILLION;
   const outputCost =
     (input.outputTokens * input.candidate.outputPriceMicrosPerMillion) /

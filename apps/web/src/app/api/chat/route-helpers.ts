@@ -6,6 +6,10 @@ import { UIMessage } from "ai";
 import { ChatAttachment } from "app-types/chat";
 import { getSession } from "auth/server";
 import { and, eq } from "drizzle-orm";
+import {
+  type ChatRunMode,
+  SCHEDULED_TASK_ID_HEADER,
+} from "@/lib/chat/run-mode";
 
 /**
  * Turns a stored attachment path into a URL an external fetcher can read.
@@ -26,15 +30,37 @@ export function toPublicAttachmentUrl(url: string): string {
  * Resolves the request session, honouring the scheduled-task secret path.
  * Returns a Response (401/403) when auth fails so the caller can early-return,
  * or the authenticated session otherwise.
+ *
+ * `headless` marks a run with no browser attached — today the scheduled-task
+ * loopback. Tool loading needs it: a client-side tool (one declared without an
+ * `execute`) can never be answered on such a run. It is derived here, once,
+ * from the same check that authenticates the request, so no other code has to
+ * decide what a valid scheduled-task credential looks like.
+ *
+ * `runMode` is the separate question of whether a human is present — see
+ * `lib/chat/run-mode`. It is set from the same verified branch, and
+ * `scheduledTaskId` with it: the header carries only an id, and the route
+ * re-reads the row, so a task's grants never travel inside the request they
+ * authorize.
  */
+export type ResolvedChatSession = {
+  session: UserSession;
+  headless: boolean;
+  runMode: ChatRunMode;
+  scheduledTaskId: string | null;
+};
+
 export async function resolveChatSession(
   request: Request,
-): Promise<UserSession | Response> {
+): Promise<ResolvedChatSession | Response> {
   // Check for scheduled task authentication
   const scheduledTaskAuth = request.headers.get("X-Scheduled-Task-Auth");
   const scheduledTaskUserId = request.headers.get("X-User-Id");
 
   let session = await getSession();
+  let headless = false;
+  let runMode: ChatRunMode = "interactive";
+  let scheduledTaskId: string | null = null;
 
   // If this is a scheduled task request, validate and load user from database
   if (scheduledTaskAuth && scheduledTaskUserId) {
@@ -104,13 +130,18 @@ export async function resolveChatSession(
         updatedAt: new Date(),
       },
     } as UserSession;
+    headless = true;
+    runMode = "unattended";
+    // Read only after the secret check above: this id selects which per-task
+    // grants apply, so it must not be trusted from an unauthenticated caller.
+    scheduledTaskId = request.headers.get(SCHEDULED_TASK_ID_HEADER);
   }
 
   if (!session?.user.id) {
     return new Response("Unauthorized", { status: 401 });
   }
 
-  return session;
+  return { session, headless, runMode, scheduledTaskId };
 }
 
 /**
@@ -208,4 +239,45 @@ export function buildInitialMessageParts(
   attachments: ChatAttachment[],
 ): UIMessage["parts"] {
   return buildMessageParts(currentParts, attachments, []);
+}
+
+/**
+ * Terminal state for a run that ended in streamText's `onAbort`.
+ *
+ * Every abort lands in that one callback: the detached stop the user asked for
+ * *and* the SDK's own step/chunk/total timeouts, which fire through the same
+ * abort signal. Only the first is a "stop". Recording a timeout as
+ * `cancelled` made the UI say "This response was stopped." for a run the user
+ * never touched — the 2026-09-08 trace `fd0141e9…` died on a 45s chunk timeout
+ * mid-step and was reported exactly that way.
+ */
+export function resolveAbortOutcome({
+  userStopped,
+  reason,
+}: {
+  userStopped: boolean;
+  reason?: unknown;
+}): {
+  runStatus: "cancelled" | "timed_out";
+  error: { code: string; retryable: true };
+  /** Present only for the unexpected case, so callers log it. */
+  detail?: string;
+} {
+  if (userStopped) {
+    return {
+      runStatus: "cancelled",
+      error: { code: "aborted", retryable: true },
+    };
+  }
+  const detail =
+    reason instanceof Error
+      ? `${reason.name}: ${reason.message}`
+      : reason === undefined
+        ? "no reason (budget exhausted: total/step/chunk/tool)"
+        : String(reason);
+  return {
+    runStatus: "timed_out",
+    error: { code: "run_timeout", retryable: true },
+    detail,
+  };
 }

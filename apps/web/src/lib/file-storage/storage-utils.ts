@@ -100,8 +100,11 @@ export const storageKeyFromUrl = (input: string): string | null => {
       return supabaseMatch[1]; // Return just the object path without bucket
     }
 
-    // Fallback: return full pathname without leading slash
-    return pathname.replace(/^\//, "");
+    // Anything else is not one of our objects. This used to fall back to the
+    // raw pathname, which turned *any* URL into a storage key — combined with
+    // a service-role download that is an object reference under the caller's
+    // control. Callers must skip a URL they cannot recognise.
+    return null;
   } catch {
     return null;
   }

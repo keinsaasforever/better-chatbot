@@ -40,6 +40,16 @@ const ChatBotTemporary = dynamic(
   },
 );
 
+const ProblemReportDialog = dynamic(
+  () =>
+    import("@/components/problem-report-dialog").then(
+      (mod) => mod.ProblemReportDialog,
+    ),
+  {
+    ssr: false,
+  },
+);
+
 const McpCustomizationPopup = dynamic(
   () =>
     import("@/components/mcp-customization-popup").then(
@@ -69,6 +79,7 @@ export function AppPopupProvider() {
       <ChatBotVoice />
       <ChatBotTemporary />
       <McpCustomizationPopup />
+      <ProblemReportDialog />
       <CloudPopups />
     </>
   );

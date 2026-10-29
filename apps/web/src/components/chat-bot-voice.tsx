@@ -1,6 +1,7 @@
 "use client";
 
 import { useGlobalShortcut } from "@/hooks/use-global-shortcut";
+import { requireCredits } from "@/lib/billing/require-credits";
 import { isNull } from "lib/utils";
 import { useEffect } from "react";
 import { appStore } from "@/app/store";
@@ -13,15 +14,21 @@ const VoiceChatSession = dynamic(
   { ssr: false },
 );
 
+const VoiceOrb = dynamic(
+  () => import("./cockpit/voice-orb/voice-orb").then((mod) => mod.VoiceOrb),
+  { ssr: false },
+);
+
 /**
  * Lightweight shell: keyboard shortcut + lazy-loaded realtime session.
  * Heavy deps (@ai-sdk/react realtime) load only when voice chat opens.
  */
 export function ChatBotVoice() {
-  const [isOpen, agentId, appStoreMutate] = appStore(
+  const [isOpen, agentId, context, appStoreMutate] = appStore(
     useShallow((state) => [
       state.voiceChat.isOpen,
       state.voiceChat.agentId,
+      state.voiceChat.context,
       state.mutate,
     ]),
   );
@@ -44,6 +51,7 @@ export function ChatBotVoice() {
       if (isVoiceChatEvent) {
         e.preventDefault();
         e.stopPropagation();
+        if (!requireCredits()) return;
         appStoreMutate((prev) => ({
           voiceChat: {
             ...prev.voiceChat,
@@ -58,5 +66,6 @@ export function ChatBotVoice() {
 
   if (!isOpen) return null;
 
-  return <VoiceChatSession />;
+  // The cockpit's COM 1 key opens a floating orb, not the full-screen drawer.
+  return context === "cockpit" ? <VoiceOrb /> : <VoiceChatSession />;
 }

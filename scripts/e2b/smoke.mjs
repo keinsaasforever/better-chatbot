@@ -6,6 +6,10 @@
  * Usage:
  *   E2B_LIVE_SMOKE=1 E2B_API_KEY=... pnpm e2b:smoke
  *   E2B_SMOKE_RUNS=5 may be used before re-enabling a rebuilt template.
+ *   E2B_INCLUDE_CUSTOM_TEMPLATE=1 adds the custom preview template.
+ *   E2B_INCLUDE_EXECUTION_TEMPLATES=1 adds the execution templates, which run
+ *     real code and assert on the files it produced. Required before enabling
+ *     navigator-python-docs in the registry.
  */
 
 import { createRequire } from "node:module";
@@ -46,6 +50,75 @@ const CUSTOM_TEMPLATE = {
   port: 3000,
   content: "export default function Home(){return <main>E2B_SMOKE_OK</main>}",
 };
+
+/**
+ * Execution templates have no dev server to poll, so a preview-style check
+ * would pass on an image whose code execution is broken. These run real code
+ * instead and assert on the file it produced.
+ *
+ * The PDF checks are the point of `navigator-python-docs`: the libraries are
+ * baked in precisely so no run has to pip install them, and a build that lost
+ * one must fail here rather than in production as a ModuleNotFoundError.
+ */
+const EXECUTION_TEMPLATES = [
+  {
+    id: "navigator-python-docs",
+    // No install line on purpose — an import that needs one is a failed build.
+    code: [
+      "from fpdf import FPDF",
+      "from weasyprint import HTML",
+      "import reportlab, pypdf",
+      "pdf = FPDF(); pdf.add_page(); pdf.set_font('Helvetica', size=16)",
+      "pdf.cell(0, 10, 'E2B_SMOKE_OK'); pdf.output('smoke.pdf')",
+      "HTML(string='<h1>E2B_SMOKE_OK</h1>').write_pdf('smoke-html.pdf')",
+      "print('E2B_SMOKE_OK')",
+    ].join("\n"),
+    expectFiles: ["smoke.pdf", "smoke-html.pdf"],
+  },
+];
+
+/** Reads a produced file and asserts it really is a PDF. */
+async function assertPdf(sandbox, filename) {
+  const bytes = await sandbox.files.read(`/home/user/${filename}`, {
+    format: "bytes",
+  });
+  const header = Buffer.from(bytes.slice(0, 5)).toString("latin1");
+  if (header !== "%PDF-") {
+    throw new Error(`${filename} is not a PDF (starts with ${header})`);
+  }
+  if (bytes.byteLength < 100) {
+    throw new Error(`${filename} is suspiciously small (${bytes.byteLength}B)`);
+  }
+}
+
+async function smokeExecutionTemplate(Sandbox, template, run, runs) {
+  const startedAt = Date.now();
+  let sandbox;
+  try {
+    sandbox = await Sandbox.create(template.id, {
+      apiKey: process.env.E2B_API_KEY,
+      requestTimeoutMs: 30_000,
+      timeoutMs: 5 * 60_000,
+    });
+
+    const execution = await sandbox.runCode(template.code, {
+      language: "python",
+      timeoutMs: 120_000,
+    });
+    if (execution.error) {
+      throw new Error(`${execution.error.name}: ${execution.error.value}`);
+    }
+    for (const filename of template.expectFiles) {
+      await assertPdf(sandbox, filename);
+    }
+
+    console.log(
+      `PASS template=${template.id} run=${run}/${runs} durationMs=${Date.now() - startedAt}`,
+    );
+  } finally {
+    if (sandbox) await sandbox.kill().catch(() => {});
+  }
+}
 
 function delay(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -107,6 +180,16 @@ async function main() {
         );
       } finally {
         if (sandbox) await sandbox.kill().catch(() => {});
+      }
+    }
+  }
+
+  // Gated separately: the execution template must exist in the E2B account
+  // before this can pass, and it is built after the preview templates.
+  if (process.env.E2B_INCLUDE_EXECUTION_TEMPLATES === "1") {
+    for (const template of EXECUTION_TEMPLATES) {
+      for (let run = 1; run <= runs; run++) {
+        await smokeExecutionTemplate(Sandbox, template, run, runs);
       }
     }
   }

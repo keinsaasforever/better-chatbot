@@ -43,6 +43,17 @@ export type UsageEvent = UsageTarget &
         modelId: string;
         promptTokens: number;
         completionTokens: number;
+        /**
+         * The prompt-cache breakdown of `promptTokens`, straight from
+         * `usage.inputTokenDetails`. Optional and purely additive: a caller
+         * that omits them bills exactly as it did before cache pricing
+         * existed.
+         */
+        cacheReadTokens?: number;
+        cacheWriteTokens?: number;
+        noCacheTokens?: number;
+        /** Generated images, for models with a per-image price component. */
+        imageCount?: number;
         idempotencyKey: string;
       }
     | {
@@ -67,7 +78,51 @@ export type UsageEvent = UsageTarget &
         memoryMb: number;
         sandboxExecutionId: string;
       }
+    | {
+        /**
+         * One Kernel browser run. `units` is whole headless-equivalent
+         * seconds (see `lib/kernel/browser-contract.ts`), so a single Autumn
+         * credit cost prices headless, headful and GPU browsers alike.
+         */
+        kind: "kernel";
+        units: number;
+        seconds: number;
+        browserType: string;
+        sessionId: string;
+        /**
+         * The tool call this segment belongs to. One browser session can span
+         * several calls once a run parks for a human sign-in, so the session
+         * id alone no longer identifies a billable run.
+         */
+        runId: string;
+      }
+    | {
+        /**
+         * One third-party (Composio) tool call. Counted, not priced — the
+         * feature's credit cost starts at 0 while the volume is unknown.
+         */
+        kind: "toolCall";
+        toolCallId: string;
+        toolName: string;
+      }
   );
+
+/**
+ * The credit position the chat surface nudges on. Only the hosted edition
+ * produces one; the community edition never has a limit to reach.
+ */
+export type UsageLimitStatus = {
+  isOverLimit: boolean;
+  usage: number;
+  includedUsage: number;
+  /**
+   * Whether the customer already holds the "pro" credit pack, which decides
+   * whether the modal offers an upgrade or another top-up. Optional on purpose:
+   * a status cached under the previous shape carries no value for it, and
+   * "unknown" must read as "not pro" rather than as a type error.
+   */
+  hasProPlan?: boolean;
+};
 
 /** Payload for the account-created side effects (CRM sync in the cloud). */
 export type CreatedUser = {
@@ -83,6 +138,14 @@ export type OrganizationInvitation = {
   invitedByEmail: string;
   teamName: string;
   inviteLink: string;
+};
+
+/** An internal notification to the operators of this instance. */
+export type NotificationEmail = {
+  to: string | string[];
+  cc?: string | string[];
+  subject: string;
+  body: string;
 };
 
 /** A password reset email that needs delivering. */

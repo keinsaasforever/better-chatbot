@@ -9,8 +9,10 @@ import {
   waitFor,
 } from "@testing-library/react";
 import { DefaultToolName } from "lib/ai/tools";
+import { NextIntlClientProvider } from "next-intl";
 import React from "react";
 import { afterEach, describe, expect, test, vi } from "vitest";
+import messages from "../../../messages/en.json";
 import { ArtifactChip } from "./artifact-chip";
 import { ArtifactPanelProvider } from "./artifact-panel-context";
 
@@ -56,15 +58,17 @@ function renderChip({
     | "cancelled";
 } = {}) {
   return render(
-    <ArtifactPanelProvider>
-      <ArtifactChip
-        part={part}
-        toolName={DefaultToolName.E2BSandbox}
-        onResult={onResult}
-        chatStatus={chatStatus}
-        runStatus={runStatus}
-      />
-    </ArtifactPanelProvider>,
+    <NextIntlClientProvider locale="en" messages={messages}>
+      <ArtifactPanelProvider>
+        <ArtifactChip
+          part={part}
+          toolName={DefaultToolName.E2BSandbox}
+          onResult={onResult}
+          chatStatus={chatStatus}
+          runStatus={runStatus}
+        />
+      </ArtifactPanelProvider>
+    </NextIntlClientProvider>,
   );
 }
 

@@ -15,8 +15,8 @@ import { Agent, AgentCreateSchema, AgentUpdateSchema } from "app-types/agent";
 import { ChatMention } from "app-types/chat";
 import { MCPServerInfo } from "app-types/mcp";
 import { WorkflowSummary } from "app-types/workflow";
-import { DefaultToolName } from "lib/ai/tools";
 import { BACKGROUND_COLORS } from "lib/const";
+import { defaultToolMentionsFromNames } from "lib/ai/agent/default-tool-mentions";
 import { cn, fetcher, objectFlow } from "lib/utils";
 import { safe } from "ts-safe";
 import { handleErrorWithToast } from "ui/shared-toast";
@@ -248,17 +248,9 @@ export default function EditAgent({
 
   const assignToolsByNames = useCallback(
     (toolNames: string[]) => {
-      const allMentions: ChatMention[] = [];
-
-      objectFlow(DefaultToolName).forEach((toolName) => {
-        if (toolNames.includes(toolName)) {
-          allMentions.push({
-            type: "defaultTool",
-            name: toolName,
-            label: toolName,
-          });
-        }
-      });
+      const allMentions: ChatMention[] = [
+        ...defaultToolMentionsFromNames(toolNames),
+      ];
 
       (mcpList as (MCPServerInfo & { id: string })[])?.forEach((mcp) => {
         mcp.toolInfo.forEach((tool) => {
@@ -283,16 +275,31 @@ export default function EditAgent({
         }
       });
 
-      if (allMentions.length > 0) {
-        setAgent((prev) => ({
-          instructions: {
-            ...prev.instructions,
-            mentions: allMentions,
-          },
-        }));
+      // Always write the resolved set, even when it is empty. The old guard
+      // skipped the update whenever nothing matched, which left the previous
+      // mentions in place and made a generation that resolved to nothing look
+      // like it had worked — the tools appeared in the proposal, the agent
+      // saved, and none of them were attached.
+      setAgent((prev) => ({
+        instructions: {
+          ...prev.instructions,
+          mentions: allMentions,
+        },
+      }));
+
+      // Names the generator proposed that match nothing this workspace has.
+      // Composio toolkits are the common case: they are reached through
+      // /api/connections and are in none of the three sources above, so a
+      // generated Composio tool silently resolves to nothing.
+      const resolved = new Set(allMentions.map((mention) => mention.name));
+      const unresolved = toolNames.filter((name) => !resolved.has(name));
+      if (unresolved.length > 0) {
+        toast.error(
+          t("Agent.toolsNotAvailable", { tools: unresolved.join(", ") }),
+        );
       }
     },
-    [mcpList, workflowToolList, setAgent],
+    [mcpList, workflowToolList, setAgent, t],
   );
 
   const saveAgent = useCallback(() => {
@@ -308,7 +315,6 @@ export default function EditAgent({
         )
         .ifOk((updatedAgent) => {
           mutateAgents(updatedAgent);
-          toast.success(t("Agent.updated"));
           router.push(`/agents`);
         })
         .ifFail(handleErrorWithToast)
@@ -325,7 +331,6 @@ export default function EditAgent({
         })
         .ifOk(async (updatedAgent) => {
           mutateAgents(updatedAgent);
-          toast.success(t("Agent.created"));
 
           // Track agent creation
           analytics.agentCreated({
@@ -355,7 +360,6 @@ export default function EditAgent({
               router.push(`/agent/${updatedAgent.id}`);
               return;
             }
-            toast.success("Schedule created");
           }
 
           router.push(`/agents`);
@@ -381,7 +385,6 @@ export default function EditAgent({
           .ifOk(() => {
             setAgent({ visibility });
             mutateAgents({ id: initialAgent.id, visibility });
-            toast.success(t("Agent.visibilityUpdated"));
 
             // Track visibility change
             analytics.agentVisibilityChanged({
@@ -420,7 +423,6 @@ export default function EditAgent({
       )
       .ifOk(() => {
         mutateAgents({ id: initialAgent.id }, true);
-        toast.success(t("Agent.deleted"));
 
         // Track agent deletion
         analytics.agentDeleted({
@@ -612,32 +614,6 @@ export default function EditAgent({
         </div>
 
         <div className="flex flex-col gap-6">
-          <div className="flex flex-wrap gap-2 items-center">
-            <span>{t("Agent.thisAgentIs")}</span>
-            {false ? (
-              <Skeleton className="w-32 sm:w-44 h-10" />
-            ) : (
-              <Input
-                id="agent-role"
-                data-testid="agent-role-input"
-                disabled={isLoading || !hasEditAccess}
-                placeholder={t("Agent.agentRolePlaceholder")}
-                className="hover:bg-input placeholder:text-xs bg-secondary/40 w-32 sm:w-44 transition-colors border-transparent border-none! focus-visible:bg-input! ring-0!"
-                value={agent.instructions?.role || ""}
-                onChange={(e) =>
-                  setAgent({
-                    instructions: {
-                      ...agent.instructions,
-                      role: e.target.value || "",
-                    },
-                  })
-                }
-                readOnly={!hasEditAccess}
-              />
-            )}
-            <span>{t("Agent.expertIn")}</span>
-          </div>
-
           <div className="flex gap-2 flex-col">
             <Label htmlFor="agent-prompt" className="text-base">
               {t("Agent.agentInstructionsLabel")}
@@ -793,7 +769,6 @@ export default function EditAgent({
                 isLoadingSchedule={isLoadingSchedule}
                 onScheduleCreated={() => {
                   refetchSchedule();
-                  toast.success("Schedule saved");
                 }}
               />
             )}

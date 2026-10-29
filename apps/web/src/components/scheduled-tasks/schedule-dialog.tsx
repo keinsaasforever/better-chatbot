@@ -1,6 +1,10 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useTranslations } from "next-intl";
+import useSWR from "swr";
+import { Switch } from "@/components/ui/switch";
+import { authClient } from "@/lib/auth/client";
 import {
   Dialog,
   DialogContent,
@@ -37,7 +41,15 @@ export type DeferredScheduleConfig = {
   cronExpression: string;
   timezone: string;
   inputPrompt: string | null;
+  browserAutomationEnabled: boolean;
+  browserCredentialAliases: string[];
   enabled: true;
+};
+
+type BrowserCredentialOption = {
+  alias: string;
+  label: string | null;
+  domain: string;
 };
 
 export interface ScheduleDialogProps {
@@ -76,12 +88,33 @@ export function ScheduleDialog({
   const [dayOfMonth, setDayOfMonth] = useState<number>(1);
   const [timezone, setTimezone] = useState(getUserTimezone());
   const [inputPrompt, setInputPrompt] = useState("");
+  const [browserAutomationEnabled, setBrowserAutomationEnabled] =
+    useState(false);
+  const [credentialAliases, setCredentialAliases] = useState<string[]>([]);
+  const tBrowser = useTranslations("Agent.scheduleBrowser");
+
+  // Only the org's stored sign-ins can be pinned, and the server re-checks the
+  // list anyway — this is for the picker, not for authorization.
+  const { data: activeOrg } = authClient.useActiveOrganization();
+  const { data: credentialData } = useSWR<{
+    credentials: BrowserCredentialOption[];
+  }>(
+    browserAutomationEnabled && activeOrg?.id
+      ? `/api/organization/${activeOrg.id}/browser-credentials`
+      : null,
+    (url: string) =>
+      fetch(url).then((res) => (res.ok ? res.json() : { credentials: [] })),
+  );
 
   // Pre-fill form with existing schedule data (a stored task or a pending
   // deferred config from the create flow — both carry the same fields).
   useEffect(() => {
     if (existingSchedule) {
       setInputPrompt(existingSchedule.inputPrompt || "");
+      setBrowserAutomationEnabled(
+        Boolean(existingSchedule.browserAutomationEnabled),
+      );
+      setCredentialAliases(existingSchedule.browserCredentialAliases ?? []);
       setTimezone(existingSchedule.timezone || getUserTimezone());
 
       // Parse cron back to form fields
@@ -119,6 +152,8 @@ export function ScheduleDialog({
         cronExpression,
         timezone,
         inputPrompt: inputPrompt || null,
+        browserAutomationEnabled,
+        browserCredentialAliases: credentialAliases,
         enabled: true,
       });
       onOpenChange(false);
@@ -136,6 +171,8 @@ export function ScheduleDialog({
         cronExpression,
         timezone,
         inputPrompt,
+        browserAutomationEnabled,
+        browserCredentialAliases: credentialAliases,
         enabled: true,
       };
 
@@ -286,6 +323,63 @@ export function ScheduleDialog({
               )}
             </div>
           )}
+
+          {/* Browser automation. Off by default and per-schedule, because an
+              unattended browser run signs itself in and bills browser-seconds
+              with nobody watching the result. */}
+          <div className="space-y-2 rounded-lg border p-3">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <Label htmlFor="browserAutomation">{tBrowser("enable")}</Label>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  {tBrowser("enableDescription")}
+                </p>
+              </div>
+              <Switch
+                id="browserAutomation"
+                checked={browserAutomationEnabled}
+                onCheckedChange={setBrowserAutomationEnabled}
+              />
+            </div>
+            {browserAutomationEnabled && (
+              <div className="space-y-1.5 pt-1">
+                <p className="text-xs font-medium">{tBrowser("credentials")}</p>
+                {(credentialData?.credentials.length ?? 0) === 0 ? (
+                  <p className="text-xs text-muted-foreground">
+                    {tBrowser("noCredentials")}
+                  </p>
+                ) : (
+                  credentialData?.credentials.map((credential) => (
+                    <label
+                      key={credential.alias}
+                      className="flex items-center gap-2 text-xs"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={credentialAliases.includes(credential.alias)}
+                        onChange={(e) =>
+                          setCredentialAliases((current) =>
+                            e.target.checked
+                              ? [...current, credential.alias]
+                              : current.filter((a) => a !== credential.alias),
+                          )
+                        }
+                      />
+                      <span>
+                        {credential.label || credential.alias}
+                        <span className="text-muted-foreground ml-1.5">
+                          {credential.domain}
+                        </span>
+                      </span>
+                    </label>
+                  ))
+                )}
+                <p className="text-xs text-muted-foreground">
+                  {tBrowser("credentialsWarning")}
+                </p>
+              </div>
+            )}
+          </div>
 
           {/* Timezone */}
           <div className="space-y-2">

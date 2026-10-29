@@ -1,6 +1,6 @@
 import SignUpPage from "@/components/auth/sign-up";
 import { getAuthConfig } from "auth/config";
-import { sanitizeCallbackUrl } from "lib/auth/callback-url";
+import { callbackUrlQuery, sanitizeCallbackUrl } from "lib/auth/callback-url";
 import { getIsFirstUser } from "lib/auth/server";
 import { redirect } from "next/navigation";
 
@@ -18,7 +18,9 @@ export default async function SignUp({
   } = getAuthConfig();
 
   if (!signUpEnabled) {
-    redirect("/sign-in");
+    // Keep the callback (an invitation, or the desktop handoff) through the
+    // bounce to sign-in.
+    redirect(`/sign-in${callbackUrlQuery(callbackUrl)}`);
   }
   const enabledProviders = (
     Object.keys(

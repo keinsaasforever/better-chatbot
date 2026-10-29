@@ -1,14 +1,21 @@
-import { MediaPreview } from "@/components/media/media-preview";
+import { appStore } from "@/app/store";
+import { FileArtifactChip } from "@/components/artifact-panel/file-artifact-chip";
+import { ArtifactFileCard } from "@/components/tool-invocation/artifact-file-card";
 import { useCopy } from "@/hooks/use-copy";
-import { splitArtifactsForDisplay } from "lib/code-runner/artifact-media";
 import { ToolUIPart } from "ai";
+import { splitArtifactsForPanel } from "lib/code-runner/artifact-media";
 
 import { callCodeRunWorker } from "lib/code-runner/call-worker";
+import { INTERACTIVE_EXECUTION_TIMEOUT_MS } from "lib/code-runner/timeouts";
 
 import {
   CodeRunnerResult,
   LogEntry,
 } from "lib/code-runner/code-runner.interface";
+import {
+  errorToCodeRunnerResult,
+  toCodeToolOutput,
+} from "lib/code-runner/tool-output";
 import { cn, isString, toAny } from "lib/utils";
 import {
   AlertTriangleIcon,
@@ -16,17 +23,32 @@ import {
   ChevronDownIcon,
   ChevronRight,
   CopyIcon,
-  DownloadIcon,
   Loader,
   Percent,
   PlayIcon,
 } from "lucide-react";
+import { useTranslations } from "next-intl";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { safe } from "ts-safe";
 
 import { CodeBlock } from "ui/CodeBlock";
 import { Skeleton } from "ui/skeleton";
 import { TextShimmer } from "ui/text-shimmer";
+
+/**
+ * Tool calls this tab has already started running, keyed by `toolCallId`.
+ *
+ * The guard cannot live in a ref, because a ref dies with the mount and this
+ * component is unmounted by things outside its control: a resume that drops
+ * the message carrying it, or any throw in the tree. The remount would then
+ * re-run the same call in a second sandbox. `isInterruptedAssistantTail` and
+ * the segment error boundary both narrow when that happens; this makes the
+ * re-run impossible rather than merely unlikely.
+ *
+ * Module scope survives a remount and is discarded on a real page load, which
+ * is exactly when re-running a still-unanswered call is the recovery we want.
+ */
+const startedToolCallIds = new Set<string>();
 
 export const CodeExecutor = memo(function CodeExecutor({
   part,
@@ -39,11 +61,19 @@ export const CodeExecutor = memo(function CodeExecutor({
   threadId?: string;
   type: "javascript" | "python";
 }) {
-  const isRun = useRef(false);
-
   // The parent chat owns the authoritative id even when it is embedded outside
   // `/chat/[thread]`; the server uses it to stage that chat's attachments.
+  // The agent selected for this thread is sent alongside so its bound files are
+  // staged too — the server re-checks access, so this is a hint, not a grant.
+  const agentId = appStore((state) =>
+    threadId
+      ? state.threadMentions[threadId]?.find(
+          (mention) => mention.type === "agent",
+        )?.agentId
+      : undefined,
+  );
   const { copy, copied } = useCopy();
+  const t = useTranslations("Chat.Tool");
   const [isExecuting, setIsExecuting] = useState(false);
   // Collapsed by default so a run is one quiet row in the thread; the full
   // widget (code, logs, artifacts) is one click away. The component stays
@@ -68,57 +98,33 @@ export const CodeExecutor = memo(function CodeExecutor({
       lastStartedAt.current = Date.now();
       const result = await callCodeRunWorker(type, {
         code,
-        timeout: 30000,
+        timeout: INTERACTIVE_EXECUTION_TIMEOUT_MS,
         threadId,
+        agentId,
         onLog: (log) => {
           setRealtimeLogs((prev) => [...prev, { ...log, time: Date.now() }]);
         },
       });
       return result;
     },
-    [threadId],
+    [threadId, agentId],
   );
 
   const menualToolCall = useCallback(
     async (code: string) => {
-      const result = await runCode(code, type);
+      // A throw here used to skip onResult entirely, leaving the tool call
+      // unanswered forever — the chat loop waits on a result that never
+      // arrives, and the started-call guard has already latched so nothing
+      // retries. Report the failure as a result instead; the model can read it
+      // and react.
+      let result: CodeRunnerResult;
+      try {
+        result = await runCode(code, type);
+      } catch (error) {
+        result = errorToCodeRunnerResult(error);
+      }
       setLocalResult(result);
-      const logstring = JSON.stringify(result.logs);
-      onResult?.({
-        ...toAny({
-          ...result,
-          logs:
-            logstring.length > 5000
-              ? [
-                  {
-                    type: "info",
-                    args: [
-                      {
-                        type: "data",
-                        value:
-                          "Log output exceeded storage limit (10KB). Full output was displayed to user but truncated for server storage.",
-                      },
-                    ],
-                  },
-                ]
-              : result.logs,
-          // Never send file BYTES to the model/DB — metadata only. Keep the
-          // durable `url` (from server-side storage) so the download survives
-          // a refresh; drop base64 (that copy is client-memory-only).
-          artifacts: result.artifacts?.map(
-            ({ filename, mimeType, url, contentBase64 }) => ({
-              filename,
-              mimeType,
-              url,
-              sizeBytes: contentBase64
-                ? Math.round((contentBase64.length * 3) / 4)
-                : undefined,
-            }),
-          ),
-        }),
-        guide:
-          "Execution finished. Provide: 1) Main results/outputs 2) Key insights or findings 3) Error explanations if any. Don't repeat code or raw logs - interpret and summarize for the user. Generated files listed in `artifacts` were already delivered to the user as downloads — mention them, do not try to re-create their content.",
-      });
+      onResult?.(toAny(toCodeToolOutput(result)));
     },
     [onResult, runCode, type],
   );
@@ -139,11 +145,12 @@ export const CodeExecutor = memo(function CodeExecutor({
     return part.output as CodeRunnerResult;
   }, [part, localResult]);
 
-  // PDFs and images render inline; everything else stays a download chip. The
-  // chip row lives inside the log panel, which is collapsed by default — so a
-  // user could ask for a PDF, get one, and never see it.
-  const { previewable, downloads: downloadableArtifacts } = useMemo(
-    () => splitArtifactsForDisplay(result?.artifacts ?? []),
+  // PDFs and images open in the artifact panel; everything else is a card
+  // with a Download button. Both sit outside the collapsed log panel: the old
+  // download chip lived inside it, so a user could ask for an Excel file, get
+  // one, and never see it.
+  const { files: panelFiles, downloads: downloadableArtifacts } = useMemo(
+    () => splitArtifactsForPanel(result?.artifacts ?? []),
     [result],
   );
 
@@ -240,7 +247,7 @@ export const CodeExecutor = memo(function CodeExecutor({
       return (
         <>
           <Loader className="size-3 animate-spin text-muted-foreground" />
-          <TextShimmer className="text-xs">Generating Code...</TextShimmer>
+          <TextShimmer className="text-xs">{t("codeGenerating")}</TextShimmer>
         </>
       );
     return (
@@ -248,7 +255,9 @@ export const CodeExecutor = memo(function CodeExecutor({
         {result?.error ? (
           <>
             <AlertTriangleIcon className="size-3 text-destructive" />
-            <span className="text-destructive text-xs">ERROR</span>
+            <span className="text-destructive text-xs uppercase">
+              {t("codeError")}
+            </span>
           </>
         ) : (
           <div className="text-[7px] bg-input rounded-xs w-4 h-4 p-0.5 flex items-end justify-end font-bold">
@@ -262,14 +271,14 @@ export const CodeExecutor = memo(function CodeExecutor({
         )}
       </>
     );
-  }, [part.state, result, isRunning, backendLabel]);
+  }, [part.state, result, isRunning, backendLabel, t]);
 
   const fallback = useMemo(() => {
     return <CodeFallback />;
   }, []);
 
   const logContainer = useMemo(() => {
-    if (!logs.length && !downloadableArtifacts.length) return null;
+    if (!logs.length) return null;
     return (
       <div className="p-4 text-[10px] text-foreground flex flex-col gap-1 border-t">
         <div className="text-foreground flex items-center gap-1">
@@ -282,26 +291,6 @@ export const CodeExecutor = memo(function CodeExecutor({
           <Percent className="size-2" />
         </div>
         {logs}
-        {downloadableArtifacts.length > 0 && (
-          <div className="flex flex-wrap gap-2 pt-2 pl-3">
-            {downloadableArtifacts.map((artifact, i) => (
-              <a
-                key={`${artifact.filename}-${i}`}
-                href={
-                  artifact.url ??
-                  `data:${artifact.mimeType ?? "application/octet-stream"};base64,${artifact.contentBase64}`
-                }
-                download={artifact.filename}
-                target={artifact.url ? "_blank" : undefined}
-                rel={artifact.url ? "noopener noreferrer" : undefined}
-                className="flex items-center gap-1.5 border rounded-md px-2 py-1 text-[10px] text-muted-foreground hover:text-foreground hover:bg-input transition-colors"
-              >
-                <DownloadIcon className="size-2.5" />
-                {artifact.filename}
-              </a>
-            ))}
-          </div>
-        )}
         {isRunning && (
           <div className="ml-3 animate-caret-blink text-muted-foreground">
             |
@@ -309,35 +298,42 @@ export const CodeExecutor = memo(function CodeExecutor({
         )}
       </div>
     );
-  }, [logs, isRunning, downloadableArtifacts]);
+  }, [logs, isRunning]);
 
   useEffect(() => {
     if (
       onResult &&
       part.input &&
       part.state == "input-available" &&
-      !isRun.current
+      !startedToolCallIds.has(part.toolCallId)
     ) {
-      isRun.current = true;
+      startedToolCallIds.add(part.toolCallId);
       menualToolCall(toAny(part.input)?.code);
     }
-  }, [part.state, !!onResult]);
+    // `part.input` is a dependency, not just a read: a part can mount already
+    // at "input-available" with the input still arriving, and keying only on
+    // `state` meant the effect never re-ran once it landed — the call then sat
+    // unanswered forever.
+  }, [part.state, part.input, part.toolCallId, !!onResult]);
 
   useEffect(() => {
     if (isRunning) {
       const closeKey = setInterval(scrollToCode, 300);
       return () => clearInterval(closeKey);
-    } else if (part.state.startsWith("output") && isRun.current) {
+    } else if (
+      part.state.startsWith("output") &&
+      startedToolCallIds.has(part.toolCallId)
+    ) {
       scrollToCode();
     }
   }, [isRunning]);
 
   const panelId = `code-exec-${part.toolCallId}`;
   const statusLabel = isRunning
-    ? "Working"
+    ? t("codeWorking")
     : result?.error
-      ? "Error"
-      : "Completed";
+      ? t("codeError")
+      : t("codeCompleted");
 
   return (
     <div className="flex flex-col px-6 py-3">
@@ -379,11 +375,32 @@ export const CodeExecutor = memo(function CodeExecutor({
         </div>
       </button>
 
-      {previewable.length > 0 && (
+      {panelFiles.length > 0 && (
         // Outside the `expanded` block on purpose: a file the user asked for
         // should not be hidden behind a disclosure toggle.
-        <div className="pt-3">
-          <MediaPreview mediaResources={previewable} />
+        <div className="pt-3 flex flex-col gap-2">
+          {panelFiles.map((file, i) => (
+            <FileArtifactChip
+              key={`${file.filename}-${i}`}
+              part={part}
+              file={file}
+              // Only the first file, and only for a run that just happened in
+              // this session — `localResult` is null when the message comes
+              // back from history.
+              autoOpen={i === 0 && Boolean(localResult)}
+            />
+          ))}
+        </div>
+      )}
+
+      {downloadableArtifacts.length > 0 && (
+        <div className="flex flex-col gap-2 pt-3">
+          {downloadableArtifacts.map((artifact, i) => (
+            <ArtifactFileCard
+              key={`${artifact.href ?? artifact.filename}-${i}`}
+              artifact={artifact}
+            />
+          ))}
         </div>
       )}
 
@@ -402,7 +419,7 @@ export const CodeExecutor = memo(function CodeExecutor({
                     onClick={reExecute}
                   >
                     <PlayIcon className="size-2" />
-                    Run
+                    {t("run")}
                   </button>
                   <button
                     type="button"
@@ -414,7 +431,7 @@ export const CodeExecutor = memo(function CodeExecutor({
                     ) : (
                       <CopyIcon className="size-2" />
                     )}
-                    Copy
+                    {t("copy")}
                   </button>
                 </>
               )}

@@ -15,10 +15,29 @@ import { errorLabel } from "./create-sandbox";
 /** Working directory of the code-interpreter template (user `user`). */
 export const SANDBOX_WORKDIR = "/home/user";
 
-/** Per-file size cap for returned artifacts. */
-export const MAX_ARTIFACT_FILE_BYTES = 8 * 1024 * 1024;
+/**
+ * Per-file size cap for returned artifacts. Mirrors the staging caps in
+ * lib/code-runner/stage-attachments.ts: what a user may upload, they may get
+ * back. The bytes never enter an HTTP response — they go straight to storage
+ * and the user downloads from there — so this is bounded by function memory,
+ * not by a response limit.
+ */
+export const MAX_ARTIFACT_FILE_BYTES = 50 * 1024 * 1024;
 /** Total size budget across all artifacts of one execution. */
-export const MAX_ARTIFACT_TOTAL_BYTES = 16 * 1024 * 1024;
+export const MAX_ARTIFACT_TOTAL_BYTES = 100 * 1024 * 1024;
+
+/**
+ * How deep the working-directory listing goes. `df.to_excel('out/report.xlsx')`
+ * is a normal thing for the model to write; one level of subdirectory covers
+ * that without walking package caches.
+ */
+export const ARTIFACT_LIST_DEPTH = 2;
+
+/** Directory names that only ever hold tooling state, never a deliverable. */
+const IGNORED_SEGMENTS = new Set(["__pycache__", "node_modules"]);
+
+/** A generated file with its bytes still attached, before persistence. */
+export type CollectedArtifact = E2BArtifact & { bytes?: Uint8Array };
 
 const MIME_BY_EXTENSION: Record<string, string> = {
   pdf: "application/pdf",
@@ -67,10 +86,19 @@ export function snapshotListing(entries: ListedFile[]): Map<string, number> {
   return map;
 }
 
+/** Path segments below the working directory (or just the name). */
+function relativeSegments(entry: ListedFile): string[] {
+  const prefix = `${SANDBOX_WORKDIR}/`;
+  const relative = entry.path.startsWith(prefix)
+    ? entry.path.slice(prefix.length)
+    : entry.name;
+  return relative.split("/");
+}
+
 /**
  * Files that appeared or changed size since the pre-run snapshot.
- * Hidden files and empty files are skipped; size caps are enforced (and
- * logged) by the collector.
+ * Hidden files and directories (`.cache/…`), tooling directories and empty
+ * files are skipped; size caps are enforced (and reported) by the collector.
  */
 export function findGeneratedFiles(
   before: Map<string, number>,
@@ -78,8 +106,14 @@ export function findGeneratedFiles(
 ): ListedFile[] {
   return after.filter((entry) => {
     if (entry.type !== "file") return false;
-    if (entry.name.startsWith(".")) return false;
     if (entry.size <= 0) return false;
+    if (
+      relativeSegments(entry).some(
+        (segment) => segment.startsWith(".") || IGNORED_SEGMENTS.has(segment),
+      )
+    ) {
+      return false;
+    }
     const previousSize = before.get(entry.path);
     return previousSize === undefined || previousSize !== entry.size;
   });
@@ -87,29 +121,46 @@ export function findGeneratedFiles(
 
 /**
  * Diff the sandbox working directory against `before` and read the generated
- * files as base64 artifacts. Best-effort: any failure returns what was
- * collected so far — file collection must never fail the execution itself.
+ * files. Best-effort: any failure returns what was collected so far — file
+ * collection must never fail the execution itself.
+ *
+ * Files over the caps are returned as metadata with an `error` rather than
+ * silently dropped, so the chat can name them and the model can say why.
  */
 export async function collectGeneratedFiles(
   sbx: Sandbox,
   before: Map<string, number>,
-): Promise<E2BArtifact[]> {
-  const artifacts: E2BArtifact[] = [];
+): Promise<CollectedArtifact[]> {
+  const artifacts: CollectedArtifact[] = [];
   try {
-    const after = await sbx.files.list(SANDBOX_WORKDIR);
+    const after = await sbx.files.list(SANDBOX_WORKDIR, {
+      depth: ARTIFACT_LIST_DEPTH,
+    });
     const generated = findGeneratedFiles(before, after);
     let totalBytes = 0;
 
     for (const file of generated) {
-      if (file.size > MAX_ARTIFACT_FILE_BYTES) {
+      const skipped = (reason: string) => {
         logger.warn(
-          `[e2b] artifact skipped (file too large) file=${file.name} size=${file.size}`,
+          `[e2b] artifact skipped (${reason}) file=${file.name} size=${file.size}`,
+        );
+        artifacts.push({
+          filename: file.name,
+          mimeType: mimeTypeForFile(file.name),
+          sizeBytes: file.size,
+          error: reason,
+        });
+      };
+
+      if (file.size > MAX_ARTIFACT_FILE_BYTES) {
+        skipped(
+          `file too large (limit ${MAX_ARTIFACT_FILE_BYTES / (1024 * 1024)} MiB)`,
         );
         continue;
       }
       if (totalBytes + file.size > MAX_ARTIFACT_TOTAL_BYTES) {
-        logger.warn(
-          `[e2b] artifact skipped (total size budget) file=${file.name} size=${file.size}`,
+        skipped(
+          `total size budget exceeded (limit ${MAX_ARTIFACT_TOTAL_BYTES / (1024 * 1024)} MiB per run)`,
         );
         continue;
       }
@@ -118,7 +169,8 @@ export async function collectGeneratedFiles(
       artifacts.push({
         filename: file.name,
         mimeType: mimeTypeForFile(file.name),
-        contentBase64: Buffer.from(bytes).toString("base64"),
+        sizeBytes: bytes.byteLength,
+        bytes,
       });
     }
   } catch (err) {
@@ -132,7 +184,9 @@ export async function snapshotWorkdir(
   sbx: Sandbox,
 ): Promise<Map<string, number>> {
   try {
-    return snapshotListing(await sbx.files.list(SANDBOX_WORKDIR));
+    return snapshotListing(
+      await sbx.files.list(SANDBOX_WORKDIR, { depth: ARTIFACT_LIST_DEPTH }),
+    );
   } catch {
     return new Map();
   }

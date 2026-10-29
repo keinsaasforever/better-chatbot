@@ -13,6 +13,10 @@ const mocks = vi.hoisted(() => ({
   deleteReturning: [] as unknown[],
 }));
 
+// POST delegates to lib/projects/members, which is server-only; the mocks
+// below cover every dependency that helper touches, so it runs for real here.
+vi.mock("server-only", () => ({}));
+
 vi.mock("@/lib/projects/access", () => {
   class ProjectAccessError extends Error {
     status: number;

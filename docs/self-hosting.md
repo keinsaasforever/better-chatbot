@@ -17,9 +17,9 @@ reference behind it.
 
 | Variable | Purpose |
 | --- | --- |
-| `POSTGRES_URL` | Postgres connection string, pgvector enabled |
+| `POSTGRES_URL` | Postgres connection string, pgvector enabled (`DATABASE_URL` is accepted too) |
 | `BETTER_AUTH_SECRET` | Session signing key — `npx @better-auth/cli@latest secret` |
-| `AI_GATEWAY_API_KEY` | Serves every model in the catalog |
+| `AI_GATEWAY_API_KEY` | Serves every model in the catalog — not needed on Vercel |
 
 The server refuses to start without these and tells you which one is missing. If
 you configure a different provider (`TENSORX_API_KEY`, `GROQ_API_KEY`,
@@ -29,6 +29,39 @@ requirement in place of the gateway key.
 Once you are not on localhost, also set `BETTER_AUTH_URL` and
 `NEXT_PUBLIC_BASE_URL` to the public URL of your instance, or sign-in redirects
 and OAuth callbacks will point at the wrong host.
+
+## Vercel
+
+The [Deploy button](../README.md#deploy-to-vercel) does all of this for you. To
+set up a project by hand:
+
+1. Import the repository and set **Root Directory** to `apps/web`. The
+   `vercel.json` there holds the monorepo install and build commands.
+2. Add a Postgres database from the Vercel Marketplace (Neon works; it ships
+   `pgvector`). The integration sets `DATABASE_URL`, which the app reads when
+   `POSTGRES_URL` is absent. Any other Postgres with pgvector works too — set
+   `POSTGRES_URL` yourself, using the pooled connection string.
+3. Set `BETTER_AUTH_SECRET` to a long random string.
+4. Deploy.
+
+What happens without further configuration:
+
+- **Migrations run during the build**, before the app is compiled. A build
+  fails rather than shipping an app whose schema does not match the code.
+  Preview deployments migrate whichever database their `POSTGRES_URL` points
+  at — give the Preview environment its own database if you use previews to
+  try out upgrades.
+- **Models need no key.** On Vercel the AI Gateway authenticates with the
+  deployment's OIDC token and bills your Vercel team. Set `AI_GATEWAY_API_KEY`
+  only if you want to bill a different account.
+- **URLs are inferred.** Sign-in works on the `*.vercel.app` URL and on custom
+  domains without configuration. Set `BETTER_AUTH_URL` and
+  `NEXT_PUBLIC_BASE_URL` to your custom domain once you add OAuth providers,
+  so callbacks and links point at it.
+
+Everything in the sections below is optional. The Vercel Marketplace has
+integrations for Upstash (`KV_URL` — resumable streams) and Inngest
+(background jobs), which set their own variables.
 
 ## Storage
 
@@ -72,6 +105,35 @@ curl -X POST https://your-instance/api/sandbox/reaper \
 ```
 
 Project-brain ingestion has no HTTP fallback and stays idle without Inngest.
+
+## Connected apps (Composio)
+
+Users connect Gmail, Slack, GitHub, Notion and a few hundred other apps through
+[Composio](https://composio.dev), which hosts the OAuth apps for most of them,
+so you usually register none yourself. Create a free account at platform.composio.dev, copy its API
+key into `COMPOSIO_API_KEY`, and the app catalog fills in. Each user's
+connections are their own, keyed by their account on your instance.
+
+Without the key, the app list stays empty and chats never call Composio.
+Composio's free tier has a monthly tool-call allowance; check its pricing page
+before opening an instance to many users.
+
+## Cockpit
+
+`/cockpit` is a dashboard of the systems behind your business. Every user (or
+workspace) connects their own sources under **CONNECT**: Stripe, Vercel,
+Revolut, Superlog and an SEO provider. Each takes that service's own API key
+or token, entered in the app, never in env vars.
+
+Nothing needs configuring on the server. Those credentials are encrypted at
+rest with a key derived from `BETTER_AUTH_SECRET`, so rotating that secret
+means users re-enter their connections. To decouple the two, set a dedicated
+`APP_SECRETS_KEY` (`openssl rand -base64 32`) before anyone connects anything;
+changing it later has the same effect.
+
+The `website` source expects a `site_events` table in a Supabase project, the
+format keinsaas's own marketing site writes. It is not a general analytics
+integration yet.
 
 ## Redis
 

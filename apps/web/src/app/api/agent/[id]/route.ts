@@ -3,6 +3,7 @@ import { withAuth } from "auth/route-guard";
 import { z } from "zod";
 import { AgentUpdateSchema } from "app-types/agent";
 import { canEditAgent, canDeleteAgent } from "lib/auth/permissions";
+import { assertOwnedAgentFiles } from "lib/ai/agent/agent-files";
 
 export const GET = withAuth(
   async (
@@ -72,6 +73,21 @@ export const PUT = withAuth(
       );
       if (existingAgent && existingAgent.userId !== session.user.id) {
         data.visibility = existingAgent.visibility;
+      }
+
+      // New file bindings must name keys the editor owns; the ones already on
+      // the agent are carried over, so an org member can edit a shared agent
+      // without owning the creator's template.
+      const ownership = assertOwnedAgentFiles({
+        files: data.instructions?.files,
+        userId: session.user.id,
+        existingFiles: existingAgent?.instructions?.files,
+      });
+      if (!ownership.ok) {
+        return Response.json(
+          { error: "Agent files must belong to the current user" },
+          { status: 400 },
+        );
       }
 
       const agent = await agentRepository.updateAgent(

@@ -1,110 +1,209 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useCallback, useMemo, useState } from "react";
+import { useTranslations } from "next-intl";
+import { CheckCircle2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { CheckCircle2 } from "lucide-react";
+import {
+  type RequestInputQuestion,
+  isRequestInputComplete,
+} from "@/lib/chat/request-input-questions";
 import { cn } from "@/lib/utils";
 
+export type RequestInputAnswer = {
+  header: string;
+  question: string;
+  value: string;
+};
+
 interface RequestInputProps {
-  label: string;
-  placeholder: string;
-  inputType?: "text" | "password" | "number" | "email" | "url";
-  onSubmit: (value: string) => void;
+  questions: RequestInputQuestion[];
+  onSubmit?: (answers: RequestInputAnswer[]) => void;
+  /** Set once the call has a result; the card then renders read-only. */
+  submittedAnswers?: RequestInputAnswer[];
 }
 
 /**
- * RequestInputUI Component
+ * RequestInputUI
  *
- * Blocks AI execution to collect user input.
- * Adapted from mastra-hitl for AI SDK 6.
+ * Collects every answer the model asked for in one card: each question offers
+ * its suggested options and a free-text field beside them, so a listed choice
+ * is a shortcut rather than the only way to answer.
  *
- * Features:
- * - Input field with label and placeholder
- * - Submit button
- * - Submitted state showing the value
- * - Keyboard support (Enter to submit)
- * - Type validation based on inputType
+ * Answers are held per question index and submitted together — the tool call is
+ * one call, so it takes one result.
  */
 export function RequestInputUI({
-  label,
-  placeholder,
-  inputType = "text",
+  questions,
   onSubmit,
+  submittedAnswers,
 }: RequestInputProps) {
-  const [inputValue, setInputValue] = useState("");
+  const t = useTranslations("Chat.Hitl.input");
+  const [answers, setAnswers] = useState<Record<number, string>>({});
+  // Tracks which option chip is highlighted. Typing clears it, so the card
+  // never shows a selected chip next to different free text.
+  const [picked, setPicked] = useState<Record<number, string[]>>({});
   const [isSubmitted, setIsSubmitted] = useState(false);
-  const [submittedValue, setSubmittedValue] = useState("");
 
-  const trimmedInput = inputValue.trim();
-  const isInputValid = trimmedInput.length > 0;
+  const isReadOnly = Boolean(submittedAnswers) || isSubmitted;
+
+  const canSubmit = useMemo(
+    () => isRequestInputComplete(questions, answers),
+    [questions, answers],
+  );
+
+  const toggleOption = useCallback(
+    (index: number, question: RequestInputQuestion, label: string) => {
+      setPicked((prev) => {
+        const current = prev[index] ?? [];
+        const next = question.multiSelect
+          ? current.includes(label)
+            ? current.filter((entry) => entry !== label)
+            : [...current, label]
+          : current.includes(label)
+            ? []
+            : [label];
+        setAnswers((prevAnswers) => ({
+          ...prevAnswers,
+          [index]: next.join(", "),
+        }));
+        return { ...prev, [index]: next };
+      });
+    },
+    [],
+  );
+
+  const setFreeText = useCallback((index: number, value: string) => {
+    setAnswers((prev) => ({ ...prev, [index]: value }));
+    // Free text replaces the picked options rather than appending to them.
+    setPicked((prev) => ({ ...prev, [index]: [] }));
+  }, []);
 
   const handleSubmit = useCallback(() => {
-    if (!isInputValid) return;
-
-    setSubmittedValue(trimmedInput);
+    if (!canSubmit || isReadOnly) return;
     setIsSubmitted(true);
-    onSubmit(trimmedInput);
-  }, [trimmedInput, isInputValid, onSubmit]);
+    onSubmit?.(
+      questions.map((question, index) => ({
+        header: question.header,
+        question: question.question,
+        value: (answers[index] ?? "").trim(),
+      })),
+    );
+  }, [answers, canSubmit, isReadOnly, onSubmit, questions]);
 
-  const handleKeyDown = useCallback(
-    (e: React.KeyboardEvent<HTMLInputElement>) => {
-      if (e.key === "Enter" && !isSubmitted && isInputValid) {
-        handleSubmit();
-      }
-    },
-    [handleSubmit, isSubmitted, isInputValid],
-  );
+  if (questions.length === 0) return null;
+
+  const rendered: RequestInputAnswer[] | undefined =
+    submittedAnswers ??
+    (isSubmitted
+      ? questions.map((question, index) => ({
+          header: question.header,
+          question: question.question,
+          value: (answers[index] ?? "").trim(),
+        }))
+      : undefined);
 
   return (
     <div className="my-3">
       <div className="overflow-hidden rounded-lg border border-border bg-background shadow-sm">
         <div className="flex items-center gap-2 border-b border-border px-4 py-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-          User Input Required
-          {isSubmitted && (
+          {t("title")}
+          {rendered && (
             <span className="ml-auto flex items-center gap-1 text-emerald-600">
               <CheckCircle2 className="h-4 w-4" aria-hidden />
-              Submitted
+              {t("submitted")}
             </span>
           )}
         </div>
 
-        <div className="space-y-3 px-4 py-4 text-sm text-muted-foreground">
-          <p className="text-foreground">{label}</p>
+        <div className="space-y-5 px-4 py-4 text-sm">
+          {questions.map((question, index) => {
+            const answered = rendered?.[index]?.value ?? "";
+            const selected = picked[index] ?? [];
+            const fieldId = `request-input-${index}`;
 
-          {isSubmitted ? (
-            <div className="whitespace-pre-wrap rounded-md border border-border bg-muted px-3 py-2 text-sm text-foreground">
-              {inputType === "password" ? "••••••••" : submittedValue}
-            </div>
-          ) : (
-            <>
-              <p className="text-xs text-muted-foreground">
-                Provide the requested information so the assistant can continue.
-              </p>
-              <div className="flex flex-col gap-2 sm:flex-row">
-                <Input
-                  type={inputType}
-                  className={cn(
-                    "h-10 rounded-md border-border bg-background text-sm text-foreground",
-                    "focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
-                  )}
-                  aria-label={label}
-                  placeholder={placeholder}
-                  onChange={(e) => setInputValue(e.target.value)}
-                  value={inputValue}
-                  disabled={isSubmitted}
-                  onKeyDown={handleKeyDown}
-                />
-                <Button
-                  type="button"
-                  className="sm:self-start"
-                  onClick={handleSubmit}
-                  disabled={!isInputValid || isSubmitted}
-                >
-                  Submit
-                </Button>
+            return (
+              <div className="space-y-2" key={`${question.header}-${index}`}>
+                <div className="flex items-center gap-2">
+                  <span className="rounded-md border border-border bg-muted px-1.5 py-0.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                    {question.header}
+                  </span>
+                </div>
+                <p className="text-foreground">{question.question}</p>
+
+                {rendered ? (
+                  <div className="whitespace-pre-wrap rounded-md border border-border bg-muted px-3 py-2 text-sm text-foreground">
+                    {question.inputType === "password" ? "••••••••" : answered}
+                  </div>
+                ) : (
+                  <>
+                    {question.options.length > 0 && (
+                      <div className="flex flex-wrap gap-1.5">
+                        {question.options.map((option) => {
+                          const isPicked = selected.includes(option.label);
+                          return (
+                            <button
+                              className={cn(
+                                "rounded-md border px-2.5 py-1.5 text-left text-xs transition-colors",
+                                isPicked
+                                  ? "border-primary bg-primary/10 text-foreground"
+                                  : "border-border text-muted-foreground hover:bg-input hover:text-foreground",
+                              )}
+                              key={option.label}
+                              onClick={() =>
+                                toggleOption(index, question, option.label)
+                              }
+                              type="button"
+                            >
+                              <span className="font-medium">
+                                {option.label}
+                              </span>
+                              {option.description && (
+                                <span className="block text-[11px] opacity-80">
+                                  {option.description}
+                                </span>
+                              )}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+
+                    <Input
+                      aria-label={question.question}
+                      className="h-10 rounded-md border-border bg-background text-sm text-foreground focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                      id={fieldId}
+                      onChange={(event) =>
+                        setFreeText(index, event.target.value)
+                      }
+                      placeholder={
+                        question.placeholder ??
+                        (question.options.length > 0
+                          ? t("otherPlaceholder")
+                          : t("answerPlaceholder"))
+                      }
+                      type={question.inputType}
+                      value={answers[index] ?? ""}
+                    />
+                  </>
+                )}
               </div>
-            </>
+            );
+          })}
+
+          {!rendered && (
+            <div className="flex items-center gap-2 border-t border-border pt-3">
+              <Button
+                disabled={!canSubmit}
+                onClick={handleSubmit}
+                size="sm"
+                type="button"
+              >
+                {t("submit")}
+              </Button>
+              <p className="text-xs text-muted-foreground">{t("hint")}</p>
+            </div>
           )}
         </div>
       </div>

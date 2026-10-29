@@ -4,25 +4,32 @@ import { appStore } from "@/app/store";
 import { useThemeStyle } from "@/hooks/use-theme-style";
 import { getLocaleAction } from "@/i18n/get-locale";
 import { BasicUser } from "app-types/user";
-import { BillingMenuItem, WorkspaceMenuSection } from "@/components/gate";
+import {
+  BillingMenuItem,
+  WorkspaceMenuSection,
+  useReferralEnabled,
+} from "@/components/gate";
 import { IS_CLOUD_EDITION } from "@/lib/edition";
 import { authClient } from "auth/client";
 import { BASE_THEMES, COOKIE_KEY_LOCALE, SUPPORTED_LOCALES } from "lib/const";
 import { getUserAvatar } from "lib/user/utils";
 import { capitalizeFirstLetter, cn, fetcher } from "lib/utils";
 import {
+  ChartNoAxesColumn,
   ChevronRight,
   ChevronsUpDown,
   Command,
+  Gift,
   Languages,
   LogOutIcon,
-  Mail,
+  MessageCircleWarning,
   MessagesSquare,
   MoonStar,
   Palette,
   Settings,
   Settings2,
   Sun,
+  UserRound,
 } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { useTheme } from "next-themes";
@@ -58,6 +65,7 @@ export function AppSidebarUserInner(props: {
   });
   const appStoreMutate = appStore((state) => state.mutate);
   const t = useTranslations("Layout");
+  const referralEnabled = useReferralEnabled();
 
   const logout = () => {
     authClient.signOut().finally(() => {
@@ -125,29 +133,70 @@ export function AppSidebarUserInner(props: {
               </DropdownMenuLabel>
               <DropdownMenuSeparator />
 
-              <DropdownMenuItem
-                className="cursor-pointer"
-                onClick={() => appStoreMutate({ openChatPreferences: true })}
-              >
-                <Settings2 className="size-4 text-foreground" />
-                <span>{t("chatPreferences")}</span>
-              </DropdownMenuItem>
+              {/* Everything that configures *the person* lives behind one entry.
+                  The flat list had chat preferences, shortcuts and account
+                  settings as three peers, which made the menu long without
+                  making anything easier to find. */}
+              <DropdownMenuSub>
+                <DropdownMenuSubTrigger
+                  className="flex items-center"
+                  icon={<ChevronRight className="size-4 ml-2" />}
+                  data-testid="user-settings-menu-item"
+                >
+                  <Settings className="mr-2 size-4" />
+                  <span className="mr-auto">{t("userSettings")}</span>
+                </DropdownMenuSubTrigger>
+                <DropdownMenuPortal>
+                  <DropdownMenuSubContent className="w-56">
+                    <DropdownMenuItem
+                      className="cursor-pointer"
+                      onClick={() => appStoreMutate({ openUserSettings: true })}
+                      data-testid="user-profile-menu-item"
+                    >
+                      <UserRound className="size-4 text-foreground" />
+                      <span>{t("profile")}</span>
+                    </DropdownMenuItem>
+                    {IS_CLOUD_EDITION && (
+                      <DropdownMenuItem
+                        className="cursor-pointer"
+                        onClick={() => appStoreMutate({ openUserUsage: true })}
+                        data-testid="user-usage-menu-item"
+                      >
+                        <ChartNoAxesColumn className="size-4 text-foreground" />
+                        <span>{t("usage")}</span>
+                      </DropdownMenuItem>
+                    )}
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem
+                      className="cursor-pointer"
+                      onClick={() =>
+                        appStoreMutate({ openChatPreferences: true })
+                      }
+                    >
+                      <Settings2 className="size-4 text-foreground" />
+                      <span>{t("chatPreferences")}</span>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      className="cursor-pointer"
+                      onClick={() =>
+                        appStoreMutate({ openShortcutsPopup: true })
+                      }
+                    >
+                      <Command className="size-4 text-foreground" />
+                      <span>{t("keyboardShortcuts")}</span>
+                    </DropdownMenuItem>
+                  </DropdownMenuSubContent>
+                </DropdownMenuPortal>
+              </DropdownMenuSub>
               <SelectTheme />
               <SelectLanguage />
               <DropdownMenuSeparator />
               <DropdownMenuItem
                 className="cursor-pointer"
-                onClick={() => appStoreMutate({ openShortcutsPopup: true })}
+                onClick={() => appStoreMutate({ openProblemReport: true })}
+                data-testid="report-issue-menu-item"
               >
-                <Command className="size-4 text-foreground" />
-                <span>{t("keyboardShortcuts")}</span>
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                onClick={() => {
-                  window.open("mailto:info@keinsaas.com", "_blank");
-                }}
-              >
-                <Mail className="size-4 text-foreground" />
+                <MessageCircleWarning className="size-4 text-foreground" />
                 <span>{t("reportAnIssue")}</span>
               </DropdownMenuItem>
               {!IS_CLOUD_EDITION && (
@@ -163,15 +212,20 @@ export function AppSidebarUserInner(props: {
               <BillingMenuItem />
               <DropdownMenuSeparator />
 
-              <DropdownMenuItem
-                onClick={() => appStoreMutate({ openUserSettings: true })}
-                className="cursor-pointer"
-                data-testid="user-settings-menu-item"
-              >
-                <Settings className="size-4 text-foreground" />
-                <span>User Settings</span>
-              </DropdownMenuItem>
               <WorkspaceMenuSection />
+              {IS_CLOUD_EDITION && referralEnabled && (
+                <>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem
+                    className="cursor-pointer"
+                    onClick={() => appStoreMutate({ openReferral: true })}
+                    data-testid="user-referral-menu-item"
+                  >
+                    <Gift className="size-4 text-foreground" />
+                    <span>{t("inviteFriends")}</span>
+                  </DropdownMenuItem>
+                </>
+              )}
               <DropdownMenuSeparator />
               <DropdownMenuItem onClick={logout} className="cursor-pointer">
                 <LogOutIcon className="size-4 text-foreground" />

@@ -14,6 +14,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "ui/tooltip";
 import { appStore } from "@/app/store";
 import { BackButton } from "@/components/layouts/back-button";
 import { NotificationBell } from "@/components/notifications/notification-bell";
+import { requireCredits } from "@/lib/billing/require-credits";
 import { buildReturnUrl } from "lib/admin/navigation-utils";
 import { Shortcuts, getShortcutKeyList } from "lib/keyboard-shortcuts";
 import { useTranslations } from "next-intl";
@@ -110,6 +111,7 @@ export function AppHeader() {
                 variant={"ghost"}
                 className="bg-secondary/40"
                 onClick={() => {
+                  if (!requireCredits()) return;
                   appStoreMutate((state) => ({
                     voiceChat: {
                       ...state.voiceChat,
@@ -182,6 +184,7 @@ export function AppHeader() {
 }
 
 function ThreadDropdownComponent() {
+  const t = useTranslations("Layout");
   const [threadList, currentThreadId, generatingTitleThreadIds] = appStore(
     useShallow((state) => [
       state.threadList,
@@ -195,9 +198,9 @@ function ThreadDropdownComponent() {
 
   useEffect(() => {
     if (currentThread?.id) {
-      document.title = currentThread.title || "New Chat";
+      document.title = currentThread.title || t("newChat");
     }
-  }, [currentThread?.id]);
+  }, [currentThread?.id, currentThread?.title, t]);
 
   if (!currentThread) return null;
 
@@ -220,11 +223,11 @@ function ThreadDropdownComponent() {
               >
                 {generatingTitleThreadIds.includes(currentThread.id) ? (
                   <TextShimmer className="truncate max-w-60 min-w-0 mr-1">
-                    {currentThread.title || "New Chat"}
+                    {currentThread.title || t("newChat")}
                   </TextShimmer>
                 ) : (
                   <p className="truncate max-w-60 min-w-0 mr-1">
-                    {currentThread.title || "New Chat"}
+                    {currentThread.title || t("newChat")}
                   </p>
                 )}
 
@@ -232,7 +235,7 @@ function ThreadDropdownComponent() {
               </Button>
             </TooltipTrigger>
             <TooltipContent className="max-w-[200px] p-4 break-all overflow-y-auto max-h-[200px]">
-              {currentThread.title || "New Chat"}
+              {currentThread.title || t("newChat")}
             </TooltipContent>
           </Tooltip>
         </div>

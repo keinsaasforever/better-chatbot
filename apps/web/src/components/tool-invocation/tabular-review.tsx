@@ -1,6 +1,11 @@
 "use client";
 
 import { ToolUIPart } from "ai";
+import {
+  hasUnansweredCells,
+  isAnsweredCell,
+  type StoredCell,
+} from "lib/tabular/cell-completion";
 import { toAny } from "lib/utils";
 import { useEffect, useRef, useState } from "react";
 import { Loader, Download, Table2, ChevronDown, ChevronUp } from "lucide-react";
@@ -67,20 +72,29 @@ export function TabularReviewCard({ part }: { part: ToolUIPart }) {
       .then(
         (data: {
           documents?: DocumentRow[];
-          cells?: {
-            documentId: string;
-            columnId: string;
-            value: string | null;
-          }[];
+          cells?: StoredCell[];
         }) => {
           const docList = data.documents ?? [];
           setDocuments(docList);
+
+          const storedCells = data.cells ?? [];
           const initial: Record<string, Record<string, string>> = {};
-          for (const cell of data.cells ?? []) {
+          for (const cell of storedCells) {
+            // Only answers. A "pending" or "error" cell holding an empty string
+            // used to render as a finished, blank result.
+            if (!isAnsweredCell(cell)) continue;
             if (!initial[cell.documentId]) initial[cell.documentId] = {};
             initial[cell.documentId][cell.columnId] = cell.value ?? "";
           }
           setCells(initial);
+
+          // `hasStarted` is a ref, so it resets on every remount - reopening the
+          // thread used to re-run, and re-bill, the whole grid even though every
+          // answer was already stored.
+          if (!hasUnansweredCells(storedCells)) {
+            setIsComplete(true);
+            return;
+          }
 
           startGeneration(reviewId, docList);
         },

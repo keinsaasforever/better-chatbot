@@ -1,3 +1,4 @@
+import type { AgentKnowledgeBaseBinding } from "app-types/agent";
 import { ChatMessage, ChatRepository, ChatThread } from "app-types/chat";
 import { UserPreferences } from "app-types/user";
 
@@ -58,6 +59,7 @@ export const pgChatRepository: ChatRepository = {
         userId: thread.userId,
         id: thread.id,
         projectId: thread.projectId ?? null,
+        knowledgeBases: thread.knowledgeBases ?? [],
       })
       .returning();
     return {
@@ -74,6 +76,9 @@ export const pgChatRepository: ChatRepository = {
       userPreferences?: UserPreferences;
     }
   > => {
+    // onConflictDoNothing, not a bare insert: the titling request upserts the
+    // same thread id concurrently on a brand-new thread, and losing that race
+    // used to fail the whole chat POST with a unique violation.
     const [result] = await db
       .insert(ChatThreadTable)
       .values({
@@ -81,8 +86,17 @@ export const pgChatRepository: ChatRepository = {
         userId: thread.userId,
         id: thread.id,
         projectId: thread.projectId ?? null,
+        knowledgeBases: thread.knowledgeBases ?? [],
       })
+      .onConflictDoNothing({ target: ChatThreadTable.id })
       .returning();
+
+    if (!result) {
+      // Someone else created it in between; read what they wrote.
+      const existing = await pgChatRepository.selectThreadDetails(thread.id);
+      if (existing) return existing;
+      throw new Error(`Failed to create chat thread ${thread.id}`);
+    }
 
     // Return with expected shape - no extra query needed
     // New threads have no messages and no user preferences yet
@@ -148,6 +162,7 @@ export const pgChatRepository: ChatRepository = {
       title: thread.chat_thread.title,
       userId: thread.chat_thread.userId,
       projectId: thread.chat_thread.projectId ?? undefined,
+      knowledgeBases: thread.chat_thread.knowledgeBases ?? [],
       createdAt: thread.chat_thread.createdAt,
       userPreferences: thread.user?.preferences ?? undefined,
       messages,
@@ -288,7 +303,9 @@ export const pgChatRepository: ChatRepository = {
       .onConflictDoUpdate({
         target: [ChatThreadTable.id],
         set: {
-          title: thread.title,
+          // Never blank an existing title. A duplicate or failed titling attempt
+          // that produced nothing must leave a good title standing.
+          title: sql`case when excluded.title = '' then ${ChatThreadTable.title} else excluded.title end`,
         },
       })
       .returning();
@@ -296,6 +313,46 @@ export const pgChatRepository: ChatRepository = {
       ...result,
       projectId: result.projectId ?? undefined,
     };
+  },
+
+  setThreadKnowledgeBases: async (
+    id: string,
+    userId: string,
+    knowledgeBases: AgentKnowledgeBaseBinding[],
+  ): Promise<boolean> => {
+    const updated = await db
+      .update(ChatThreadTable)
+      .set({ knowledgeBases })
+      .where(
+        and(eq(ChatThreadTable.id, id), eq(ChatThreadTable.userId, userId)),
+      )
+      .returning({ id: ChatThreadTable.id });
+    return updated.length > 0;
+  },
+
+  setThreadTitleIfEmpty: async (id: string, title: string): Promise<string> => {
+    const trimmed = title.trim();
+    if (!trimmed) {
+      const [existing] = await db
+        .select({ title: ChatThreadTable.title })
+        .from(ChatThreadTable)
+        .where(eq(ChatThreadTable.id, id));
+      return existing?.title ?? "";
+    }
+
+    const [updated] = await db
+      .update(ChatThreadTable)
+      .set({ title: trimmed })
+      .where(and(eq(ChatThreadTable.id, id), eq(ChatThreadTable.title, "")))
+      .returning({ title: ChatThreadTable.title });
+    if (updated) return updated.title;
+
+    // Either the thread is gone or someone titled it first — report what stands.
+    const [existing] = await db
+      .select({ title: ChatThreadTable.title })
+      .from(ChatThreadTable)
+      .where(eq(ChatThreadTable.id, id));
+    return existing?.title ?? "";
   },
 
   deleteThread: async (id: string): Promise<void> => {

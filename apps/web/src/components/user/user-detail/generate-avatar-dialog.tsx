@@ -60,7 +60,6 @@ export function GenerateAvatarDialog({
         : `data:${result.mimeType || "image/png"};base64,${result.base64}`;
 
       setGeneratedImage(imageData);
-      toast.success(t("imageGeneratedSuccessfully"));
     } catch (error) {
       console.error("Failed to generate image:", error);
       toast.error(
@@ -87,7 +86,6 @@ export function GenerateAvatarDialog({
       const result = await upload(file);
       if (result) {
         onGenerate(result.url);
-        toast.success(t("profilePhotoUpdatedSuccessfully"));
 
         // Reset and close
         setPrompt("");

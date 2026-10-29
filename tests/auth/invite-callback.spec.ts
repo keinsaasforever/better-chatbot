@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { TEST_USERS } from "../constants/test-users";
 
 const INVITE_PATH = "/accept-invitation/11111111-1111-4111-8111-111111111111";
 const ENCODED_INVITE = encodeURIComponent(INVITE_PATH);
@@ -53,5 +54,27 @@ test.describe("Invitation link survives the authentication detour", () => {
       "href",
       new RegExp(`callbackUrl=${encodeURIComponent(ENCODED_INVITE)}`),
     );
+  });
+});
+
+test.describe("The invitation dialog is reachable, whatever the credits say", () => {
+  test.use({ storageState: TEST_USERS.regular.authFile });
+
+  test("nothing is layered over the invitation decision", async ({ page }) => {
+    // Regression: `AppShell` mounted the usage-limit guard, so an invited user
+    // whose personal credits were exhausted got a non-dismissible "usage limit
+    // reached" modal portalled on top of this dialog — and could never join the
+    // organization whose credits would have replaced that allowance.
+    await page.goto(INVITE_PATH);
+    await page.waitForLoadState("networkidle");
+
+    await expect(page.getByTestId("invitation-dialog")).toBeVisible();
+    await expect(page.getByTestId("usage-limit-dialog")).toHaveCount(0);
+
+    // Playwright's actionability check fails on a covered element, so a click
+    // that lands is the assertion: this invitation id is unknown, so the dialog
+    // shows the "no longer valid" card with a single continue button.
+    await page.getByRole("button").first().click();
+    await expect(page).not.toHaveURL(new RegExp("/accept-invitation/"));
   });
 });

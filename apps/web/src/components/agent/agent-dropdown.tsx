@@ -1,5 +1,6 @@
 "use client";
 import { appStore } from "@/app/store";
+import { requireCredits } from "@/lib/billing/require-credits";
 import { AudioWaveformIcon, PencilLine } from "lucide-react";
 import { type PropsWithChildren, useState } from "react";
 import { Command, CommandGroup, CommandItem, CommandList } from "ui/command";
@@ -34,6 +35,7 @@ export function AgentDropdown({ agent, children, side, align }: Props) {
                 <div
                   className="flex items-center gap-2 w-full px-2 py-1 rounded"
                   onClick={() => {
+                    if (!requireCredits()) return;
                     appStore.setState((state) => ({
                       voiceChat: {
                         ...state.voiceChat,

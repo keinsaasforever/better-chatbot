@@ -52,7 +52,6 @@ export function UserRoleSelector({
         }
       };
       closeDialog();
-      toast.success(result?.message || t("roleUpdatedSuccessfully"));
     } else {
       toast.error(result?.message || t("failedToUpdateRole"));
       const closeDialog = () => {

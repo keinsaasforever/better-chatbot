@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { selectDeterministicRoute } from "./route";
-import type { RoutingCandidate, RoutingProfile, RoutingTaskKey } from "./types";
+import type {
+  RouteSignals,
+  RoutingCandidate,
+  RoutingProfile,
+  RoutingTaskKey,
+} from "./types";
 
 const candidate = (
   id: string,
@@ -95,6 +100,110 @@ describe("selectDeterministicRoute", () => {
     });
 
     expect(route.candidate.deploymentId).toBe("a");
+  });
+});
+
+describe("selectDeterministicRoute — thread pinning", () => {
+  const signals = (overrides: Partial<RouteSignals> = {}): RouteSignals => ({
+    taskKey: "coding",
+    requiresTools: false,
+    requiresVision: false,
+    minimumContextTokens: 0,
+    ...overrides,
+  });
+
+  it("keeps the thread on its previous model over a better task fit", () => {
+    const route = selectDeterministicRoute({
+      candidates: [candidate("previous", 20), candidate("best-fit", 90)],
+      signals: signals(),
+      pinnedChatModel: { provider: "test", model: "previous" },
+    });
+
+    expect(route.candidate.deploymentId).toBe("previous");
+    expect(route.reasonCode).toBe("thread_pinned:coding");
+    expect(route.taskScore).toBe(20);
+  });
+
+  it("routes on task fit for the first turn of a thread", () => {
+    const route = selectDeterministicRoute({
+      candidates: [candidate("previous", 20), candidate("best-fit", 90)],
+      signals: signals(),
+      pinnedChatModel: undefined,
+    });
+
+    expect(route.candidate.deploymentId).toBe("best-fit");
+    expect(route.reasonCode).toBe("task_fit:coding");
+  });
+
+  it("drops the pin when the pinned model cannot serve this turn", () => {
+    const route = selectDeterministicRoute({
+      candidates: [
+        candidate("previous", 20, { supportsVision: false }),
+        candidate("sees", 90),
+      ],
+      signals: signals({ requiresVision: true }),
+      pinnedChatModel: { provider: "test", model: "previous" },
+    });
+
+    expect(route.candidate.deploymentId).toBe("sees");
+    expect(route.reasonCode).toBe("task_fit:coding");
+  });
+
+  it("drops the pin when the organization has since disabled the model", () => {
+    const route = selectDeterministicRoute({
+      candidates: [candidate("previous", 20), candidate("allowed", 10)],
+      signals: signals(),
+      policy: { allowedDeploymentIds: new Set(["allowed"]) },
+      pinnedChatModel: { provider: "test", model: "previous" },
+    });
+
+    expect(route.candidate.deploymentId).toBe("allowed");
+  });
+
+  it("ignores a pinned model that has left the catalog", () => {
+    const route = selectDeterministicRoute({
+      candidates: [candidate("best-fit", 90)],
+      signals: signals(),
+      pinnedChatModel: { provider: "test", model: "retired" },
+    });
+
+    expect(route.candidate.deploymentId).toBe("best-fit");
+  });
+
+  it("pins across task keys — a thread does not re-route when the topic turns", () => {
+    const candidates = [
+      candidate("previous", 20, {
+        profiles: [
+          {
+            taskKey: "coding",
+            score: 20,
+            tieBreakPriority: 0,
+            bestTaskDescription: "coding",
+          },
+        ],
+      }),
+      candidate("writer", 0, {
+        profiles: [
+          {
+            taskKey: "writing",
+            score: 95,
+            tieBreakPriority: 30,
+            bestTaskDescription: "writing",
+          },
+        ],
+      }),
+    ];
+
+    const route = selectDeterministicRoute({
+      candidates,
+      signals: signals({ taskKey: "writing" }),
+      pinnedChatModel: { provider: "test", model: "previous" },
+    });
+
+    expect(route.candidate.deploymentId).toBe("previous");
+    // No profile for the new task key: reported as 0 rather than the score of
+    // the task the thread was routed on.
+    expect(route.taskScore).toBe(0);
   });
 });
 

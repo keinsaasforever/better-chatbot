@@ -351,6 +351,132 @@
       "when": 1785900100000,
       "tag": "0048_out_of_band_schema_baseline",
       "breakpoints": true
+    },
+    {
+      "idx": 50,
+      "version": "7",
+      "when": 1786000000000,
+      "tag": "0049_tensorx_deployments",
+      "breakpoints": true
+    },
+    {
+      "idx": 51,
+      "version": "7",
+      "when": 1786100000000,
+      "tag": "0050_promote_shared_personal_orgs",
+      "breakpoints": true
+    },
+    {
+      "idx": 52,
+      "version": "7",
+      "when": 1786200000000,
+      "tag": "0051_backfill_untitled_chat_threads",
+      "breakpoints": true
+    },
+    {
+      "idx": 53,
+      "version": "7",
+      "when": 1786300000000,
+      "tag": "0052_kernel_browser_automation",
+      "breakpoints": true
+    },
+    {
+      "idx": 54,
+      "version": "7",
+      "when": 1786400000000,
+      "tag": "0053_unattended_browser_runs",
+      "breakpoints": true
+    },
+    {
+      "idx": 55,
+      "version": "7",
+      "when": 1786500000000,
+      "tag": "0054_browser_credential",
+      "breakpoints": true
+    },
+    {
+      "idx": 56,
+      "version": "7",
+      "when": 1786600000000,
+      "tag": "0055_base_model_glm_deployment",
+      "breakpoints": true
+    },
+    {
+      "idx": 57,
+      "version": "7",
+      "when": 1786700000000,
+      "tag": "0056_project_todo",
+      "breakpoints": true
+    },
+    {
+      "idx": 58,
+      "version": "7",
+      "when": 1786800000000,
+      "tag": "0057_drop_project_widget",
+      "breakpoints": true
+    },
+    {
+      "idx": 59,
+      "version": "7",
+      "when": 1786900000000,
+      "tag": "0058_problem_report",
+      "breakpoints": true
+    },
+    {
+      "idx": 60,
+      "version": "7",
+      "when": 1787000000000,
+      "tag": "0059_chat_thread_knowledge_bases",
+      "breakpoints": true
+    },
+    {
+      "idx": 61,
+      "version": "7",
+      "when": 1787100000000,
+      "tag": "0060_graph_parity",
+      "breakpoints": true
+    },
+    {
+      "idx": 62,
+      "version": "7",
+      "when": 1787200000000,
+      "tag": "0061_drop_project_brain_check_drift",
+      "breakpoints": true
+    },
+    {
+      "idx": 63,
+      "version": "7",
+      "when": 1787300000000,
+      "tag": "0062_navigator_workflows_source",
+      "breakpoints": true
+    },
+    {
+      "idx": 64,
+      "version": "7",
+      "when": 1787400000000,
+      "tag": "0063_navigator_workflows_integration_calls",
+      "breakpoints": true
+    },
+    {
+      "idx": 65,
+      "version": "7",
+      "when": 1787500000000,
+      "tag": "0064_navigator_workflows_dashboard",
+      "breakpoints": true
+    },
+    {
+      "idx": 66,
+      "version": "7",
+      "when": 1787600000000,
+      "tag": "0065_api_key",
+      "breakpoints": true
+    },
+    {
+      "idx": 67,
+      "version": "7",
+      "when": 1787700000000,
+      "tag": "0066_cockpit_connection",
+      "breakpoints": true
     }
   ]
 }

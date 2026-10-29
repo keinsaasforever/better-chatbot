@@ -12,7 +12,7 @@ pnpm db:migrate
 pnpm dev
 ```
 
-You need the three variables from [the README](README.md#quick-start) filled in.
+You need the three variables from [the README](README.md#quick-start-docker) filled in.
 
 ## Before you open a pull request
 
@@ -23,6 +23,19 @@ pnpm check          # lint, typecheck, unit tests — all three must pass
 Add `pnpm build` if you touched streaming, the database schema, or anything
 that crosses the client/server boundary. Type errors do not always surface
 without it.
+
+## What happens after your pull request is merged
+
+better-chatbot is the open-source edition of keinsaas Navigator, and both are
+built from one codebase. Your pull request is reviewed and merged here, like in
+any other project. Within a day a bot carries it over to that codebase as its
+own pull request, with you as the commit author. Once it is released there,
+the next weekly sync publishes it back here unchanged.
+
+Nothing merged here is overwritten by a sync: the sync refuses to publish while
+a merged contribution has not made the round trip. You do not need to do
+anything for this. If your change conflicts with work that happened upstream
+in the meantime, a maintainer ports it by hand.
 
 ## How the code is organized
 

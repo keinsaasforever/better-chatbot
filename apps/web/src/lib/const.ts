@@ -11,6 +11,13 @@ export const PROMPT_PASTE_MAX_LENGTH = 1000;
 // demand via the "load older" affordance. Shared by the repo and the chat UI.
 export const CHAT_MESSAGE_WINDOW = 50;
 
+// How long a workflow may sit in an in-flight build status (`building`,
+// `awaiting_credentials`, `deploying`) before a re-submission is allowed to
+// re-dispatch it. The build agent reports progress on every iteration, so this
+// much silence means the build was accepted and then lost. Far longer than the
+// wizard's two dispatch points, which fire seconds apart.
+export const WORKFLOW_BUILD_STALE_AFTER_MS = 2 * 60 * 60 * 1000;
+
 export const IS_VERCEL_ENV = process.env.VERCEL === "1";
 export const IS_DOCKER_ENV = process.env.DOCKER_BUILD === "1";
 
@@ -65,6 +72,12 @@ export const OAUTH_REQUIRED_CODE = "OAUTH_REQUIRED";
 // what most MCP servers advertise as supported; offline_access preserves
 // refresh tokens across sessions.
 export const MCP_OAUTH_SCOPE = "openid profile email offline_access mcp:tools";
+
+// MCP_OAUTH_SCOPE without mcp:tools, for authorization servers that do not
+// know that scope (Clerk rejects dynamic client registration with a 400).
+// PgOAuthClientProvider switches to it when the server's metadata omits
+// mcp:tools or a registration with the full scope fails.
+export const MCP_OAUTH_FALLBACK_SCOPE = "openid profile email offline_access";
 
 export const SUPPORTED_LOCALES = [
   {

@@ -24,9 +24,11 @@ test.describe("User Settings Popup", () => {
       const settingsOption = page.getByTestId("user-settings-menu-item");
       await settingsOption.waitFor({ state: "visible", timeout: 2000 });
       await settingsOption.click();
+      await page.getByTestId("user-profile-menu-item").click();
     } catch {
-      // Fallback to text selector
+      // Fallback to text selectors
       await page.getByText("User Settings").click();
+      await page.getByText("Profile").click();
     }
 
     // Wait for drawer to open
@@ -57,6 +59,7 @@ test.describe("User Settings Popup", () => {
 
     const settingsOption = page.getByTestId("user-settings-menu-item");
     await settingsOption.click();
+    await page.getByTestId("user-profile-menu-item").click();
 
     // Wait for drawer to open
     await page.waitForSelector("[data-testid='user-detail-content']");
@@ -92,6 +95,7 @@ test.describe("User Settings Popup", () => {
 
     const settingsOption = page.getByTestId("user-settings-menu-item");
     await settingsOption.click();
+    await page.getByTestId("user-profile-menu-item").click();
 
     // Wait for settings to load
     await page.waitForSelector("[data-testid='user-detail-content']");
@@ -130,6 +134,7 @@ test.describe("User Settings Popup", () => {
 
     const settingsOption = page.getByTestId("user-settings-menu-item");
     await settingsOption.click();
+    await page.getByTestId("user-profile-menu-item").click();
 
     // Wait for drawer
     const drawer = page.getByRole("dialog", { name: "User Settings" });

@@ -14,6 +14,13 @@ import {
 } from "lib/ai/prompts";
 
 import type { ChatModel, ChatThread } from "app-types/chat";
+import {
+  AgentKnowledgeBaseBindingSchema,
+  type AgentKnowledgeBaseBinding,
+} from "app-types/agent";
+import { MAX_KNOWLEDGE_SOURCES } from "lib/chat/knowledge-base-mentions";
+import { RUN_RECOVERY_WINDOW } from "lib/chat/persisted-tail";
+import z from "zod";
 
 import {
   agentRepository,
@@ -82,6 +89,7 @@ export async function selectThreadWithMessagesAction(threadId: string) {
         title: ChatThreadTable.title,
         userId: ChatThreadTable.userId,
         projectId: ChatThreadTable.projectId,
+        knowledgeBases: ChatThreadTable.knowledgeBases,
         createdAt: ChatThreadTable.createdAt,
         projectName: ProjectTable.name,
       })
@@ -119,6 +127,7 @@ export async function selectThreadWithMessagesAction(threadId: string) {
     title: threadRow.title,
     userId: threadRow.userId,
     projectId: threadRow.projectId ?? undefined,
+    knowledgeBases: threadRow.knowledgeBases ?? [],
     createdAt: threadRow.createdAt,
     messages: messages ?? [],
     projectInfo,
@@ -140,6 +149,25 @@ export async function loadOlderThreadMessagesAction(
   return chatRepository.selectMessagesByThreadId(threadId, {
     limit: CHAT_MESSAGE_WINDOW,
     beforeMessageId,
+  });
+}
+
+/**
+ * The newest rows of a thread, for a client whose stream died to reconcile
+ * against once the server-side run has ended. Small on purpose: a run touches
+ * at most two rows, and this is polled while the run is still going.
+ */
+export async function loadLatestThreadMessagesAction(threadId: string) {
+  const session = await getSession();
+  if (!session) {
+    throw new Error("Unauthorized");
+  }
+  const thread = await chatRepository.selectThread(threadId);
+  if (!thread || thread.userId !== session.user.id) {
+    return [];
+  }
+  return chatRepository.selectMessagesByThreadId(threadId, {
+    limit: RUN_RECOVERY_WINDOW,
   });
 }
 
@@ -191,6 +219,28 @@ export async function updateThreadAction(
 ) {
   const userId = await getUserId();
   await chatRepository.updateThread(id, { ...thread, userId });
+}
+
+/**
+ * Replaces the knowledge sources attached to a thread from the composer.
+ *
+ * Returns false when the thread has no row yet (a draft whose first message is
+ * still unsent) — the chat POST writes the same list when it creates the
+ * thread, so the attachment is never lost, it just becomes durable a moment
+ * later. Deliberately does NOT create the thread: an empty row would show up
+ * in the sidebar as a phantom chat.
+ */
+export async function setThreadKnowledgeBasesAction(
+  threadId: string,
+  knowledgeBases: AgentKnowledgeBaseBinding[],
+) {
+  const userId = await getUserId();
+  const parsed = z
+    .array(AgentKnowledgeBaseBindingSchema)
+    .max(MAX_KNOWLEDGE_SOURCES)
+    .safeParse(knowledgeBases);
+  if (!parsed.success) throw new Error("Invalid knowledge base bindings");
+  return chatRepository.setThreadKnowledgeBases(threadId, userId, parsed.data);
 }
 
 export async function deleteThreadsAction() {

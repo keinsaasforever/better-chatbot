@@ -1,6 +1,11 @@
 import { createEphemeralMCPClient } from "lib/ai/mcp/ephemeral-client";
 import { extractMCPToolId } from "lib/ai/mcp/mcp-tool-id";
 import { mcpRepository } from "lib/db/repository";
+import { voiceToolDuration } from "lib/observability/instruments";
+import {
+  getVoiceAppToolDefinition,
+  isVoiceAppToolName,
+} from "./app-tool-definitions";
 import { isDefaultVoiceTool } from "./openai-tools";
 import {
   VoiceActor,
@@ -72,7 +77,86 @@ function normalizeToolError(
   return errorResult(toolName, message, "tool_execution_failed", callId);
 }
 
+/**
+ * Run an app tool from the registry for the session's actor.
+ *
+ * Browser-target tools (activateAgent, browseWeb, checkBrowserRun) are handled
+ * by the voice hook and never run here; a registry tool hidden from voice
+ * (`voice: false`) was never offered to the session, so a call for it is a
+ * hallucination and is refused rather than executed.
+ */
+async function executeAppTool(
+  input: VoiceToolExecutionInput,
+  args: unknown,
+): Promise<VoiceToolExecutionResult> {
+  const definition = getVoiceAppToolDefinition(input.toolName);
+  if (!definition || definition.target !== "server") {
+    return errorResult(
+      input.toolName,
+      "This tool is not available in a voice session",
+      "unknown_tool",
+      input.callId,
+    );
+  }
+
+  const { runTool } = await import("lib/navigator-tools/registry");
+  const result = await runTool(
+    {
+      userId: input.actor.userId,
+      organizationId: input.actor.organizationId ?? null,
+      source: "voice",
+    },
+    input.toolName,
+    args,
+  );
+  return result.ok
+    ? {
+        ok: true,
+        toolName: input.toolName,
+        callId: input.callId,
+        output: result.output,
+      }
+    : errorResult(
+        input.toolName,
+        result.error.message,
+        result.error.code,
+        input.callId,
+      );
+}
+
+function voiceToolKind(input: VoiceToolExecutionInput): string {
+  if (input.kind === "composio") return "composio";
+  if (isDefaultVoiceTool(input.toolName)) return "default";
+  if (isVoiceAppToolName(input.toolName)) return "app";
+  return "mcp";
+}
+
+/**
+ * Execute one voice tool call and record `voice.tool.duration`.
+ *
+ * The tool name is only a metric dimension for app and default tools, whose
+ * names are code constants; MCP and Composio names are user-defined.
+ */
 export async function executeVoiceTool(
+  input: VoiceToolExecutionInput,
+): Promise<VoiceToolExecutionResult> {
+  const startedAt = performance.now();
+  const kind = voiceToolKind(input);
+  let ok = false;
+  try {
+    const result = await executeVoiceToolUntimed(input);
+    ok = result.ok;
+    return result;
+  } finally {
+    voiceToolDuration.record(performance.now() - startedAt, {
+      kind,
+      tool: kind === "app" || kind === "default" ? input.toolName : kind,
+      outcome: ok ? "ok" : "error",
+    });
+  }
+}
+
+async function executeVoiceToolUntimed(
   input: VoiceToolExecutionInput,
 ): Promise<VoiceToolExecutionResult> {
   if (Boolean(input.mcpServerId) !== Boolean(input.mcpToolName)) {
@@ -88,6 +172,22 @@ export async function executeVoiceTool(
     input.arguments ??
     (input.argumentsText ? JSON.parse(input.argumentsText) : {});
 
+  // Composio tools are dispatched on the caller's declared `kind` rather than
+  // on their name. They are neither app-allowlisted nor shaped like an MCP tool
+  // id, so name-sniffing would fall through to the MCP path and fail with a
+  // misleading "MCP server not found".
+  if (input.kind === "composio") {
+    const { executeComposioVoiceTool } = await import(
+      "./execute-composio-tool"
+    );
+    return executeComposioVoiceTool({
+      toolName: input.toolName,
+      args,
+      actor: input.actor,
+      callId: input.callId,
+    });
+  }
+
   if (isDefaultVoiceTool(input.toolName)) {
     return executeServerSupportedDefaultVoiceTool(
       input.toolName,
@@ -95,6 +195,14 @@ export async function executeVoiceTool(
       input.actor,
       input.callId,
     );
+  }
+
+  // App-control tools dispatch by allowlisted name before any MCP resolution,
+  // straight into the Navigator tool registry: in-process, so a spoken tool
+  // call pays no HTTP hop through the MCP route. Dynamic import keeps the
+  // device transcript path free of the registry's dependencies.
+  if (isVoiceAppToolName(input.toolName)) {
+    return executeAppTool(input, args);
   }
 
   const legacyTarget =
@@ -134,7 +242,9 @@ export async function executeVoiceTool(
     return errorResult(input.toolName, "Forbidden", "forbidden", input.callId);
   }
 
-  const client = await createEphemeralMCPClient(server.id, input.actor.userId);
+  const client = await createEphemeralMCPClient(server.id, input.actor.userId, {
+    organizationId: input.actor.organizationId,
+  });
   if (!client) {
     return errorResult(
       input.toolName,

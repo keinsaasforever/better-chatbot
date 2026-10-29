@@ -14,6 +14,12 @@ export type VoiceActor = {
 export type VoiceToolExecutionInput = {
   actor: VoiceActor;
   toolName: string;
+  /**
+   * Which executor handles this call, as declared by the caller. Absent means
+   * "work it out from the name", which is what the device transcript path and
+   * every pre-Composio client do.
+   */
+  kind?: "mcp" | "app" | "composio";
   mcpServerId?: string;
   mcpToolName?: string;
   argumentsText?: string;
@@ -36,11 +42,29 @@ export type VoiceToolStatus = {
   unavailable: VoiceMcpToolReference[];
 };
 
-export type VoiceToolExecutionTarget = {
-  mcpServerId: string;
-  mcpServerName: string;
-  toolName: string;
-};
+// `kind` is optional on the MCP arm so existing construction sites and
+// serialized maps stay valid; a missing kind means "mcp".
+export type VoiceToolExecutionTarget =
+  | {
+      kind?: "mcp";
+      mcpServerId: string;
+      mcpServerName: string;
+      toolName: string;
+    }
+  | {
+      kind: "app";
+      toolName: string;
+    }
+  | {
+      /**
+       * Composio's Tool Router meta-tools. Only four of them exist regardless
+       * of how many apps are connected — they are a search/execute interface,
+       * not one schema per action — so offering them to a realtime session
+       * costs about what one app tool does.
+       */
+      kind: "composio";
+      toolName: string;
+    };
 
 export type VoiceToolExecutionMap = Record<string, VoiceToolExecutionTarget>;
 

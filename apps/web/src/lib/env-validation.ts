@@ -3,6 +3,8 @@ import { IS_VERCEL_ENV } from "lib/const";
 type OptionalFeature = {
   /** Env vars that must all be present for the feature to be active. */
   vars: string[];
+  /** Alternative: the feature is active when any one of these is present. */
+  anyOf?: string[];
   /** What the vars unlock. */
   feature: string;
   /** What happens when they are missing. */
@@ -41,9 +43,13 @@ const OPTIONAL_FEATURES: OptionalFeature[] = [
       "knowledge bases are unavailable; project RAG falls back to local pgvector search",
   },
   {
+    // KV_URL is what the Vercel/Upstash integration provisions; the stream
+    // context accepts either name.
     vars: ["REDIS_URL"],
+    anyOf: ["REDIS_URL", "KV_URL"],
     feature: "Resumable chat streams and cross-instance stop",
-    fallback: "streams are viewer-bound and the cache is per-instance",
+    fallback:
+      "streams are viewer-bound (a closed tab or reload cancels the run) and the cache is per-instance",
   },
   {
     vars: ["INNGEST_SIGNING_KEY", "INNGEST_EVENT_KEY"],
@@ -67,6 +73,20 @@ const OPTIONAL_FEATURES: OptionalFeature[] = [
     fallback: "voice transcription is unavailable",
   },
   {
+    vars: ["COMPOSIO_API_KEY"],
+    feature: "Connected apps (Composio: Gmail, Slack, GitHub, …)",
+    fallback: "third-party app connections are unavailable",
+  },
+  {
+    // Without its own key, production derives one from BETTER_AUTH_SECRET.
+    vars: ["APP_SECRETS_KEY"],
+    anyOf: ["APP_SECRETS_KEY", "BETTER_AUTH_SECRET"],
+    feature:
+      "Cockpit connections (encrypted credentials for Stripe, Revolut, Superlog, SEO, Vercel, website analytics)",
+    fallback:
+      "cockpit connections disabled: they cannot be saved or read in production (development uses a fixed, insecure key)",
+  },
+  {
     vars: ["VAPID_PRIVATE_KEY", "NEXT_PUBLIC_VAPID_PUBLIC_KEY"],
     feature: "Web push notifications",
     fallback: "browser notifications are disabled while the app is closed",
@@ -86,7 +106,8 @@ const OPTIONAL_FEATURES: OptionalFeature[] = [
 export function validateEnvironment(): void {
   const errors: string[] = [];
 
-  if (!has("POSTGRES_URL")) {
+  // DATABASE_URL is the name the Neon integration on Vercel provisions.
+  if (!has("POSTGRES_URL") && !has("DATABASE_URL")) {
     errors.push(
       "POSTGRES_URL is not set. Point it at a Postgres database with the pgvector extension (pnpm docker:pg starts one locally).",
     );
@@ -96,7 +117,9 @@ export function validateEnvironment(): void {
       "BETTER_AUTH_SECRET is not set. Generate one with: npx @better-auth/cli@latest secret",
     );
   }
-  if (!MODEL_PROVIDER_VARS.some(has)) {
+  // On Vercel the AI Gateway authenticates with the deployment's OIDC token,
+  // so the gateway is available without a key.
+  if (!IS_VERCEL_ENV && !MODEL_PROVIDER_VARS.some(has)) {
     errors.push(
       `No model provider is configured. Set AI_GATEWAY_API_KEY (one key serves every model in the catalog), or configure one of: ${MODEL_PROVIDER_VARS.slice(1).join(", ")}.`,
     );
@@ -115,7 +138,9 @@ export function validateEnvironment(): void {
     return;
   }
 
-  const disabled = OPTIONAL_FEATURES.filter((entry) => !entry.vars.every(has));
+  const disabled = OPTIONAL_FEATURES.filter((entry) =>
+    entry.anyOf ? !entry.anyOf.some(has) : !entry.vars.every(has),
+  );
   if (disabled.length > 0) {
     console.info("ℹ️ Optional integrations not configured:");
     for (const { vars, feature, fallback } of disabled) {

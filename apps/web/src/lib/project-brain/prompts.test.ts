@@ -1,8 +1,20 @@
 import { describe, expect, test } from "vitest";
 import {
+  buildConsolidationSystemPrompt,
   buildExtractionSystemPrompt,
   buildGatherSystemPrompt,
 } from "./prompts";
+
+describe("buildConsolidationSystemPrompt", () => {
+  test("anchors to the current date and states the notify rule", () => {
+    const prompt = buildConsolidationSystemPrompt();
+
+    expect(prompt).toContain(String(new Date().getFullYear()));
+    expect(prompt).toContain("`notify: true` only");
+    expect(prompt).toContain("Keep at most 8 open to-dos");
+    expect(prompt).toContain("Connector failures");
+  });
+});
 
 describe("buildGatherSystemPrompt", () => {
   test("anchors the connector-read prompt to the current date", () => {
@@ -40,13 +52,21 @@ describe("buildExtractionSystemPrompt", () => {
     expect(prompt).toContain("never assume a year");
   });
 
-  // The schema is a discriminated union on `kind`; when the prompt does not name
-  // the legal values the model invents its own ("list", "calendar") and the whole
-  // extraction fails validation.
-  test("names the widget kinds the schema accepts", () => {
+  test("no longer asks for widgets and steers todos toward actionable items", () => {
     const prompt = buildExtractionSystemPrompt();
 
-    expect(prompt).toContain('"table"');
-    expect(prompt).toContain('"metric"');
+    expect(prompt).not.toContain("widget");
+    expect(prompt).toContain("A calendar entry is not a todo");
+    expect(prompt).toContain("sourceUrl");
+  });
+
+  // A Gmail 403 once became a "Gmail Access: Blocked" widget. Failed tool
+  // results are filtered before extraction, but the model must also ignore
+  // any error text that slips through inside otherwise valid payloads.
+  test("tells the model that tool errors are not project facts", () => {
+    const prompt = buildExtractionSystemPrompt();
+
+    expect(prompt).toContain("Tool failures, HTTP errors");
+    expect(prompt).toContain("are not project facts");
   });
 });

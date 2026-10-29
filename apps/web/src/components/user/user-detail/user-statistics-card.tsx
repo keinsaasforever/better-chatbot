@@ -87,6 +87,9 @@ export function UserStatisticsCard({ stats, view }: UserStatisticsCardProps) {
                     >
                       {stats.totalTokens.toLocaleString()}
                     </p>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      {tCommon("totalTokensNote")}
+                    </p>
                   </div>
                 </div>
               </div>

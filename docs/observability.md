@@ -39,7 +39,10 @@ To activate:
    Superlog can group incidents but has nowhere to push a fix.
 4. **Connect Slack** on the same page for incident delivery.
 5. **Add the MCP server** so a coding agent can query production telemetry
-   directly: `claude mcp add --transport http superlog https://api.superlog.sh/mcp`
+   directly: `claude mcp add --transport http superlog https://api.superlog.sh/mcp`.
+   The MCP server does not take the ingest token: it wants OAuth or a personal
+   access token (`superlog_pat_…`, Superlog → Settings → MCP tokens) as
+   `Authorization: Bearer`. The cockpit's Superlog connection needs the same.
 
 ## Ingest contract
 
@@ -71,12 +74,20 @@ failure by a wide margin.
   `lib/ai/request-timer.ts`, turning the pre-stream breakdown (MCP tool loading,
   RAG retrieval, billing lookups) into a flame graph.
 - **Business operations** — `mcp.tool.call`, `mcp.tools.list`, `job.<function>`.
+- **Cockpit feeds** — `cockpit.provider.probe|fetch|prepare` per provider
+  (Stripe, Revolut, Superlog, SEO, Vercel, website), with `cockpit.outcome`
+  and `cockpit.reason`. A failed probe logs `[cockpit] probe failed`; a feed
+  logs `[cockpit] feed inop` / `feed live` only when its state changes, since an
+  open cockpit refreshes every minute. Reasons are built by our own code
+  (`lib/cockpit/reasons.ts`), so no provider response body or key reaches
+  Superlog.
 
 ### Metrics
 
 `chat.ttft`, `chat.total`, `chat.gateway.ttft`, `chat.stage.duration`,
 `mcp.tool.calls`, `mcp.tool.call.duration`, `mcp.tools.list.lookups`,
-`ai.route.decisions`, `billing.usage.events`, `job.runs`, `webhook.deliveries`.
+`ai.route.decisions`, `billing.usage.events`, `job.runs`, `webhook.deliveries`,
+`cockpit.provider.runs`.
 
 Metric dimensions are deliberately low-cardinality — outcome, tool name,
 function ID, error class. Org IDs, thread IDs and user IDs go on **spans**, never
@@ -88,6 +99,27 @@ Every `logger.*` call in `apps/web` reaches Superlog through a consola reporter
 (`lib/observability/consola-otel-reporter.ts`). Calls made inside a span carry
 `trace_id` / `span_id` automatically, so the existing `LatencyTimer:` JSON lines
 now cross-link into the trace they describe rather than floating free.
+
+### User-reported problems
+
+The sidebar "Report an issue" dialog turns a user's own report into an incident.
+Superlog has no create-incident API — incidents are grouped from error-severity
+signals — so `lib/problem-report/superlog-incident.ts` emits the report the same
+way a crash is emitted: a `user.problem_report` span with ERROR status carrying a
+recorded exception, plus an ERROR log record.
+
+Two details are deliberate:
+
+- The exception **type** is the constant `UserReportedProblem`, not the user's
+  text, so every report groups under one issue instead of opening a fresh one
+  per wording. The user's first line is the exception message.
+- **No reporter identity** is attached — no user id, no email — matching the rule
+  the rest of the telemetry follows. `problem_report.id` links the incident to
+  the `problem_report` row in Postgres, which is where the reporter lives. The
+  same submission also mails `tech@keinsaas.com`.
+
+The description itself *is* attached, unlike chat content: a report with the text
+stripped is not actionable, and the user wrote it in order to send it to us.
 
 ## What is *not* captured
 

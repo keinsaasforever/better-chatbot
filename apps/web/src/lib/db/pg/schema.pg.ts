@@ -1,10 +1,14 @@
 import type { ModelCapability, ModelRoutingProfile } from "@/types/model";
 import { TipTapMentionJsonContent } from "@/types/util";
 import { UIMessage } from "ai";
-import { Agent } from "app-types/agent";
+import { Agent, AgentKnowledgeBaseBinding } from "app-types/agent";
 import { ChatMetadata } from "app-types/chat";
-import { Skill } from "app-types/skill";
 import { MCPServerConfig } from "app-types/mcp";
+import type {
+  ProblemReportContext,
+  ProblemReportScreenshot,
+} from "app-types/problem-report";
+import { Skill } from "app-types/skill";
 import { UserPreferences } from "app-types/user";
 import { DBEdge, DBNode, DBWorkflow } from "app-types/workflow";
 import { isNotNull, sql } from "drizzle-orm";
@@ -37,6 +41,13 @@ export const ChatThreadTable = pgTable(
     projectId: uuid("project_id").references(() => ProjectTable.id, {
       onDelete: "set null",
     }),
+    // Knowledge sources attached from the composer. Same binding shape as an
+    // agent's `instructions.knowledgeBases`; the ids are references only, so
+    // access is re-checked at retrieval time.
+    knowledgeBases: jsonb("knowledge_bases")
+      .notNull()
+      .default([])
+      .$type<AgentKnowledgeBaseBinding[]>(),
     createdAt: timestamp("created_at")
       .notNull()
       .default(sql`CURRENT_TIMESTAMP`),
@@ -174,6 +185,17 @@ export const ScheduledTaskTable = pgTable(
 
     // The message to send to the agent
     inputPrompt: text("input_prompt"),
+
+    // Per-task opt-in for driving a browser with nobody watching. Defaults off
+    // and is not ceremony: headful browser time bills at 128 credits/second
+    // (docs/kernel-browser-billing.md), so a tool that bound by default on
+    // every schedule would be a billing incident waiting for a slow run.
+    browserAutomationEnabled: boolean("browser_automation_enabled")
+      .notNull()
+      .default(false),
+    // Which `browser_credential` aliases this task may sign in with. The model
+    // never widens this; a human picks it in the schedule dialog.
+    browserCredentialAliases: text("browser_credential_aliases").array(),
 
     // Tracking
     enabled: boolean("enabled").default(true),
@@ -378,6 +400,53 @@ export const VerificationTable = pgTable("verification", {
     () => /* @__PURE__ */ new Date(),
   ),
 });
+
+// Better Auth `apiKey` plugin (@better-auth/api-key). Property names are the
+// plugin's field names, which the drizzle adapter maps by key. `key` holds the
+// SHA-256 hash, never the secret; `start` is its first characters for display.
+// Keys reference a user (`references: "user"`); the organization a key acts in
+// lives in `metadata.organizationId` and is re-checked against membership on
+// every use (lib/navigator-tools/api-keys.ts). Migration 0065.
+export const ApiKeyTable = pgTable(
+  "apikey",
+  {
+    id: uuid("id").primaryKey().notNull().defaultRandom(),
+    configId: text("config_id").notNull().default("default"),
+    name: text("name"),
+    start: text("start"),
+    referenceId: uuid("reference_id")
+      .notNull()
+      .references(() => UserTable.id, { onDelete: "cascade" }),
+    prefix: text("prefix"),
+    key: text("key").notNull(),
+    refillInterval: integer("refill_interval"),
+    refillAmount: integer("refill_amount"),
+    lastRefillAt: timestamp("last_refill_at"),
+    enabled: boolean("enabled").default(true),
+    rateLimitEnabled: boolean("rate_limit_enabled").default(true),
+    rateLimitTimeWindow: integer("rate_limit_time_window"),
+    rateLimitMax: integer("rate_limit_max"),
+    requestCount: integer("request_count").default(0),
+    remaining: integer("remaining"),
+    lastRequest: timestamp("last_request"),
+    expiresAt: timestamp("expires_at"),
+    createdAt: timestamp("created_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: timestamp("updated_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
+    permissions: text("permissions"),
+    metadata: text("metadata"),
+  },
+  (table) => [
+    uniqueIndex("apikey_key_idx").on(table.key),
+    index("apikey_reference_id_idx").on(table.referenceId),
+    index("apikey_config_id_idx").on(table.configId),
+  ],
+);
+
+export type ApiKeyEntity = typeof ApiKeyTable.$inferSelect;
 
 // Tool customization table for per-user additional instructions
 export const McpToolCustomizationTable = pgTable(
@@ -844,6 +913,26 @@ export const OrganizationAiPolicyTable = pgTable("organization_ai_policy", {
   automaticRoutingEnabled: boolean("automatic_routing_enabled")
     .notNull()
     .default(true),
+  /**
+   * Org opt-in for Kernel browser automation. Defaults off: this is the one
+   * tool that drives a real browser against arbitrary sites, and it is metered
+   * per browser-second.
+   */
+  browserAutomationEnabled: boolean("browser_automation_enabled")
+    .notNull()
+    .default(false),
+  /**
+   * Separate opt-in for browser automation on runs with nobody watching
+   * (scheduled agents). Distinct from the flag above on purpose: "a person may
+   * drive a browser from chat" and "a robot may drive one at 3am, sign in, and
+   * bill browser-seconds unsupervised" are different decisions, and an org can
+   * reasonably want the first without the second.
+   */
+  browserAutomationUnattendedEnabled: boolean(
+    "browser_automation_unattended_enabled",
+  )
+    .notNull()
+    .default(false),
   maxInputPriceMicrosPerMillion: bigint("max_input_price_micros_per_million", {
     mode: "number",
   }),
@@ -858,6 +947,70 @@ export const OrganizationAiPolicyTable = pgTable("organization_ai_policy", {
   createdAt: timestamp("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
   updatedAt: timestamp("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
 });
+
+/**
+ * A website the org's agents may sign into, and the saved browser session for
+ * it.
+ *
+ * Holds NO credential material. The username, password and any TOTP seed live
+ * in one Scaleway Secret Manager secret; this row keeps only the pointer
+ * (`externalSecretId`), the same shape `navigator_connected_tools` already
+ * uses. `usernameHint` is a masked display string computed at write time, never
+ * the real value.
+ *
+ * Org-scoped rather than user-scoped: a scheduled task runs as its owner but
+ * inside the agent's organization, and a company's portal login belongs to the
+ * company. Every repository method filters on `organizationId`.
+ */
+export const BrowserCredentialTable = pgTable(
+  "browser_credential",
+  {
+    id: uuid("id").primaryKey().notNull().defaultRandom(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => OrganizationTable.id, { onDelete: "cascade" }),
+    createdByUserId: uuid("created_by_user_id")
+      .notNull()
+      .references(() => UserTable.id, { onDelete: "cascade" }),
+    /** Short handle the agent refers to this site by, e.g. `emta`. */
+    alias: varchar("alias", { length: 64 }).notNull(),
+    label: text("label"),
+    /**
+     * Registrable domain this credential is bound to. The origin check in
+     * `lib/kernel/playwright-execute-tool` refuses to substitute the value
+     * anywhere else, which is what keeps a prompt-injected page from
+     * harvesting it.
+     */
+    domain: text("domain").notNull(),
+    /** Narrower than `domain` when a site needs it, e.g. one path prefix. */
+    allowedUrlPrefix: text("allowed_url_prefix"),
+    /** Masked, for display only, e.g. `p***@keinsaas.com`. */
+    usernameHint: text("username_hint"),
+    /** Scaleway secret UUID. Never returned to a client. */
+    externalSecretId: text("external_secret_id"),
+    /** Kernel profile holding the saved cookies for this site. */
+    kernelProfileId: text("kernel_profile_id"),
+    kernelProfileName: text("kernel_profile_name"),
+    profileSavedAt: timestamp("profile_saved_at"),
+    lastUsedAt: timestamp("last_used_at"),
+    createdAt: timestamp("created_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: timestamp("updated_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [
+    uniqueIndex("browser_credential_org_alias_idx").on(
+      table.organizationId,
+      table.alias,
+    ),
+    index("browser_credential_org_idx").on(table.organizationId),
+  ],
+);
+
+export type BrowserCredentialEntity =
+  typeof BrowserCredentialTable.$inferSelect;
 
 export const OrganizationModelAccessTable = pgTable(
   "organization_model_access",
@@ -1244,6 +1397,17 @@ export const NavigatorWorkflowTable = pgTable(
     userInputRaw: text("user_input_raw"),
     userInputFileName: text("user_input_file_name"),
     userInputDescription: text("user_input_description"),
+    // GitHub repo or web page the user pointed the generator at. The analyze
+    // job fetches it server-side; the commit pins which revision was read.
+    sourceUrl: text("source_url"),
+    sourceCommitSha: text("source_commit_sha"),
+    // Outbound calls found in the source, mapped to verified Composio actions
+    // or flagged as custom APIs (see composio-actions.ts).
+    integrationCalls: jsonb("integration_calls"),
+    // Per-workflow end-user dashboard (served by the workflow's container)
+    // and its database on the shared managed Postgres instance.
+    dashboardUrl: text("dashboard_url"),
+    workflowDbName: text("workflow_db_name"),
     // Enriched process description produced by the analyze step — used by
     // refine as the n8nac search query and the primary context for the AI.
     enhancedDescription: text("enhanced_description"),
@@ -1623,6 +1787,16 @@ export const ProjectBrainPageTable = pgTable(
       .$type<Record<string, unknown>>()
       .notNull()
       .default({}),
+    // Set when the nightly dedupe folded this page into another one. The row
+    // stays so old links and citations keep resolving; it is hidden from the
+    // graph, retrieval and consolidation via archivedAt.
+    mergedIntoPageId: uuid("merged_into_page_id"),
+    // Degree + facts + recency + source diversity, recomputed by the dream
+    // cycle. Orders the graph and boosts retrieval.
+    salience: numeric("salience", { precision: 8, scale: 3 })
+      .notNull()
+      .default("0"),
+    archivedAt: timestamp("archived_at"),
     createdAt: timestamp("created_at")
       .notNull()
       .default(sql`CURRENT_TIMESTAMP`),
@@ -1637,8 +1811,64 @@ export const ProjectBrainPageTable = pgTable(
     ),
     index("project_brain_page_project_idx").on(table.projectId),
     index("project_brain_page_user_idx").on(table.userId),
+    index("project_brain_page_project_salience_idx").on(
+      table.projectId,
+      table.salience,
+    ),
   ],
 );
+
+export const ProjectBrainContradictionTable = pgTable(
+  "project_brain_contradiction",
+  {
+    id: uuid("id").primaryKey().notNull().defaultRandom(),
+    projectId: uuid("project_id")
+      .notNull()
+      .references(() => ProjectTable.id, { onDelete: "cascade" }),
+    pageId: uuid("page_id")
+      .notNull()
+      .references(() => ProjectBrainPageTable.id, { onDelete: "cascade" }),
+    factKey: text("fact_key").notNull(),
+    factIdA: uuid("fact_id_a").notNull(),
+    factIdB: uuid("fact_id_b").notNull(),
+    verdict: varchar("verdict", {
+      length: 16,
+      enum: ["contradiction", "compatible", "unknown"],
+    })
+      .notNull()
+      .default("unknown"),
+    explanation: text("explanation"),
+    status: varchar("status", {
+      length: 16,
+      enum: ["open", "resolved", "dismissed"],
+    })
+      .notNull()
+      .default("open"),
+    resolvedByUserId: uuid("resolved_by_user_id").references(
+      () => UserTable.id,
+      { onDelete: "set null" },
+    ),
+    createdAt: timestamp("created_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: timestamp("updated_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [
+    uniqueIndex("project_brain_contradiction_pair_idx").on(
+      table.factIdA,
+      table.factIdB,
+    ),
+    index("project_brain_contradiction_project_status_idx").on(
+      table.projectId,
+      table.status,
+    ),
+  ],
+);
+
+export type ProjectBrainContradictionEntity =
+  typeof ProjectBrainContradictionTable.$inferSelect;
 
 export const ProjectBrainEventTable = pgTable(
   "project_brain_event",
@@ -1990,6 +2220,25 @@ export type VoiceTranscriptSegmentEntity =
 // Project GBrain Workspace Tables
 // ============================================================
 
+export type ProjectBrainSourceSignalsRecord = {
+  summary: string;
+  status: {
+    health: "green" | "yellow" | "red" | "unknown";
+    progressPct?: number;
+    blockers: string[];
+    shortSummary: string;
+  };
+  todos: Array<{
+    title: string;
+    status: string;
+    priority: string;
+    rationale?: string;
+    detail?: string;
+    dueAt?: string;
+    sourceUrl?: string;
+  }>;
+};
+
 export const ProjectBrainRawSourceTable = pgTable(
   "project_brain_raw_source",
   {
@@ -2025,6 +2274,11 @@ export const ProjectBrainRawSourceTable = pgTable(
       .$type<Record<string, unknown>>()
       .notNull()
       .default({}),
+    // Per-source summary / status / todos from the extraction step. Read by
+    // the project-level consolidation so it never re-parses raw text.
+    extractionSignals: jsonb(
+      "extraction_signals",
+    ).$type<ProjectBrainSourceSignalsRecord | null>(),
     observedAt: timestamp("observed_at").notNull(),
     createdAt: timestamp("created_at")
       .notNull()
@@ -2187,6 +2441,9 @@ export const ProjectStatusSnapshotTable = pgTable(
     })
       .notNull()
       .default("unknown"),
+    // The ingest run that produced this snapshot. Unique where set, so a
+    // replayed consolidation step cannot insert a second snapshot.
+    runId: uuid("run_id"),
     generatedAt: timestamp("generated_at")
       .notNull()
       .default(sql`CURRENT_TIMESTAMP`),
@@ -2194,49 +2451,64 @@ export const ProjectStatusSnapshotTable = pgTable(
   (table) => [
     index("project_status_snapshot_project_idx").on(table.projectId),
     index("project_status_snapshot_generated_idx").on(table.generatedAt),
+    uniqueIndex("project_status_snapshot_run_idx")
+      .on(table.runId)
+      .where(isNotNull(table.runId)),
   ],
 );
 
-export const ProjectWidgetTable = pgTable(
-  "project_widget",
+export const ProjectTodoTable = pgTable(
+  "project_todo",
   {
     id: uuid("id").primaryKey().notNull().defaultRandom(),
     projectId: uuid("project_id")
       .notNull()
       .references(() => ProjectTable.id, { onDelete: "cascade" }),
-    userId: uuid("user_id")
-      .notNull()
-      .references(() => UserTable.id, { onDelete: "cascade" }),
-    sourceScope: text("source_scope").notNull(),
-    sourceRunId: uuid("source_run_id").references(
-      () => ProjectBrainRunTable.id,
-      { onDelete: "set null" },
-    ),
-    kind: varchar("kind", {
-      enum: ["todos", "status", "table", "metric"],
-    }).notNull(),
+    // LLM-stable dedupe key: the same task seen in two tools is one row.
+    key: varchar("key", { length: 80 }).notNull(),
     title: text("title").notNull(),
-    renderData: jsonb("render_data")
-      .$type<Record<string, unknown>>()
+    detail: text("detail"),
+    priority: varchar("priority", {
+      length: 16,
+      enum: ["low", "normal", "high", "critical"],
+    })
       .notNull()
-      .default({}),
-    // Stable slot key so refreshes upsert in place (e.g. "leads", "kpi").
-    slot: text("slot").notNull().default("default"),
-    position: integer("position").notNull().default(0),
-    generatedAt: timestamp("generated_at")
+      .default("normal"),
+    dueAt: timestamp("due_at"),
+    sourceScope: text("source_scope"),
+    sourceLabel: text("source_label"),
+    sourceUrl: text("source_url"),
+    // Owned by the user once set to done/dismissed: a later sync never reopens.
+    status: varchar("status", {
+      length: 16,
+      enum: ["open", "done", "dismissed"],
+    })
+      .notNull()
+      .default("open"),
+    notifiedAt: timestamp("notified_at"),
+    notifiedRunId: uuid("notified_run_id"),
+    lastSeenAt: timestamp("last_seen_at")
       .notNull()
       .default(sql`CURRENT_TIMESTAMP`),
-    staleAt: timestamp("stale_at"),
+    resolvedAt: timestamp("resolved_at"),
+    resolvedByUserId: uuid("resolved_by_user_id").references(
+      () => UserTable.id,
+      { onDelete: "set null" },
+    ),
+    createdAt: timestamp("created_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: timestamp("updated_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
   },
   (table) => [
-    unique("project_widget_scope_slot_unique").on(
-      table.projectId,
-      table.sourceScope,
-      table.slot,
-    ),
-    index("project_widget_project_idx").on(table.projectId),
+    uniqueIndex("project_todo_project_key_idx").on(table.projectId, table.key),
+    index("project_todo_project_status_idx").on(table.projectId, table.status),
   ],
 );
+
+export type ProjectTodoEntity = typeof ProjectTodoTable.$inferSelect;
 
 export const ProjectMemberTable = pgTable(
   "project_member",
@@ -2378,6 +2650,7 @@ export const ProjectBrainRunTable = pgTable(
         "extracting",
         "persisting",
         "materializing",
+        "consolidating",
         "complete",
       ],
     })
@@ -2841,6 +3114,10 @@ export const NotificationTable = pgTable(
     body: text("body"),
     threadId: uuid("thread_id"),
     agentId: uuid("agent_id"),
+    // In-app deep link (e.g. /projects/<id>). Takes precedence over threadId.
+    url: text("url"),
+    // Idempotency key per user; a replayed producer cannot duplicate a row.
+    dedupeKey: text("dedupe_key"),
     readAt: timestamp("read_at"),
     createdAt: timestamp("created_at")
       .notNull()
@@ -2849,10 +3126,55 @@ export const NotificationTable = pgTable(
   (table) => [
     index("notification_user_read_idx").on(table.userId, table.readAt),
     index("notification_user_created_idx").on(table.userId, table.createdAt),
+    uniqueIndex("notification_user_dedupe_idx")
+      .on(table.userId, table.dedupeKey)
+      .where(isNotNull(table.dedupeKey)),
   ],
 );
 
 export type NotificationEntity = typeof NotificationTable.$inferSelect;
+
+/**
+ * Encrypted credentials for one cockpit data source (migration 0066). Scoped
+ * to an organization, or to the user alone when `organizationId` is null; one
+ * row per scope and provider. `configEncrypted` is sealed with
+ * `lib/crypto/secret-box.ts` and must never leave the server decrypted.
+ */
+export const CockpitConnectionTable = pgTable(
+  "cockpit_connection",
+  {
+    id: uuid("id").primaryKey().notNull().defaultRandom(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => UserTable.id, { onDelete: "cascade" }),
+    organizationId: text("organization_id").references(
+      () => OrganizationTable.id,
+      { onDelete: "cascade" },
+    ),
+    provider: varchar("provider", { length: 32 }).notNull(),
+    label: text("label"),
+    configEncrypted: text("config_encrypted").notNull(),
+    enabled: boolean("enabled").notNull().default(true),
+    lastOkAt: timestamp("last_ok_at"),
+    lastError: text("last_error"),
+    createdAt: timestamp("created_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: timestamp("updated_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [
+    uniqueIndex("cockpit_connection_scope_provider_idx").on(
+      sql`COALESCE(${table.organizationId}, 'user:' || ${table.userId}::text)`,
+      table.provider,
+    ),
+    index("cockpit_connection_user_idx").on(table.userId),
+  ],
+);
+
+export type CockpitConnectionEntity =
+  typeof CockpitConnectionTable.$inferSelect;
 
 // Standalone knowledge bases: named Agentset namespaces filled from chat
 // uploads and bound to agents for scoped retrieval. Namespace provisioning is
@@ -2890,3 +3212,55 @@ export const KnowledgeBaseTable = pgTable(
 );
 
 export type KnowledgeBaseEntity = typeof KnowledgeBaseTable.$inferSelect;
+
+// In-product problem reports from the sidebar "Report an issue" dialog.
+//
+// The row is the source of truth; the Superlog incident and the notification
+// mail raised by the same submission are best-effort side effects. `traceId` is
+// what stitches a row back to the incident Superlog grouped it into.
+// `organizationId` is `set null` rather than `cascade`: a deleted workspace
+// must not take its bug reports with it.
+export const ProblemReportTable = pgTable(
+  "problem_report",
+  {
+    id: uuid("id").primaryKey().notNull().defaultRandom(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => UserTable.id, { onDelete: "cascade" }),
+    organizationId: text("organization_id").references(
+      () => OrganizationTable.id,
+      { onDelete: "set null" },
+    ),
+    description: text("description").notNull(),
+    // `{ key, url, name, contentType, size }[]`, uploaded via /api/storage/upload
+    // before submit. Denormalised: attachments are only read back with the report.
+    screenshots: jsonb("screenshots")
+      .notNull()
+      .default(sql`'[]'::jsonb`)
+      .$type<ProblemReportScreenshot[]>(),
+    // Page URL / user agent / locale — the "what were you looking at" that
+    // users never think to include.
+    context: jsonb("context").$type<ProblemReportContext>(),
+    traceId: varchar("trace_id", { length: 32 }),
+    status: varchar("status", { length: 16 }).notNull().default("open"),
+    createdAt: timestamp("created_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: timestamp("updated_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [
+    index("problem_report_user_created_idx").on(table.userId, table.createdAt),
+    index("problem_report_org_created_idx").on(
+      table.organizationId,
+      table.createdAt,
+    ),
+    index("problem_report_status_created_idx").on(
+      table.status,
+      table.createdAt,
+    ),
+  ],
+);
+
+export type ProblemReportEntity = typeof ProblemReportTable.$inferSelect;

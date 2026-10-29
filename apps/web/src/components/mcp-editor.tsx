@@ -12,7 +12,6 @@ import { Button } from "./ui/button";
 import { Label } from "./ui/label";
 import { Textarea } from "./ui/textarea";
 import JsonView from "./ui/json-view";
-import { toast } from "sonner";
 import { safe } from "ts-safe";
 import { useRouter } from "next/navigation";
 import { createDebounce, fetcher, isNull, safeJSONParse } from "lib/utils";
@@ -203,8 +202,6 @@ export default function MCPEditor({
         }),
       )
       .ifOk((result) => {
-        toast.success(t("MCP.configurationSavedSuccessfully"));
-
         // Track MCP server creation (only for new servers)
         if (shouldInsert) {
           analytics.mcpServerCreated({

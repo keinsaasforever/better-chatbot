@@ -8,6 +8,14 @@ files:
   - build/icon-win.png
   - build/icon.png
   - package.json
+# Registers `keinsaas://` with the OS (CFBundleURLTypes on macOS, HKCU classes
+# via NSIS on Windows, x-scheme-handler on Linux). The web app's
+# /desktop/auth/complete page uses it to hand a browser sign-in back to the
+# app; see src/main/desktop-auth.ts.
+protocols:
+  - name: Keinsaas Navigator
+    schemes:
+      - keinsaas
 win:
   icon: build/icon-win.png
   target:

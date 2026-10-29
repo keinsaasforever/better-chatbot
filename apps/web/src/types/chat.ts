@@ -1,5 +1,10 @@
+import type { AgentKnowledgeBaseBinding } from "app-types/agent";
 import type { RetrievalSource } from "@/lib/citations/retrieval-source";
 import type { LanguageModelUsage, UIMessage } from "ai";
+import {
+  MAX_ATTACHMENT_URL_CHARS,
+  MAX_INGESTED_ATTACHMENTS,
+} from "@/lib/ai/ingest/limits";
 import { tag } from "lib/tag";
 import { z } from "zod";
 import { AllowedMCPServerZodSchema } from "./mcp";
@@ -12,9 +17,26 @@ export type ChatMetadata = {
     automatic: boolean;
     taskKey?: string;
     reasonCode?: string;
+    /**
+     * `provider/model` this thread ran on last turn, recorded only when it
+     * differs from the model serving this one. A switch throws away the
+     * prompt cache, so this is what makes the cost of that churn countable -
+     * and `automatic` above says whether routing or the user caused it.
+     */
+    switchedFrom?: string;
   };
   toolChoice?: "auto" | "none" | "manual";
   toolCount?: number;
+  /**
+   * A tool stopped because it needed a person: today, the browser agent hitting
+   * an identity check with nobody to answer it.
+   *
+   * The turn itself still finishes normally (`finishReason: "stop"`), so
+   * without this a scheduled run would be recorded as a success that did
+   * nothing. Set from the tool during the run and read off the terminal
+   * `finish` frame by `lib/scheduled-tasks/chat-failure`.
+   */
+  blocked?: { source: string; reason: string };
   runId?: string;
   runStatus?:
     | "queued"
@@ -33,7 +55,13 @@ export type ChatMetadata = {
   lastCompletedStep?: number;
   agentId?: string;
   retrievalSources?: RetrievalSource[];
-  source?: "voice_transcript";
+  // `navigator_*`: written by a Navigator tool called over MCP or from the
+  // cockpit (lib/navigator-tools), not typed in the chat UI.
+  source?:
+    | "voice_transcript"
+    | "voice_realtime"
+    | "navigator_mcp"
+    | "navigator_cockpit";
   voiceSessionId?: string;
   error?: {
     code: string;
@@ -48,9 +76,11 @@ export type ChatModel = {
 
 export const ChatAttachmentSchema = z.object({
   type: z.enum(["file", "source-url"]),
-  url: z.string(),
-  mediaType: z.string().optional(),
-  filename: z.string().optional(),
+  // Bounded because every entry costs a storage download and a parse before
+  // the stream opens, and this array is client-supplied.
+  url: z.string().max(MAX_ATTACHMENT_URL_CHARS),
+  mediaType: z.string().max(255).optional(),
+  filename: z.string().max(1024).optional(),
 });
 
 export type ChatAttachment = z.infer<typeof ChatAttachmentSchema>;
@@ -60,6 +90,8 @@ export type ChatThread = {
   title: string;
   userId: string;
   projectId?: string;
+  /** Knowledge sources attached to this thread from the composer. */
+  knowledgeBases?: AgentKnowledgeBaseBinding[];
   createdAt: Date;
 };
 
@@ -132,6 +164,18 @@ export const ChatMentionSchema = z.discriminatedUnion("type", [
       })
       .nullish(),
   }),
+  // A knowledge source attached to the thread from the composer. Mirrors the
+  // agent's `AgentKnowledgeBaseBinding` shape (`sourceType`/`id`) so both
+  // paths resolve through the same retrieval builder. The id is a reference,
+  // never a grant — access is re-validated server-side at retrieval time.
+  z.object({
+    type: z.literal("knowledgeBase"),
+    name: z.string(),
+    description: z.string().nullish(),
+    /** Knowledge base id, or the project id when `sourceType` is "project". */
+    knowledgeBaseId: z.string().uuid(),
+    sourceType: z.enum(["kb", "project"]),
+  }),
 ]);
 
 export type ChatMention = z.infer<typeof ChatMentionSchema>;
@@ -150,11 +194,28 @@ export const chatApiSchemaRequestBodySchema = z.object({
     .optional(),
   autoRouting: z.boolean().optional().default(false),
   toolChoice: z.enum(["auto", "none", "manual"]),
+  planMode: z.boolean().optional().default(false),
   mentions: z.array(ChatMentionSchema).optional(),
-  imageTool: z.object({ model: z.string().optional() }).optional(),
+  imageTool: z
+    .object({
+      model: z.string().optional(),
+      // A brush mask drawn on one uploaded image in the composer. Both are
+      // public storage URLs; the image tool hands them to the inpainting
+      // model, so a mask forces the tool on even without a model pick.
+      mask: z
+        .object({
+          imageUrl: z.string().url().max(MAX_ATTACHMENT_URL_CHARS),
+          maskUrl: z.string().url().max(MAX_ATTACHMENT_URL_CHARS),
+        })
+        .optional(),
+    })
+    .optional(),
   allowedMcpServers: z.record(z.string(), AllowedMCPServerZodSchema).optional(),
   allowedAppDefaultToolkit: z.array(z.string()).optional(),
-  attachments: z.array(ChatAttachmentSchema).optional(),
+  attachments: z
+    .array(ChatAttachmentSchema)
+    .max(MAX_INGESTED_ATTACHMENTS)
+    .optional(),
   projectId: z.string().optional(),
 });
 
@@ -205,6 +266,25 @@ export type ChatRepository = {
   upsertThread(
     thread: PartialBy<Omit<ChatThread, "createdAt">, "userId">,
   ): Promise<ChatThread>;
+
+  /**
+   * Replaces the thread's attached knowledge sources, scoped to its owner.
+   * A no-op (resolves false) when the thread does not exist yet or belongs to
+   * someone else, so a stale client cannot create or repoint a thread.
+   */
+  setThreadKnowledgeBases(
+    id: string,
+    userId: string,
+    knowledgeBases: AgentKnowledgeBaseBinding[],
+  ): Promise<boolean>;
+
+  /**
+   * Sets the title only while the thread is still untitled and returns the
+   * effective title. Titling can be attempted concurrently by the chat run and
+   * by the client, so first write wins and the loser reports the stored title
+   * rather than overwriting it.
+   */
+  setThreadTitleIfEmpty(id: string, title: string): Promise<string>;
 
   insertMessage(message: Omit<ChatMessage, "createdAt">): Promise<ChatMessage>;
   upsertMessage(message: Omit<ChatMessage, "createdAt">): Promise<ChatMessage>;

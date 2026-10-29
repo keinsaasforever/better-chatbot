@@ -1451,6 +1451,24 @@
     scrollbar-width: none;
   }
 
+  /* Height of the authed shell. `ViewportSync` publishes the visual viewport's
+     height so the shell ends where the on-screen keyboard starts; `100dvh` is
+     the fallback for browsers without `visualViewport`. */
+  .h-app-viewport {
+    height: var(--app-viewport-height, 100dvh);
+  }
+
+  /* Set by `ViewportSync` while the authed shell is mounted. Every authed
+     surface scrolls inside its own bounded region, so the document must not
+     scroll or rubber-band at all — otherwise a hard flick drags the shell up
+     and paints the page canvas as a white band under it. */
+  html.app-viewport-locked,
+  html.app-viewport-locked body {
+    height: 100%;
+    overflow: hidden;
+    overscroll-behavior: none;
+  }
+
   .mention {
     color: #0070f3;
     font-weight: 700;

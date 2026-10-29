@@ -91,7 +91,6 @@ export function AgentsList({
       )
       .ifOk(() => {
         mutateAgents({ id: agentId, visibility });
-        toast.success(t("Agent.visibilityUpdated"));
 
         // Track visibility change
         if (oldVisibility) {
@@ -127,7 +126,6 @@ export function AgentsList({
       )
       .ifOk(() => {
         mutateAgents({ id: agentId }, true);
-        toast.success(t("Agent.deleted"));
 
         // Track agent deletion
         analytics.agentDeleted({

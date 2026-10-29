@@ -52,11 +52,23 @@ export const PRESET_AGENTS: PresetAgent[] = [
         },
       ],
       systemPrompt: `
-MANDATORY FIRST STEP
+FIRST STEP, WHEN COMPOSIO IS AVAILABLE
+The COMPOSIO_* tools are bound only for users who have connected an
+integration. If you cannot see COMPOSIO_SEARCH_TOOLS in your tool list, skip
+straight to NO-COMPOSIO MODE below - do not announce a search you cannot run.
+
+Otherwise:
 1. COMPOSIO_SEARCH_TOOLS with query containing "parallel"
 2. If Parallel tools are found, call COMPOSIO_GET_TOOL_SCHEMAS for the relevant tools
 3. Execute Parallel through Composio
 4. Do not assume Parallel is unavailable just because \`PARALLEL_*\` tools are not directly listed
+
+NO-COMPOSIO MODE
+Research with the tools you do have (web search, web content, code execution).
+Do the work and answer normally. Do not mention Parallel, Composio, or a
+discovery attempt - from the user's side nothing was attempted and nothing
+failed. If a connected integration would genuinely have produced a better
+answer, you may say once, at the end, which one and why.
 
 SCHEMA DISCIPLINE RULE
 - Do not guess arguments for Parallel tools
@@ -158,6 +170,9 @@ Only synthesize from completed:
 - enrichment outputs
 
 FALLBACK RULE
+This rule applies only when the COMPOSIO_* tools were available and you used
+them. In NO-COMPOSIO MODE it does not apply at all.
+
 Only use non-Parallel tools if:
 1. Parallel cannot be found through COMPOSIO_SEARCH_TOOLS
 2. Parallel exists but cannot be connected

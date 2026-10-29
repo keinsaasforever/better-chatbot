@@ -93,11 +93,41 @@ export interface CreateSandboxOptions extends SandboxOpts {
   requestId?: string;
 }
 
+/**
+ * HTTP status the SDK encodes at the head of its message ("404: template
+ * 'x' not found").
+ *
+ * Needed because `instanceof` alone does not classify these errors. The SDK
+ * reports a missing template as a plain `SandboxError`, and
+ * `@e2b/code-interpreter` bundles its own copy of the `e2b` package, so even a
+ * typed error thrown inside that copy is a different class identity from the
+ * one this module imports. Production proved it: every
+ * `404: template 'navigator-python-docs' not found` logged `retryable=true`,
+ * burned both attempts, and came back to the user as the generic "Failed to
+ * start the sandbox. Please try again." — which reads as a transient outage
+ * for a condition that will never clear on its own.
+ */
+function statusFromError(err: unknown): number | undefined {
+  if (!(err instanceof Error)) return undefined;
+  const status = /^\s*(\d{3})\s*:/.exec(err.message)?.[1];
+  return status ? Number(status) : undefined;
+}
+
+/**
+ * Whether the requested template does not exist in this E2B account.
+ *
+ * A typo or an unbuilt image in `E2B_EXECUTION_TEMPLATE` lands here, and it is
+ * never transient: retrying cannot build the template.
+ */
+export function isTemplateNotFound(err: unknown): boolean {
+  if (err instanceof NotFoundError || err instanceof TemplateError) return true;
+  return statusFromError(err) === 404;
+}
+
 /** Errors that will never succeed on retry — fail fast on these. */
 function isNonRetryable(err: unknown): boolean {
   return (
-    err instanceof NotFoundError ||
-    err instanceof TemplateError ||
+    isTemplateNotFound(err) ||
     err instanceof AuthenticationError ||
     err instanceof RateLimitError ||
     err instanceof InvalidArgumentError
@@ -193,7 +223,7 @@ export function toSandboxErrorResponse(
   err: unknown,
   template?: string,
 ): SandboxErrorResponse {
-  if (err instanceof NotFoundError || err instanceof TemplateError) {
+  if (isTemplateNotFound(err)) {
     return {
       status: 502,
       code: "template_not_available",

@@ -23,9 +23,10 @@ import { aiTelemetry } from "lib/ai/telemetry";
 
 const logger = globalLogger.withDefaults({ message: "Voice Transcript: " });
 
-const VOICE_COMMAND_MODEL = {
-  provider: "moonshotai",
-  model: "kimi-k2.6",
+/** Navigator base model, by alias so a base-model swap carries here. */
+export const VOICE_COMMAND_MODEL = {
+  provider: "Navigator",
+  model: "Base model",
 } as const;
 
 function normalizeToolSteps(steps: unknown): VoiceTranscriptAction[] {

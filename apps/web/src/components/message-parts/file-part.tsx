@@ -1,8 +1,10 @@
 "use client";
 
 import { FileUIPart } from "ai";
+import { notify } from "lib/notify";
 import { cn } from "lib/utils";
 import { Download, FileIcon } from "lucide-react";
+import { useTranslations } from "next-intl";
 import { memo } from "react";
 import { Badge } from "ui/badge";
 import { Button } from "ui/button";
@@ -16,6 +18,7 @@ interface FileMessagePartProps {
 
 export const FileMessagePart = memo(
   ({ part, isUserMessage }: FileMessagePartProps) => {
+    const t = useTranslations("Chat");
     const isImage = part.mediaType?.startsWith("image/");
 
     const fileExtension =
@@ -47,25 +50,74 @@ export const FileMessagePart = memo(
         : undefined;
 
     if (isImage && fileUrl) {
+      const url = fileUrl;
+      // A compact chip in the thread; the full-size photo only on demand. A
+      // renovation thread carries the same source photo many times over, and
+      // rendering each at full width buried the conversation under it.
+      const openFullSize = () =>
+        notify.component({
+          className: "max-w-[90vw]! max-h-[90vh]! p-6!",
+          children: (
+            <div className="flex flex-col h-full gap-4">
+              <div className="flex-1 flex items-center justify-center min-h-0 py-6">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={url}
+                  className="max-w-[80vw] max-h-[80vh] object-contain rounded-lg"
+                  alt={filename}
+                />
+              </div>
+              <div className="flex items-center justify-center gap-3 text-sm text-muted-foreground">
+                <span className="truncate max-w-[60vw]">{filename}</span>
+                <a
+                  href={url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1 text-foreground hover:underline"
+                >
+                  <Download className="size-4" />
+                  {t("attachmentDownload")}
+                </a>
+              </div>
+            </div>
+          ),
+        });
+
       return (
-        <div
+        <button
+          type="button"
+          onClick={openFullSize}
+          title={t("attachmentOpenImage")}
           className={cn(
-            "max-w-md rounded-lg overflow-hidden border border-border",
-            isUserMessage ? "ml-auto" : "mr-auto",
+            "group flex max-w-xs items-center gap-3 rounded-2xl border p-2 pr-4 text-left shadow-sm transition-colors",
+            isUserMessage
+              ? "ml-auto bg-accent text-accent-foreground border-accent/40 hover:bg-accent/80"
+              : "mr-auto bg-muted/60 text-foreground border-border/80 hover:bg-muted",
           )}
         >
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
-            src={fileUrl}
-            alt={part.filename || "Uploaded image"}
-            className="w-full h-auto"
+            src={url}
+            alt={filename}
+            loading="lazy"
+            className="size-14 flex-shrink-0 rounded-xl object-cover"
           />
-          {part.filename && (
-            <div className="px-3 py-2 bg-muted text-sm text-muted-foreground">
-              {part.filename}
-            </div>
-          )}
-        </div>
+          <div className="min-w-0">
+            <p className="text-sm font-medium truncate" title={filename}>
+              {filename}
+            </p>
+            <p
+              className={cn(
+                "text-xs",
+                isUserMessage
+                  ? "text-accent-foreground/70"
+                  : "text-muted-foreground",
+              )}
+            >
+              {t("attachmentOpenImage")}
+            </p>
+          </div>
+        </button>
       );
     }
 
@@ -157,10 +209,12 @@ export const FileMessagePart = memo(
                   }}
                 >
                   <Download className="size-4" />
-                  <span className="sr-only">Download {filename}</span>
+                  <span className="sr-only">
+                    {t("attachmentDownload")} {filename}
+                  </span>
                 </Button>
               </TooltipTrigger>
-              <TooltipContent>Download</TooltipContent>
+              <TooltipContent>{t("attachmentDownload")}</TooltipContent>
             </Tooltip>
           )}
         </div>

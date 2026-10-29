@@ -40,4 +40,12 @@ The `e2b-sandbox` tool (`src/lib/ai/tools/code/e2b-sandbox-tool.ts`) includes `n
 
 ## Updating the template
 
-Edit `e2b.Dockerfile`, then re-run `pnpm e2b:template:build` to publish a new version. The `TEMPLATE_NAME` constant in `scripts/e2b/template.mjs` must match the `--name` flag passed to `e2b template build`.
+Edit `e2b.Dockerfile`, then run the **Build E2B template** GitHub Action and pick
+`navigator-remotion-nextjs`. It needs no local clone, no Docker and no E2B CLI —
+only the `E2B_API_KEY` repository secret.
+
+To build from a checkout instead: `E2B_TEMPLATE=navigator-remotion-nextjs E2B_API_KEY=... pnpm e2b:template:build`.
+
+The template's `name` in `scripts/e2b/template.mjs` is passed verbatim to
+`Sandbox.create`, so it must match its key in `apps/web/src/lib/e2b/sandbox-registry.ts`
+— `sandbox-registry.test.ts` fails the build if the two drift.

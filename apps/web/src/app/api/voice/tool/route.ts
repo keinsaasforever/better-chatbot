@@ -26,6 +26,7 @@ export const POST = withAuth(async (request, session) => {
         source: "browser",
       },
       toolName: body.toolName,
+      kind: body.kind,
       mcpServerId: body.mcpServerId,
       mcpToolName: body.mcpToolName,
       arguments: body.arguments,

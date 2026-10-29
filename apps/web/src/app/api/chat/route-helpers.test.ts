@@ -10,7 +10,7 @@ vi.mock("@/lib/db/pg/schema.pg", () => ({
 }));
 vi.mock("auth/server", () => ({ getSession: vi.fn() }));
 
-import { buildInitialMessageParts } from "./route-helpers";
+import { buildInitialMessageParts, resolveAbortOutcome } from "./route-helpers";
 
 describe("buildInitialMessageParts", () => {
   test("makes a CSV source-url durable before the streamed turn starts", () => {
@@ -49,5 +49,33 @@ describe("buildInitialMessageParts", () => {
       },
       ...currentParts,
     ]);
+  });
+});
+
+describe("resolveAbortOutcome", () => {
+  test("a user stop is a cancelled run", () => {
+    expect(resolveAbortOutcome({ userStopped: true })).toEqual({
+      runStatus: "cancelled",
+      error: { code: "aborted", retryable: true },
+    });
+  });
+
+  test("an SDK chunk timeout is a timed-out run, not a stop", () => {
+    const reason = new DOMException(
+      "Chunk timeout of 45000ms exceeded",
+      "TimeoutError",
+    );
+    const outcome = resolveAbortOutcome({ userStopped: false, reason });
+    expect(outcome.runStatus).toBe("timed_out");
+    expect(outcome.error).toEqual({ code: "run_timeout", retryable: true });
+    expect(outcome.detail).toBe(
+      "TimeoutError: Chunk timeout of 45000ms exceeded",
+    );
+  });
+
+  test("an abort with no reason is still reported as a timeout", () => {
+    const outcome = resolveAbortOutcome({ userStopped: false });
+    expect(outcome.runStatus).toBe("timed_out");
+    expect(outcome.detail).toMatch(/budget exhausted/);
   });
 });

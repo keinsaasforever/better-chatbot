@@ -5,9 +5,10 @@ import { getModelInstance } from "@/lib/ai/models";
 import type { AuthenticatedVoiceDevice } from "./device-auth";
 import { aiTelemetry } from "lib/ai/telemetry";
 
+/** Navigator base model, by alias so a base-model swap carries here. */
 const LONG_CAPTURE_MODEL = {
-  provider: "moonshotai",
-  model: "kimi-k2.6",
+  provider: "Navigator",
+  model: "Base model",
 } as const;
 
 export const LongVoiceCaptureAnalysisSchema = z.object({

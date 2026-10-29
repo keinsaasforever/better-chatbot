@@ -1,17 +1,22 @@
 import "server-only";
-import { eq, sql } from "drizzle-orm";
+import { parseAgentModel } from "@/lib/ai/agent-model";
+import { SCHEDULED_TASK_ID_HEADER } from "@/lib/chat/run-mode";
 import { pgDb } from "@/lib/db/pg/db.pg";
 import {
-  ScheduledTaskTable,
   AgentTable,
+  ScheduledTaskTable,
   UserTable,
-  NotificationTable,
 } from "@/lib/db/pg/schema.pg";
-import logger from "logger";
+import { createNotifications } from "@/lib/notifications/create-notifications";
+import { eq, sql } from "drizzle-orm";
 import { generateUUID } from "lib/utils";
-import { isTransientChatFailure } from "./chat-failure";
-import { parseAgentModel } from "@/lib/ai/agent-model";
-import { sendPushToUser } from "@/lib/push/send-push-to-user";
+import logger from "logger";
+import {
+  type StreamOutcome,
+  isFailedRunFinishReason,
+  isTransientChatFailure,
+  readStreamOutcome,
+} from "./chat-failure";
 
 const UUID_REGEX =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -188,6 +193,10 @@ export async function executeAgentRun(
     "Content-Type": "application/json",
     "X-Scheduled-Task-Auth": secret,
     "X-User-Id": task.userId,
+    // Names the task whose per-task grants (may this run drive a browser, with
+    // which credentials) the chat route should load. Only meaningful once the
+    // secret above has been verified.
+    [SCHEDULED_TASK_ID_HEADER]: task.id,
   };
   if (agent.organizationId) {
     headers["X-Organization-Id"] = agent.organizationId;
@@ -237,7 +246,35 @@ export async function executeAgentRun(
     };
   }
 
-  await drainStream(response);
+  // Draining is not enough on its own: the stream closes cleanly even when the
+  // model's loop stopped on a tool call nothing could answer, and that used to
+  // be recorded as a successful run.
+  const { finishReason, blockedReason } = await drainStream(response);
+  logger.info(
+    `[scheduled-tasks] run finished taskId=${task.id} finishReason=${finishReason ?? "none"}${
+      blockedReason ? " blocked" : ""
+    }`,
+  );
+  // Checked before the finish reason, because a blocked run finishes normally.
+  // The browser agent hitting an identity check with nobody to answer it ends
+  // the turn with `stop`, and this used to be recorded as a success — the run
+  // did nothing and the owner was told it had finished.
+  if (blockedReason) {
+    return {
+      success: false,
+      error: `Run stopped: ${blockedReason}`,
+      threadId,
+    };
+  }
+  if (isFailedRunFinishReason(finishReason)) {
+    return {
+      success: false,
+      error: finishReason
+        ? `Run ended without an answer (finishReason: ${finishReason})`
+        : "Run ended without completing",
+      threadId,
+    };
+  }
   return { success: true, threadId };
 }
 
@@ -252,16 +289,33 @@ function isEventStreamContentType(contentType: string): boolean {
   );
 }
 
+/**
+ * Bytes of stream tail kept while draining. The terminal `finish` frame is the
+ * only part that is read, so this only has to be wide enough to hold the last
+ * few frames intact — an agent run's full stream can be megabytes.
+ */
+const FINISH_TAIL_CHARS = 64_000;
+
 // Drain the SSE stream to completion. The chat route persists the assistant
-// message in onEnd, which only settles once the stream finishes — the content
-// itself is not needed here.
-async function drainStream(response: Response) {
+// message in onEnd, which only settles once the stream finishes. The body is
+// not otherwise needed, so only the tail is retained — enough to read the run's
+// outcome off the terminal `finish` frame.
+async function drainStream(response: Response): Promise<StreamOutcome> {
   const reader = response.body?.getReader();
-  if (!reader) return;
+  if (!reader) return { finishReason: undefined, blockedReason: undefined };
+  const decoder = new TextDecoder();
+  let tail = "";
   while (true) {
-    const { done } = await reader.read();
+    const { done, value } = await reader.read();
     if (done) break;
+    if (!value) continue;
+    tail += decoder.decode(value, { stream: true });
+    if (tail.length > FINISH_TAIL_CHARS) {
+      tail = tail.slice(-FINISH_TAIL_CHARS);
+    }
   }
+  tail += decoder.decode();
+  return readStreamOutcome(tail);
 }
 
 /**
@@ -300,20 +354,18 @@ export async function recordScheduledRunResult(
     ? (task.inputPrompt ?? null)
     : (result.error ?? null);
 
-  await pgDb.insert(NotificationTable).values({
-    userId: task.userId,
+  await createNotifications({
+    userIds: [task.userId],
     type: result.success ? "scheduled_run_success" : "scheduled_run_failure",
     title,
     body,
     threadId: isValidUUID(result.threadId) ? result.threadId : null,
     agentId: task.agentId,
-  });
-  await sendPushToUser(task.userId, {
-    title,
-    body: body ?? "",
     url: result.threadId ? `/chat/${result.threadId}` : "/agents",
-    kind: result.success ? "complete" : "error",
-    tag: `scheduled-task-${task.id}`,
+    push: {
+      kind: result.success ? "complete" : "error",
+      tag: `scheduled-task-${task.id}`,
+    },
   });
 }
 

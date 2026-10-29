@@ -94,7 +94,13 @@ export async function getUserIdAndCheckAccess(
  * We can only get stats for the current user as a non-admin user
  * We can get stats for any user as an admin user
  *
- * Uses Autumn as the source of truth for usage/billing data
+ * Reports raw provider tokens from this user's own chats over the last 30
+ * days. Credits are a separate, workspace-scoped quantity — see
+ * `getTokenUsage` in `lib/billing/server.ts` — and are deliberately not mixed
+ * in here: Autumn's query API takes no entity id, so in a team workspace there
+ * is no per-person credit figure to report, and this is also called for *other*
+ * users (org member stats, admin user detail) where the caller's billing
+ * context means nothing.
  */
 export async function getUserStats(userId?: string): Promise<{
   threadCount: number;
@@ -109,41 +115,15 @@ export async function getUserStats(userId?: string): Promise<{
   period: string;
 }> {
   const resolvedUserId = await getUserIdAndCheckAccess(userId);
-
-  // Get thread and message counts from database
   const dbStats = await userRepository.getUserStats(resolvedUserId);
 
-  // Prefer billed usage where billing is the source of truth for it.
-  try {
-    const { getBilledTokenTotal } = await import("@/lib/gate");
-    const billedTokens = await getBilledTokenTotal(resolvedUserId);
-
-    // Null for free/new users who have not gone through the billing flow yet,
-    // and in editions without billing. Fall back to the DB token count so the
-    // usage widget always shows real data.
-    const totalTokens = billedTokens ?? dbStats.totalTokens;
-
-    return {
-      threadCount: dbStats.threadCount,
-      messageCount: dbStats.messageCount,
-      modelStats: dbStats.modelStats.map((stat) => ({
-        ...stat,
-        provider: getModelProvider(stat.model),
-      })),
-      totalTokens,
-      period: "Last 30 Days",
-    };
-  } catch (error) {
-    console.error("[getUserStats] Error fetching Autumn data:", error);
-    // Fall back to database stats on error
-    return {
-      ...dbStats,
-      modelStats: dbStats.modelStats.map((stat) => ({
-        ...stat,
-        provider: getModelProvider(stat.model),
-      })),
-    };
-  }
+  return {
+    ...dbStats,
+    modelStats: dbStats.modelStats.map((stat) => ({
+      ...stat,
+      provider: getModelProvider(stat.model),
+    })),
+  };
 }
 
 /**

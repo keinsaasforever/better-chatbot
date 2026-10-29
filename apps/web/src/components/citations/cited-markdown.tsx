@@ -11,7 +11,8 @@ import {
 } from "@/lib/citations/parse-citations";
 import { enrichCitationsForDisplay } from "@/lib/citations/enrich-citations";
 import type { RetrievalSource } from "@/lib/citations/retrieval-source";
-import { Markdown } from "@/components/markdown";
+import { Markdown, MarkdownAnchor } from "@/components/markdown";
+import { markdownUrlTransform } from "lib/code-runner/artifact-links";
 import { CitationMark } from "./citation-mark";
 import { CitationSourcesPanel } from "./citation-sources-panel";
 
@@ -22,6 +23,9 @@ const inlineMarkdownComponents = {
   p: ({ children }: { children?: ReactNode }) => (
     <span className="inline">{children}</span>
   ),
+  // Same link handling as the block renderer, or a sandbox:/ link the model
+  // wrote next to a citation would still render dead.
+  a: MarkdownAnchor,
 };
 
 // One memoized text segment between citation marks. Keys are positional and a
@@ -37,6 +41,7 @@ const CitedTextSegment = memo(function CitedTextSegment({
     <ReactMarkdown
       remarkPlugins={[remarkGfm]}
       components={inlineMarkdownComponents}
+      urlTransform={markdownUrlTransform}
     >
       {segment}
     </ReactMarkdown>

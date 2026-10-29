@@ -108,7 +108,10 @@ export const pgUserRepository: UserRepository = {
       thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
       thirtyDaysAgo.setHours(0, 0, 0, 0);
 
-      // Get thread and message counts for the same 30-day period
+      // Counts of what was *active* in the window, filtered on the message
+      // date so all three numbers below cover the same 30 days. Filtering on
+      // the thread date instead meant a thread opened 40 days ago with
+      // messages from yesterday contributed tokens but no messages.
       const [result] = await db
         .select({
           threadCount: sql<number>`COALESCE(COUNT(DISTINCT ${ChatThreadTable.id}), 0)`,
@@ -120,7 +123,7 @@ export const pgUserRepository: UserRepository = {
           eq(ChatThreadTable.id, ChatMessageTable.threadId),
         )
         .where(
-          sql`${ChatThreadTable.userId} = ${userId} AND ${ChatThreadTable.createdAt} >= ${thirtyDaysAgo.toISOString()}`,
+          sql`${ChatThreadTable.userId} = ${userId} AND ${ChatMessageTable.createdAt} >= ${thirtyDaysAgo.toISOString()}`,
         );
 
       // Safely query model stats with error handling for JSON operations
@@ -163,10 +166,31 @@ export const pgUserRepository: UserRepository = {
         )
         .limit(10); // Get top 10 models by token usage
 
-      const totalTokens = modelStats.reduce(
-        (acc, curr) => acc + Number(curr.totalTokens || 0),
-        0,
-      );
+      // Deliberately its own query: `modelStats` is capped at the top ten
+      // models for display, so reducing that list reported a subtotal as the
+      // total for anyone who used more than ten.
+      const [totals] = await db
+        .select({
+          totalTokens: sql<number>`COALESCE(SUM(
+            CASE
+              WHEN (${ChatMessageTable.metadata}->'usage'->>'totalTokens') ~ '^[0-9]+$'
+              THEN (${ChatMessageTable.metadata}->'usage'->>'totalTokens')::numeric
+              ELSE 0
+            END
+          ), 0)`,
+        })
+        .from(ChatMessageTable)
+        .leftJoin(
+          ChatThreadTable,
+          eq(ChatMessageTable.threadId, ChatThreadTable.id),
+        )
+        .where(
+          sql`${ChatThreadTable.userId} = ${userId}
+              AND ${ChatMessageTable.createdAt} >= ${thirtyDaysAgo.toISOString()}
+              AND ${ChatMessageTable.metadata} IS NOT NULL`,
+        );
+
+      const totalTokens = Number(totals?.totalTokens || 0);
 
       return {
         threadCount: result?.threadCount || 0,

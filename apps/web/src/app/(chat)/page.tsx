@@ -1,4 +1,4 @@
-import ChatBot from "@/components/chat-bot";
+import { HomeChat } from "@/components/home-chat";
 import { logBootServerRender } from "@/lib/boot-diagnostics/server";
 
 // Dynamic so the boot trace sees every render. Auth is already enforced by the
@@ -11,6 +11,7 @@ export default async function HomePage() {
   // NOTE: do not mint the thread id here. This page is force-dynamic, so it
   // re-renders on every Server Action too, and a fresh id per render reached
   // ChatBot as a changed prop — rebuilding the chat and re-running every
-  // threadId-keyed effect. ChatBot now mints its own id once, client-side.
-  return <ChatBot initialMessages={[]} />;
+  // threadId-keyed effect. ChatBot now mints its own id once, client-side, and
+  // HomeChat owns the one thing that may reset it: an explicit "New chat".
+  return <HomeChat />;
 }

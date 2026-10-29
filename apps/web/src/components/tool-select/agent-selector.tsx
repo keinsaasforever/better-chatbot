@@ -58,7 +58,7 @@ export function AgentSelector({
           {t("Agent.title")}
         </DropdownMenuSubTrigger>
         <DropdownMenuPortal>
-          <DropdownMenuSubContent className="w-80 relative">
+          <DropdownMenuSubContent className="w-[var(--radix-popper-available-width)] relative md:w-80">
             {emptyAgent}
 
             {/* My Agents */}

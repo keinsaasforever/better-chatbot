@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { normalizeEdgeType } from "./edge-types";
 
 export const ProjectBrainEntityTypeSchema = z.enum([
   "overview",
@@ -41,7 +42,7 @@ const EntitySchema = z.object({
 const RelationSchema = z.object({
   fromEntityId: EntityIdSchema,
   toEntityId: EntityIdSchema,
-  type: z.string().regex(/^[a-z][a-z0-9_-]{0,79}$/),
+  type: z.string().max(80).transform(normalizeEdgeType),
   context: z.string().max(2000).optional(),
   confidence: z.number().min(0).max(1).default(1),
   observedAt: z.string().datetime().optional(),
@@ -54,60 +55,26 @@ const TimelineItemSchema = z.object({
   eventDate: z.string().datetime().optional(),
 });
 
-const WidgetCellSchema = z.union([
-  z.string(),
-  z.number(),
-  z.boolean(),
-  z.null(),
-]);
-
-export const ProjectWidgetSpecSchema = z.discriminatedUnion("kind", [
-  z.object({
-    kind: z.literal("table"),
-    slot: z
-      .string()
-      .max(60)
-      .regex(/^[a-z0-9_-]+$/),
-    title: z.string().min(1).max(80),
-    columns: z.array(
-      z.object({
-        key: z.string().min(1),
-        label: z.string().min(1),
-        type: z.enum(["text", "number", "status"]).default("text"),
-      }),
-    ),
-    rows: z.array(z.record(z.string(), WidgetCellSchema)).max(25),
-  }),
-  z.object({
-    kind: z.literal("metric"),
-    slot: z
-      .string()
-      .max(60)
-      .regex(/^[a-z0-9_-]+$/),
-    title: z.string().min(1).max(80),
-    items: z
-      .array(
-        z.object({
-          label: z.string(),
-          value: WidgetCellSchema,
-          delta: WidgetCellSchema.optional(),
-          deltaLabel: z.string().optional(),
-        }),
-      )
-      .max(12),
-  }),
-]);
+const TodoItemSchema = z.object({
+  title: z.string().min(1).max(200),
+  status: z.enum(["open", "in_progress", "done", "blocked"]).catch("open"),
+  priority: z.enum(["low", "normal", "high", "critical"]).catch("normal"),
+  rationale: z.string().max(500).optional(),
+  detail: z.string().max(500).optional(),
+  dueAt: z.string().datetime().optional(),
+  sourceUrl: z.string().url().max(2000).optional(),
+});
 
 /**
  * Drop array items that do not parse, instead of letting one bad item reject the
- * whole extraction. The model occasionally emits a widget with an unknown `kind`
- * or a half-built entity; losing that item is recoverable, losing the entire run
- * is not.
+ * whole extraction. The model occasionally emits a half-built entity or a todo
+ * without a title; losing that item is recoverable, losing the entire run is
+ * not.
  *
  * Runs as a `z.preprocess` so the surviving items are still validated by the
  * inner schema afterwards — this filters, it does not weaken.
  */
-function resilientArray(schema: z.ZodTypeAny) {
+export function resilientArray(schema: z.ZodTypeAny) {
   return (value: unknown): unknown =>
     Array.isArray(value)
       ? value.filter((item) => schema.safeParse(item).success)
@@ -129,20 +96,10 @@ export const ProjectBrainExtractionSchema = z
       resilientArray(TimelineItemSchema),
       z.array(TimelineItemSchema).default([]),
     ),
-    todos: z
-      .array(
-        z.object({
-          title: z.string().min(1),
-          status: z
-            .enum(["open", "in_progress", "done", "blocked"])
-            .catch("open"),
-          priority: z
-            .enum(["low", "normal", "high", "critical"])
-            .catch("normal"),
-          rationale: z.string().optional(),
-        }),
-      )
-      .default([]),
+    todos: z.preprocess(
+      resilientArray(TodoItemSchema),
+      z.array(TodoItemSchema).max(40).default([]),
+    ),
     status: z
       .object({
         health: z.enum(["green", "yellow", "red", "unknown"]).catch("unknown"),
@@ -151,15 +108,6 @@ export const ProjectBrainExtractionSchema = z
         shortSummary: z.string().default(""),
       })
       .default({ health: "unknown", blockers: [], shortSummary: "" }),
-    widgets: z.preprocess(
-      resilientArray(ProjectWidgetSpecSchema),
-      // `.max(6)` counts what survived the filter, so a run is not failed for
-      // length by widgets that were going to be dropped anyway.
-      z
-        .array(ProjectWidgetSpecSchema)
-        .max(6)
-        .default([]),
-    ),
   })
   .transform((value) => {
     // `persist-extraction.ts` maps entity.id -> pageId with last-write-wins and
@@ -190,4 +138,13 @@ export const ProjectBrainExtractionSchema = z
 
 export type ProjectBrainExtraction = z.infer<
   typeof ProjectBrainExtractionSchema
+>;
+
+/**
+ * The per-source signals the project-level consolidation step reads. They are
+ * persisted on the raw source so consolidation never has to re-read raw text.
+ */
+export type ProjectBrainSourceSignals = Pick<
+  ProjectBrainExtraction,
+  "summary" | "status" | "todos"
 >;

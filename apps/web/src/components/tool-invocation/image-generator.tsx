@@ -19,6 +19,8 @@ interface ImageGenerationResult {
   }[];
   mode?: "create" | "edit" | "composite";
   model: string;
+  /** Set when the request never reached the model (e.g. unreadable upload). */
+  error?: string;
 }
 
 function PureImageGeneratorToolInvocation({
@@ -100,6 +102,7 @@ function PureImageGeneratorToolInvocation({
         {hasError ? (
           <div className="bg-card text-muted-foreground p-6 rounded-lg text-xs border border-border/20">
             {part.errorText ??
+              result?.error ??
               (result?.images.length === 0
                 ? "No images generated"
                 : "Failed to generate image. Please try again.")}

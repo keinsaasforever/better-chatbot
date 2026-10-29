@@ -39,6 +39,10 @@ export interface MediaMetadata {
   // Audio-specific metadata
   bitrate?: number;
   sampleRate?: number;
+
+  // Generated files: `url` is the inline (preview) form; this is the target a
+  // Download button should use.
+  downloadUrl?: string;
 }
 
 /**

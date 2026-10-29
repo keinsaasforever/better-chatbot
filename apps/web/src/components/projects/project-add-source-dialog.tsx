@@ -67,7 +67,6 @@ export function ProjectAddSourceDialog({
           payload?.error?.message ?? "Could not ingest the pasted text.",
         );
       }
-      toast.success("Source added — the brain is processing it.");
       onIngested?.();
       handleOpenChange(false);
     } catch (error) {

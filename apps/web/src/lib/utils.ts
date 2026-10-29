@@ -6,6 +6,37 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
+/**
+ * Pulls a human-readable message out of an error body.
+ *
+ * Routes in this app answer with two shapes: a flat `{ error: "..." }` and,
+ * for everything behind `toProjectErrorResponse`, a nested
+ * `{ error: { code, message } }`. Passing the nested object straight to
+ * `new Error()` stringifies it, so every failing project route surfaced as the
+ * literal text "[object Object]" — the knowledge graph rendering that instead
+ * of its real error is what made this visible.
+ */
+export function errorMessageFromPayload(payload: unknown): string | undefined {
+  if (typeof payload === "string") return payload || undefined;
+  if (!payload || typeof payload !== "object") return undefined;
+
+  const { message, error, detail } = payload as {
+    message?: unknown;
+    error?: unknown;
+    detail?: unknown;
+  };
+
+  if (typeof message === "string" && message) return message;
+  if (typeof error === "string" && error) return error;
+  if (error && typeof error === "object") {
+    const nested = (error as { message?: unknown }).message;
+    if (typeof nested === "string" && nested) return nested;
+  }
+  // Some upstreams (AssemblyAI, Composio) use `detail` instead.
+  if (typeof detail === "string" && detail) return detail;
+  return undefined;
+}
+
 export const fetcher = async (url: string, options?: RequestInit) => {
   const res = await fetch(url, {
     redirect: "follow",
@@ -21,8 +52,7 @@ export const fetcher = async (url: string, options?: RequestInit) => {
       errorPayload = { message: `Request failed with status ${res.status}` };
     }
     const error = new Error(
-      errorPayload.message ||
-        errorPayload.error ||
+      errorMessageFromPayload(errorPayload) ||
         "An error occurred while fetching the data.",
     );
     Object.assign(error, { info: errorPayload, status: res.status });

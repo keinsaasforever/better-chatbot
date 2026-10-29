@@ -14,7 +14,7 @@ import dynamic from "next/dynamic";
 import { useEffect, useMemo, useState, useCallback, useRef } from "react";
 import { toast } from "sonner";
 import { Loader2, Plug, Search, X, Zap } from "lucide-react";
-import { cn } from "lib/utils";
+import { cn, fetcher } from "lib/utils";
 import { authClient } from "auth/client";
 import {
   useComposioConnections,
@@ -28,6 +28,7 @@ import {
   DrawerDescription,
 } from "ui/drawer";
 import { Input } from "ui/input";
+import useSWR from "swr";
 
 const LightRays = dynamic(() => import("@/components/ui/light-rays"), {
   ssr: false,
@@ -46,6 +47,7 @@ function ComposioDrawerCard({
   onDisconnect: (id: string) => void;
   isConnecting: boolean;
 }) {
+  const t = useTranslations("MCP");
   return (
     <div
       className={cn(
@@ -95,7 +97,7 @@ function ComposioDrawerCard({
           {isConnecting ? (
             <Loader2 className="size-3 animate-spin" />
           ) : (
-            "Connect"
+            t("connect")
           )}
         </Button>
       )}
@@ -105,7 +107,9 @@ function ComposioDrawerCard({
 
 // ─── Composio Drawer ─────────────────────────────────────────────────────────
 
-const DRAWER_PAGE_SIZE = 60;
+// Matches the server-side clamp in /api/connections; asking for more just
+// got silently reduced to this anyway.
+const DRAWER_PAGE_SIZE = 50;
 
 function ComposioDrawer({
   open,
@@ -120,6 +124,7 @@ function ComposioDrawer({
   onDisconnect: (id: string) => void;
   connectingSlug: string | null;
 }) {
+  const t = useTranslations("MCP");
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [toolkits, setToolkits] = useState<ComposioToolkit[]>([]);
@@ -159,7 +164,7 @@ function ComposioDrawer({
         );
         setNextCursor(data.nextCursor ?? null);
       } catch {
-        toast.error("Failed to load apps");
+        toast.error(t("failedToLoadApps"));
       } finally {
         setIsLoading(false);
         setIsLoadingMore(false);
@@ -197,11 +202,13 @@ function ComposioDrawer({
     >
       <DrawerPortal>
         <DrawerContent className="max-h-[90vh] w-full rounded-none flex flex-col overflow-hidden p-4 md:p-6">
-          <DrawerTitle className="sr-only">Connect Tools</DrawerTitle>
+          <DrawerTitle className="sr-only">{t("connectTools")}</DrawerTitle>
           <DrawerDescription className="sr-only" />
 
           <div className="flex items-center gap-3 mb-4">
-            <h2 className="text-lg font-semibold flex-1">Connect Tools</h2>
+            <h2 className="text-lg font-semibold flex-1">
+              {t("connectTools")}
+            </h2>
             <Button variant="ghost" size="icon" onClick={onClose}>
               <X className="size-4" />
             </Button>
@@ -210,7 +217,7 @@ function ComposioDrawer({
           <div className="relative mb-4" data-vaul-no-drag>
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground pointer-events-none" />
             <Input
-              placeholder="Search 250+ apps…"
+              placeholder={t("searchApps")}
               value={search}
               onChange={(e) => handleSearchChange(e.target.value)}
               className="pl-9"
@@ -260,10 +267,10 @@ function ComposioDrawer({
                       {isLoadingMore ? (
                         <>
                           <Loader2 className="size-3 mr-1 animate-spin" />
-                          Loading…
+                          {t("loading")}
                         </>
                       ) : (
-                        "Load more"
+                        t("loadMore")
                       )}
                     </Button>
                   </div>
@@ -288,6 +295,7 @@ function ConnectedAppCard({
   toolkit: ComposioToolkit;
   onDisconnect: (id: string) => void;
 }) {
+  const t = useTranslations("MCP");
   return (
     <div className="relative flex flex-col items-center gap-2 p-3 rounded-xl border border-green-500/30 bg-green-500/5 hover:bg-green-500/10 transition-all">
       <span className="absolute top-2 right-2 size-2 rounded-full bg-green-500" />
@@ -313,7 +321,7 @@ function ConnectedAppCard({
           toolkit.connectedAccountId && onDisconnect(toolkit.connectedAccountId)
         }
       >
-        Disconnect
+        {t("disconnect")}
       </Button>
     </div>
   );
@@ -321,14 +329,18 @@ function ConnectedAppCard({
 
 // ─── Connect Tools Teaser (shown when no apps connected) ─────────────────────
 
-function ConnectToolsTeaser({
-  toolkits,
-  onOpenDrawer,
-}: {
-  toolkits: ComposioToolkit[];
-  onOpenDrawer: () => void;
-}) {
-  const preview = toolkits.slice(0, 5);
+function ConnectToolsTeaser({ onOpenDrawer }: { onOpenDrawer: () => void }) {
+  const t = useTranslations("MCP");
+  // This branch only renders when nothing is connected, so the five preview
+  // logos are fetched here. Handing them down from the dashboard would mean
+  // loading the whole toolkit catalog on every visit just in case the user
+  // has no apps — which is what made this page take seconds to paint.
+  const { data } = useSWR<{ toolkits: ComposioToolkit[] }>(
+    "/api/connections?paginate=true&limit=5",
+    fetcher,
+    { revalidateOnFocus: false, errorRetryCount: 0 },
+  );
+  const preview = (data?.toolkits ?? []).slice(0, 5);
 
   return (
     <div className="flex flex-col items-center gap-4 py-6 px-4 rounded-2xl border border-dashed border-border bg-secondary/20 text-center">
@@ -361,16 +373,15 @@ function ConnectToolsTeaser({
       )}
 
       <div className="space-y-1">
-        <p className="text-sm font-semibold">No tools connected yet</p>
+        <p className="text-sm font-semibold">{t("noToolsConnected")}</p>
         <p className="text-xs text-muted-foreground max-w-xs">
-          Connect Gmail, GitHub, Slack and 250+ other apps. Your AI will use
-          them automatically.
+          {t("noToolsConnectedHint")}
         </p>
       </div>
 
       <Button size="sm" onClick={onOpenDrawer}>
         <Zap className="size-3.5 mr-1.5" />
-        Connect your first tool
+        {t("connectFirstTool")}
       </Button>
     </div>
   );
@@ -383,13 +394,18 @@ export default function MCPDashboard({ message }: { message?: string }) {
   const { data: session } = authClient.useSession();
   const { data: mcpList, isLoading, isValidating, mutate } = useMcpList();
 
-  const { data: composioData, mutate: mutateComposio } =
-    useComposioConnections();
-  const composioToolkits = composioData?.toolkits ?? [];
+  // Connected-only: this page renders the user's connected apps and nothing
+  // else. The default mode walks Composio's full ~250-toolkit catalog server
+  // side, then throws all but these away.
+  const {
+    data: composioData,
+    isLoading: isLoadingComposio,
+    mutate: mutateComposio,
+  } = useComposioConnections(undefined, { connectedOnly: true });
 
   const connectedToolkits = useMemo(
-    () => composioToolkits.filter((t) => t.isConnected),
-    [composioToolkits],
+    () => (composioData?.toolkits ?? []).filter((t) => t.isConnected),
+    [composioData],
   );
 
   const { myMcps, sharedMcps } = useMemo(() => {
@@ -427,7 +443,7 @@ export default function MCPDashboard({ message }: { message?: string }) {
       const { redirectUrl } = await res.json();
       window.location.href = redirectUrl;
     } catch (error: any) {
-      toast.error(error.message ?? "Failed to connect app");
+      toast.error(error.message ?? t("failedToConnectApp"));
       setConnectingSlug(null);
     }
   }, []);
@@ -442,9 +458,8 @@ export default function MCPDashboard({ message }: { message?: string }) {
         });
         if (!res.ok) throw new Error("Failed to disconnect");
         await mutateComposio();
-        toast.success("Disconnected");
       } catch (error: any) {
-        toast.error(error.message ?? "Failed to disconnect");
+        toast.error(error.message ?? t("failedToDisconnect"));
       }
     },
     [mutateComposio],
@@ -556,10 +571,14 @@ export default function MCPDashboard({ message }: { message?: string }) {
           ) : (
             <div className="flex flex-col gap-10 mb-4 z-20">
               {/* Connected Apps OR teaser */}
-              {connectedToolkits.length > 0 ? (
+              {isLoadingComposio ? (
+                <Skeleton className="h-32 w-full" />
+              ) : connectedToolkits.length > 0 ? (
                 <div className="flex flex-col gap-4">
                   <div className="flex items-center gap-2">
-                    <h2 className="text-lg font-semibold">Connected Apps</h2>
+                    <h2 className="text-lg font-semibold">
+                      {t("connectedApps")}
+                    </h2>
                     <span className="text-xs text-muted-foreground bg-secondary px-2 py-0.5 rounded-full">
                       {connectedToolkits.length}
                     </span>
@@ -571,7 +590,7 @@ export default function MCPDashboard({ message }: { message?: string }) {
                       onClick={() => setDrawerOpen(true)}
                     >
                       <Plug className="size-3 mr-1" />
-                      Add more
+                      {t("addMore")}
                     </Button>
                   </div>
                   <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-5 gap-2">
@@ -585,16 +604,15 @@ export default function MCPDashboard({ message }: { message?: string }) {
                   </div>
                 </div>
               ) : (
-                <ConnectToolsTeaser
-                  toolkits={composioToolkits}
-                  onOpenDrawer={() => setDrawerOpen(true)}
-                />
+                <ConnectToolsTeaser onOpenDrawer={() => setDrawerOpen(true)} />
               )}
 
               {/* Developer Section — always visible */}
               <div className="flex flex-col gap-4">
                 <div className="flex items-center gap-2">
-                  <h2 className="text-lg font-semibold">Developer Section</h2>
+                  <h2 className="text-lg font-semibold">
+                    {t("developerSection")}
+                  </h2>
                   <div className="flex-1 h-px bg-border" />
                 </div>
                 <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">

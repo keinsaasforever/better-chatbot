@@ -1,3 +1,8 @@
+import {
+  INGEST_SUPPORTED_MIME,
+  SUMMARIZE_SUPPORTED_MIME,
+} from "@/lib/ai/ingest/formats";
+
 export const DEFAULT_FILE_PART_MIME_TYPES = [
   "image/jpeg",
   "image/png",
@@ -24,13 +29,15 @@ const DEFAULT_FILE_PART_MIME_SET = new Set<string>(
   DEFAULT_FILE_PART_MIME_TYPES,
 );
 
-export const INGEST_SUPPORTED_MIME = new Set<string>([
-  "text/csv",
-  "application/csv",
-  "application/pdf", // PDFs use server-side text extraction (same as CSV)
-  // Future: xlsx when server-side parser is added
-  // "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-]);
+/**
+ * Mime types whose content the chat route extracts for the model.
+ *
+ * Derived from the format registry rather than listed again here: this set,
+ * the media-type regex in `app/api/chat/chat/slim-history.ts` and each
+ * ingester's matcher all used to be maintained by hand, and adding a format to
+ * one and forgetting another failed silently.
+ */
+export { INGEST_SUPPORTED_MIME, SUMMARIZE_SUPPORTED_MIME };
 
 export const isFilePartSupported = (
   mime?: string,
@@ -45,3 +52,13 @@ export const isFilePartSupported = (
 
 export const isIngestSupported = (mime?: string) =>
   !!mime && INGEST_SUPPORTED_MIME.has(mime);
+
+/**
+ * Whether the composer's Summarize action can do anything with this file.
+ *
+ * Narrower than `isIngestSupported` on purpose: the button posts to
+ * `/api/storage/ingest`, which handles CSV only and 400s on everything else —
+ * including the PDFs the button used to appear for.
+ */
+export const isSummarizeSupported = (mime?: string) =>
+  !!mime && SUMMARIZE_SUPPORTED_MIME.has(mime);

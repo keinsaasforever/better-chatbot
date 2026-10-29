@@ -66,15 +66,19 @@ export const SANDBOX_TEMPLATE_REGISTRY = {
     label: "Remotion/Next.js",
   },
   // HTML -> PDF. Ships WeasyPrint and its system libraries preinstalled, which
-  // code-interpreter-v1 cannot do. Stays disabled until it is built into the
-  // E2B account and passes repeated cold starts under `pnpm e2b:smoke` — a
-  // registry entry does not create the template, and an enabled-but-unbuilt id
-  // fails at runtime as a 502 rather than at validation.
-  "navigator-html-render": {
+  // code-interpreter-v1 cannot do.
+  //
+  // Enabled once the image was actually built into the E2B account — a registry
+  // entry does not create the template, and an enabled-but-unbuilt id fails at
+  // runtime as a 404 on every execution, which is exactly how it took
+  // production down when E2B_EXECUTION_TEMPLATE named it early. The build
+  // (Actions → Build E2B template) verifies the library imports and the
+  // code-interpreter health check before it publishes.
+  "navigator-python-docs": {
     kind: "execution",
-    enabled: false,
-    entrypoint: "render.py",
-    label: "HTML to PDF renderer",
+    enabled: true,
+    entrypoint: "script.py",
+    label: "Python code interpreter with document libraries",
   },
   "code-interpreter-v1": {
     kind: "execution",
@@ -85,6 +89,58 @@ export const SANDBOX_TEMPLATE_REGISTRY = {
 } as const satisfies Record<string, SandboxTemplateDefinition>;
 
 export type SandboxTemplateId = keyof typeof SANDBOX_TEMPLATE_REGISTRY;
+
+/** Template id used for every code execution, before the env override. */
+const DEFAULT_EXECUTION_TEMPLATE_ID = "navigator-python-docs";
+
+/**
+ * The stock interpreter, and the floor every execution can fall back to.
+ *
+ * E2B publishes it for every account, so it is the one execution template that
+ * cannot be missing. `e2bRun` falls back to it when the configured template
+ * turns out not to exist, which is the difference between "PDF libraries are
+ * missing" and "no code runs at all".
+ */
+export const STOCK_EXECUTION_TEMPLATE_ID = "code-interpreter-v1";
+
+/**
+ * The template every Python/JS execution runs in.
+ *
+ * `navigator-python-docs` is `code-interpreter-v1` plus reportlab, fpdf2,
+ * weasyprint and pypdf, so a PDF request stops depending on the model
+ * remembering to pip install. It stays disabled in the registry until the
+ * image is built and `pnpm e2b:diagnose` + `pnpm e2b:smoke` pass, because an
+ * enabled-but-unbuilt id fails at runtime as a 502 rather than at validation.
+ *
+ * `E2B_EXECUTION_TEMPLATE` is the rollback: set it to `code-interpreter-v1` to
+ * go back to the stock image without a deploy.
+ *
+ * The override is deliberately not validated against the registry — pointing at
+ * a template before flipping its entry is the whole point of it. That makes it
+ * possible to name a template E2B does not have, which took production down
+ * once; `e2bRun` handles that at runtime by falling back to
+ * {@link STOCK_EXECUTION_TEMPLATE_ID}.
+ */
+export function getExecutionTemplateId(): string {
+  const override = process.env.E2B_EXECUTION_TEMPLATE?.trim();
+  if (override) return override;
+
+  return SANDBOX_TEMPLATE_REGISTRY[DEFAULT_EXECUTION_TEMPLATE_ID].enabled
+    ? DEFAULT_EXECUTION_TEMPLATE_ID
+    : STOCK_EXECUTION_TEMPLATE_ID;
+}
+
+/**
+ * Whether the active execution template has the document libraries baked in.
+ *
+ * Drives two things that must not disagree with reality: the Python tool tells
+ * the model to pip install only when it has to, and `create-pdf` (which needs
+ * WeasyPrint and has no pip-install escape hatch) is only registered when it
+ * can actually work.
+ */
+export function hasPreinstalledDocumentLibraries(): boolean {
+  return getExecutionTemplateId() === DEFAULT_EXECUTION_TEMPLATE_ID;
+}
 
 export const ENABLED_PREVIEW_TEMPLATE_IDS = Object.entries(
   SANDBOX_TEMPLATE_REGISTRY,

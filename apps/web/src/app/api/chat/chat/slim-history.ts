@@ -1,4 +1,5 @@
 import { type UIMessage, isToolUIPart } from "ai";
+import { INGESTED_MEDIA_TYPE } from "@/lib/ai/ingest/formats";
 
 /**
  * Trims bulky content out of *older* turns before a chat request is sent.
@@ -21,10 +22,6 @@ export const SLIM_KEEP_RECENT_TURNS = 2;
 
 /** Cap for a single truncated part, in characters (~500 tokens). */
 export const SLIM_MAX_PART_CHARS = 2000;
-
-/** Media types that arrive as a text ingestion preview alongside the raw file. */
-const INGESTED_MEDIA_TYPE =
-  /^(application\/pdf|text\/csv|application\/vnd\.ms-excel)/i;
 
 const TRUNCATION_MARKER = "…[truncated —";
 

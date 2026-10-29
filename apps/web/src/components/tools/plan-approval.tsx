@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { CheckCircle2, Circle, Clock, CornerRightUp, X } from "lucide-react";
 import { useState } from "react";
+import { useTranslations } from "next-intl";
 
 interface Todo {
   text: string;
@@ -72,6 +73,8 @@ export function PlanApprovalUI({
     });
   };
 
+  const t = useTranslations("Chat.Hitl.plan");
+
   const handleDeleteTodo = (index: number) => {
     setTodos((prev) => prev.filter((_, i) => i !== index));
   };
@@ -79,7 +82,7 @@ export function PlanApprovalUI({
   return (
     <div className="my-3 overflow-hidden rounded-lg border border-border bg-background shadow-sm">
       <div className="border-b border-border px-4 py-2 text-xs font-medium uppercase text-muted-foreground">
-        Plan Approval Required
+        {t("title")}
       </div>
 
       <div className="px-4 py-3">
@@ -115,14 +118,14 @@ export function PlanApprovalUI({
                   onChange={(e) => handleTodoChange(index, e.target.value)}
                   className="flex-1 bg-transparent text-sm text-foreground outline-none focus:underline"
                   disabled={isProcessing}
-                  placeholder="Task description..."
+                  placeholder={t("taskPlaceholder")}
                 />
                 <button
                   type="button"
                   onClick={() => handleDeleteTodo(index)}
                   disabled={isProcessing}
                   className="opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-destructive disabled:opacity-50"
-                  aria-label="Delete task"
+                  aria-label={t("deleteTask")}
                 >
                   <X className="h-4 w-4" />
                 </button>
@@ -154,9 +157,9 @@ export function PlanApprovalUI({
                 }}
                 disabled={isProcessing}
                 rows={2}
-                placeholder="Comment on this plan, or describe a different approach…"
+                placeholder={t("commentPlaceholder")}
                 className="min-h-16 resize-none pr-12 text-sm"
-                aria-label="Comment on this plan"
+                aria-label={t("commentLabel")}
               />
               <Button
                 type="button"
@@ -165,7 +168,7 @@ export function PlanApprovalUI({
                 className="absolute bottom-2 right-2 size-8 rounded-full"
                 onClick={handleFeedback}
                 disabled={isProcessing || !trimmedComment}
-                aria-label="Send comment"
+                aria-label={t("sendComment")}
               >
                 <CornerRightUp className="size-4" />
               </Button>
@@ -184,13 +187,13 @@ export function PlanApprovalUI({
             onClick={handleReject}
             disabled={isProcessing}
           >
-            Reject Plan
+            {t("reject")}
           </Button>
           <Button
             onClick={handleApprove}
             disabled={isProcessing || todos.length === 0}
           >
-            Approve & Continue
+            {t("approve")}
           </Button>
         </div>
       </div>

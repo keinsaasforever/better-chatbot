@@ -49,6 +49,7 @@
     "db:pull": "pnpm --filter web db:pull",
     "db:check": "pnpm --filter web db:check",
     "rag:backfill-embeddings": "dotenv -- tsx scripts/backfill-document-embeddings.ts",
+    "org:repair-active-workspaces": "dotenv -- tsx scripts/repair-stale-active-workspaces.ts",
     "docker-compose:up": "docker-compose -f docker/compose.yml up -d --build",
     "docker-compose:down": "docker-compose -f docker/compose.yml down",
     "docker-compose:logs": "docker-compose -f docker/compose.yml logs -f",
@@ -60,7 +61,7 @@
     "prepare": "husky",
     "playwright:install": "playwright install",
     "check": "pnpm lint:fix && pnpm check-types && pnpm test",
-    "e2b:template:build": "eval \"$(node scripts/e2b/template.mjs build ${E2B_TEMPLATE:-})\"",
+    "e2b:template:build": "cd e2b/build && npm install --silent && npx tsx build.ts",
     "e2b:diagnose": "node scripts/e2b/diagnose.mjs",
     "e2b:smoke": "node scripts/e2b/smoke.mjs"
   },

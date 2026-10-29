@@ -10,7 +10,6 @@ vi.mock("@/lib/auth/auth-instance", () => ({
 import {
   assertCreditsAvailable,
   checkFeature,
-  getBilledTokenTotal,
   getBillingContext,
   requireBillingContext,
   requireFeature,
@@ -62,8 +61,5 @@ describe("community gate", () => {
         idempotencyKey: "msg_1",
       }),
     ).resolves.toBeUndefined();
-
-    // Null, so callers fall back to their own database counts.
-    await expect(getBilledTokenTotal("anything")).resolves.toBeNull();
   });
 });
