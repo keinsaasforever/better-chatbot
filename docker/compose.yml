@@ -1,5 +1,12 @@
+# Full local stack: the app plus a Postgres with pgvector.
+#
+#   cp .env.example .env     # fill in the three required variables
+#   docker compose -f docker/compose.yml up -d --build
+#
+# Redis is optional and off by default — start it with `--profile redis` to get
+# resumable chat streams. See docs/self-hosting.md for everything else.
 services:
-  better-chatbot:
+  app:
     build:
       context: ..
       dockerfile: ./docker/Dockerfile
@@ -7,30 +14,53 @@ services:
       - '3000:3000'
     environment:
       - NO_HTTPS=1
+      # Overrides POSTGRES_URL from .env so the app reaches the container below
+      # rather than a database on your host.
+      - POSTGRES_URL=postgres://postgres:postgres@postgres:5432/better_chatbot
     env_file:
-      - .env
-    dns:
-      - 8.8.8.8 # Google's public DNS server
-      - 8.8.4.4 # Google's public DNS server
+      - ../.env
     networks:
-      - better-chatbot-networks
+      - better-chatbot
     depends_on:
       - postgres
     restart: unless-stopped
 
   postgres:
-    image: postgres:17
-    env_file:
-      - .env
+    # pgvector is required: document embeddings are stored as vector(1536).
+    image: pgvector/pgvector:pg17
+    ports:
+      - '5432:5432'
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=better_chatbot
     networks:
-      - better-chatbot-networks
+      - better-chatbot
     volumes:
       - postgres_data:/var/lib/postgresql/data
     restart: unless-stopped
 
+  # Optional: resumable chat streams and a shared cache across instances.
+  #   docker compose -f docker/compose.yml --profile redis up -d
+  # Then set REDIS_URL=redis://redis:6379 in .env.
+  redis:
+    image: redis:7-alpine
+    profiles: [redis]
+    ports:
+      - '6379:6379'
+    networks:
+      - better-chatbot
+    volumes:
+      - redis_data:/data
+    restart: unless-stopped
+
 volumes:
+  # Intentionally left unnamed: the volume key is prefixed by the compose
+  # project name, so renaming services/networks does not orphan existing local
+  # data. Adding an explicit name: here WOULD orphan it.
   postgres_data:
+  redis_data:
 
 networks:
-  better-chatbot-networks:
+  better-chatbot:
     driver: bridge

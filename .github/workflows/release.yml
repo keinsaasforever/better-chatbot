@@ -8,10 +8,16 @@ on:
 permissions:
   contents: write
   pull-requests: write
+  # A called workflow can only narrow the caller's permissions, and the
+  # desktop release's Windows job needs this for Workload Identity Federation.
+  id-token: write
 
 jobs:
   release-please:
     runs-on: ubuntu-latest
+    outputs:
+      release_created: ${{ steps.release.outputs.release_created }}
+      tag_name: ${{ steps.release.outputs.tag_name }}
     steps:
       - uses: googleapis/release-please-action@v4
         id: release
@@ -100,3 +106,15 @@ jobs:
           echo "Attempting to commit changes to CHANGELOG.md."
           git commit -m "update CHANGELOG.md with author info [skip ci] [skip release]" || echo "No changes to commit for CHANGELOG.md or commit failed (this is expected if no changes)."
           git push
+
+  # release-please tags with GITHUB_TOKEN, and GitHub does not start workflows
+  # from events made with that token — so the tag push never reached
+  # desktop-release.yml and every desktop release had to be dispatched by hand.
+  # Calling it runs it inside this run, where that restriction does not apply.
+  release-desktop:
+    needs: release-please
+    if: ${{ needs.release-please.outputs.release_created }}
+    uses: ./.github/workflows/desktop-release.yml
+    with:
+      version: ${{ needs.release-please.outputs.tag_name }}
+    secrets: inherit

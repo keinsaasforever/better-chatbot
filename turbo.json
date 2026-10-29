@@ -1,0 +1,57 @@
+{
+  "$schema": "https://turbo.build/schema.json",
+  // desktop#build is added when apps/desktop exists (Phase 5) — Turborepo v2
+  // errors on package-task keys referencing unknown packages. See docs/monorepo.md §2.2/§4.
+  "tasks": {
+    "build": {
+      "dependsOn": ["^build"],
+      "outputs": ["dist/**", ".next/**", "!.next/cache/**"]
+    },
+    "dev": {
+      "cache": false,
+      "persistent": true
+    },
+    "lint": {
+      "dependsOn": ["^build"]
+    },
+    "lint:fix": {
+      "cache": false
+    },
+    "test": {
+      "dependsOn": ["^build"]
+    },
+    "typecheck": {
+      "dependsOn": ["^build"]
+    },
+    "web#build": {
+      "dependsOn": ["^build"],
+      "outputs": [".next/**", "!.next/cache/**"],
+      "env": [
+        "POSTGRES_URL",
+        "NEXT_PUBLIC_*",
+        "BETTER_AUTH_*",
+        "SUPABASE_*",
+        "OPENAI_API_KEY",
+        "ANTHROPIC_API_KEY",
+        "GOOGLE_GENERATIVE_AI_API_KEY",
+        "REDIS_URL",
+        "S3_*",
+        "POSTHOG_*",
+        "NEXT_STANDALONE_OUTPUT",
+        "NO_HTTPS",
+        "DOCKER_BUILD",
+        "VERCEL",
+        "FILE_BASED_MCP_CONFIG"
+      ]
+    },
+    "desktop#build": {
+      "dependsOn": ["^build"],
+      "outputs": ["dist/**", "out/**"]
+    },
+    "gateway#build": {
+      "dependsOn": ["^build"],
+      "outputs": ["dist/**"]
+    }
+  },
+  "globalDependencies": ["pnpm-lock.yaml", "tsconfig.base.json"]
+}

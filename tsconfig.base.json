@@ -1,0 +1,18 @@
+{
+  // Shared compiler defaults for all workspaces (docs/monorepo.md §4).
+  // composite/declaration are intentionally absent: apps/web compiles with
+  // noEmit, which TypeScript rejects in composite projects — packages opt in
+  // themselves (Phase 3+). App-specific options stay in each workspace.
+  "compilerOptions": {
+    "target": "ES2017",
+    "lib": ["dom", "dom.iterable", "esnext"],
+    "strict": true,
+    "esModuleInterop": true,
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "incremental": true,
+    "skipLibCheck": true
+  }
+}

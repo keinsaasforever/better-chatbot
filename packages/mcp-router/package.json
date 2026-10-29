@@ -1,0 +1,29 @@
+{
+  "name": "@keinsaas/mcp-router",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./config-path": "./src/config-path.ts",
+    "./transport": "./src/transport.ts",
+    "./transport-errors": "./src/transport-errors.ts",
+    "./with-timeout": "./src/with-timeout.ts",
+    "./execution-plane": "./src/execution-plane.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "check-types": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@keinsaas/mcp-types": "workspace:*",
+    "@modelcontextprotocol/sdk": "^1.26.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.3",
+    "vitest": "^3.2.4"
+  }
+}

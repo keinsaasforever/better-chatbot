@@ -1,0 +1,65 @@
+name: gitleaks
+
+on:
+  # Feature branches are covered by their pull request. Without this filter the
+  # push and pull_request triggers both fire on every commit, which is why one
+  # SHA used to produce two `scan` checks.
+  push:
+    branches: [main, staging, dev]
+  pull_request:
+  # The action picks its scan scope from the event: pull_request and push scan
+  # only the commits they carry, while schedule and workflow_dispatch scan the
+  # whole history. So this weekly run is the full-history sweep, and it cannot
+  # block a merge. Scheduled runs only fire from the default branch.
+  schedule:
+    - cron: "0 5 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  # The action comments on a PR when it finds a leak. The restricted default
+  # token is read-only, so without this the first real finding would fail.
+  pull-requests: write
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    env:
+      GITLEAKS_LICENSE: ${{ secrets.GITLEAKS_LICENSE }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          # The action diffs commit ranges, so it needs real history.
+          fetch-depth: 0
+
+      # gitleaks-action calls a licence server before it scans, and refuses to
+      # run for org-owned repos without a key. The key is free (gitleaks.io),
+      # but until one is set every run dies during startup having scanned
+      # nothing — which is how this repo sat unscanned while the workflow file
+      # looked healthy.
+      #
+      # `secrets` is not available in an `if:` at job or step level, hence the
+      # hop through `env`.
+      - name: Warn when scanning is disabled
+        if: env.GITLEAKS_LICENSE == ''
+        run: |
+          echo "::warning title=Secret scanning disabled::GITLEAKS_LICENSE is not set, so no secret scan ran. Get a free org key at https://gitleaks.io and add it as a repository secret."
+          {
+            echo "### ⚠️ Secret scanning disabled"
+            echo
+            echo "\`GITLEAKS_LICENSE\` is not set, so **no scan ran**."
+            echo "Get a free organization key at <https://gitleaks.io> and add it as a repository secret."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      # Deliberately fail-open: a missing key skips the scan instead of failing
+      # the check, so one unset secret does not wall off every pull request.
+      # Remove this condition once the secret is set, so that deleting it later
+      # fails closed.
+      - name: Run gitleaks
+        if: env.GITLEAKS_LICENSE != ''
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Leaves a SARIF behind so the weekly full-history run is triageable.
+          GITLEAKS_ENABLE_UPLOAD_ARTIFACT: true

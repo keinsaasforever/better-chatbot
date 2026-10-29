@@ -1,0 +1,56 @@
+appId: com.keinsaas.navigator
+productName: Keinsaas Navigator
+directories:
+  output: out
+  buildResources: build
+files:
+  - dist/**/*
+  - build/icon-win.png
+  - build/icon.png
+  - package.json
+# Registers `keinsaas://` with the OS (CFBundleURLTypes on macOS, HKCU classes
+# via NSIS on Windows, x-scheme-handler on Linux). The web app's
+# /desktop/auth/complete page uses it to hand a browser sign-in back to the
+# app; see src/main/desktop-auth.ts.
+protocols:
+  - name: Keinsaas Navigator
+    schemes:
+      - keinsaas
+win:
+  icon: build/icon-win.png
+  target:
+    - nsis
+  signtoolOptions:
+    # Signs via signtool + Google Cloud KMS CNG provider; see
+    # scripts/sign-windows-hsm.mjs. No PFX, no CSC_LINK — the key stays in the HSM.
+    sign: ./scripts/sign-windows-hsm.mjs
+    # The KMS key is RSA_SIGN_PKCS1_3072_SHA256; a sha1 pass would be rejected
+    # and modern Windows ignores sha1 signatures anyway.
+    signingHashAlgorithms:
+      - sha256
+    rfc3161TimeStampServer: http://timestamp.digicert.com
+    # electron-builder normally derives this from the certificate file. There is
+    # no local certificate to read here, and electron-updater needs it to verify
+    # the signature of downloaded updates. Given the full DN, electron-updater
+    # compares every field against the signer certificate's subject; given a bare
+    # CN it matches on that alone and warns. Must stay in sync with the leaf
+    # certificate's subject.
+    publisherName: CN=keinsaas OÜ, O=keinsaas OÜ, L=Tallinn, C=EE
+mac:
+  icon: build/icon.png
+  category: public.app-category.productivity
+  target:
+    - dmg
+    - zip
+  hardenedRuntime: true
+  entitlements: entitlements.mac.plist
+  entitlementsInherit: entitlements.mac.plist
+linux:
+  icon: build/icon.png
+  target:
+    - AppImage
+# Update feed. Set DESKTOP_UPDATE_FEED_URL when packaging a build that should
+# receive auto-updates; builds packaged without it ship with updates disabled.
+publish:
+  provider: generic
+  url: ${env.DESKTOP_UPDATE_FEED_URL}

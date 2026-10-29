@@ -8,7 +8,7 @@ test.describe("User Signup", () => {
       Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
     const testEmail = `playwright.signup.${uniqueSuffix}@example.com`;
     const testName = `Signup Test User ${uniqueSuffix}`;
-    const testPassword = "SignupTest123";
+    const testPassword = "SignupTest123!";
 
     // Navigate to sign-up page
     await page.goto("/sign-up");
@@ -206,8 +206,8 @@ test.describe("User Signup", () => {
     await expect(passwordInput).toBeVisible();
     await expect(page.getByText(/Step 3 of 3/i)).toBeVisible();
 
-    // Try weak password (no number)
-    await passwordInput.fill("abcdefgh");
+    // Try weak password
+    await passwordInput.fill("weak");
 
     const createButton = page.getByRole("button", {
       name: "Create account",
@@ -219,9 +219,9 @@ test.describe("User Signup", () => {
     await expect(passwordInput).toBeVisible();
     await expect(page.getByText(/Step 3 of 3/i)).toBeVisible();
 
-    // Try with strong password (letter + number, no special char required)
+    // Try with strong password
     await passwordInput.clear();
-    await passwordInput.fill("Test1234");
+    await passwordInput.fill("Strong123!");
     await createButton.click();
 
     // Should either succeed or show server validation error

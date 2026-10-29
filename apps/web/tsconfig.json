@@ -1,0 +1,41 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "allowJs": true,
+    "noEmit": true,
+    "jsx": "preserve",
+    "emitDecoratorMetadata": true,
+    "experimentalDecorators": true,
+    "noUnusedLocals": true,
+    "strictPropertyInitialization": false,
+    "noUnusedParameters": false,
+    "noImplicitAny": false,
+    "plugins": [
+      {
+        "name": "next"
+      }
+    ],
+    "paths": {
+      "ui/*": ["./src/components/ui/*"],
+      "auth/*": ["./src/lib/auth/*"],
+      "app-types/*": ["./src/types/*"],
+      "logger": ["./src/lib/logger.ts"],
+      "lib/*": ["./src/lib/*"],
+      "load-env": ["./src/lib/load-env.ts"],
+      "@/*": ["./src/*"],
+      "@keinsaas/mcp-types": ["../../packages/mcp-types/src"],
+      "@keinsaas/mcp-core": ["../../packages/mcp-core/src"],
+      "@keinsaas/mcp-core/*": ["../../packages/mcp-core/src/*"],
+      "@keinsaas/mcp-router": ["../../packages/mcp-router/src"],
+      "@keinsaas/mcp-router/*": ["../../packages/mcp-router/src/*"]
+    }
+  },
+  "include": [
+    "next-env.d.ts",
+    "**/*.ts",
+    "**/*.tsx",
+    ".next/types/**/*.ts",
+    "src/types/global.d.ts"
+  ],
+  "exclude": ["node_modules"]
+}

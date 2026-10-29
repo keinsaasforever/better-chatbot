@@ -1,0 +1,482 @@
+{
+  "version": "7",
+  "dialect": "postgresql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "7",
+      "when": 1746202772129,
+      "tag": "0000_past_nebula",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1746462028815,
+      "tag": "0001_slimy_tarot",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1747140046221,
+      "tag": "0002_numerous_power_man",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1747238989170,
+      "tag": "0003_hesitant_firedrake",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1747470320204,
+      "tag": "0004_oval_silverclaw",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1748344985313,
+      "tag": "0005_mushy_harpoon",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1749184066159,
+      "tag": "0006_married_marvel_boy",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1750508915812,
+      "tag": "0007_eager_clint_barton",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1753711175572,
+      "tag": "0008_deep_miracleman",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1754240183672,
+      "tag": "0009_neat_ultimates",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1754662685461,
+      "tag": "0010_misty_bloodstorm",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1754762039299,
+      "tag": "0011_petite_doctor_strange",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1755486014955,
+      "tag": "0012_kind_multiple_man",
+      "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1758229343280,
+      "tag": "0013_graceful_leo",
+      "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1759110840795,
+      "tag": "0014_faulty_gateway",
+      "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "7",
+      "when": 1772000000000,
+      "tag": "0015_org_auth_baseline",
+      "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1773511262069,
+      "tag": "0016_workflow_user_input_context",
+      "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1774975596954,
+      "tag": "0016_flippant_lorna_dane",
+      "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1775000000000,
+      "tag": "0017_navigator_workflow_scaleway",
+      "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1775100000000,
+      "tag": "0018_rename_scaleway_function_to_container",
+      "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1775200000000,
+      "tag": "0019_blog_agent_tables",
+      "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1775300000000,
+      "tag": "0020_blog_agent_publish_toolkit_slug",
+      "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1775400000000,
+      "tag": "0021_sales_agent_settings",
+      "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1775500000000,
+      "tag": "0022_archive_agentset_columns",
+      "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1775600000000,
+      "tag": "0023_agentset_document_and_brain",
+      "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1775700000000,
+      "tag": "0024_navigator_workflow_github_repo",
+      "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1775800000000,
+      "tag": "0025_voice_devices",
+      "breakpoints": true
+    },
+    {
+      "idx": 27,
+      "version": "7",
+      "when": 1775900000000,
+      "tag": "0026_voice_device_registration",
+      "breakpoints": true
+    },
+    {
+      "idx": 28,
+      "version": "7",
+      "when": 1776000000000,
+      "tag": "0027_project_gbrain_workspace",
+      "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "7",
+      "when": 1776100000000,
+      "tag": "0028_voice_project_widgets",
+      "breakpoints": true
+    },
+    {
+      "idx": 30,
+      "version": "7",
+      "when": 1776200000000,
+      "tag": "0029_voice_streaming_sessions",
+      "breakpoints": true
+    },
+    {
+      "idx": 31,
+      "version": "7",
+      "when": 1776300000000,
+      "tag": "0030_slack_navigator_bot",
+      "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "7",
+      "when": 1776400000000,
+      "tag": "0031_push_subscription",
+      "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "7",
+      "when": 1776500000000,
+      "tag": "0032_project_cutover",
+      "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "7",
+      "when": 1776600000000,
+      "tag": "0033_project_brain_v2",
+      "breakpoints": true
+    },
+    {
+      "idx": 35,
+      "version": "7",
+      "when": 1784029420916,
+      "tag": "0034_model_router",
+      "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "7",
+      "when": 1784200000000,
+      "tag": "0035_org_scope_shared_resources",
+      "breakpoints": true
+    },
+    {
+      "idx": 37,
+      "version": "7",
+      "when": 1784224266977,
+      "tag": "0036_chat_index_reconcile",
+      "breakpoints": true
+    },
+    {
+      "idx": 38,
+      "version": "7",
+      "when": 1784542084524,
+      "tag": "0037_model_router_task_fit",
+      "breakpoints": true
+    },
+    {
+      "idx": 39,
+      "version": "7",
+      "when": 1784729864126,
+      "tag": "0038_agent_model",
+      "breakpoints": true
+    },
+    {
+      "idx": 40,
+      "version": "7",
+      "when": 1784729864127,
+      "tag": "0039_notification",
+      "breakpoints": true
+    },
+    {
+      "idx": 41,
+      "version": "7",
+      "when": 1784748000000,
+      "tag": "0040_knowledge_base",
+      "breakpoints": true
+    },
+    {
+      "idx": 42,
+      "version": "7",
+      "when": 1784800000000,
+      "tag": "0041_add_skill",
+      "breakpoints": true
+    },
+    {
+      "idx": 43,
+      "version": "7",
+      "when": 1785420000000,
+      "tag": "0042_general_chat_base_model",
+      "breakpoints": true
+    },
+    {
+      "idx": 44,
+      "version": "7",
+      "when": 1785500000000,
+      "tag": "0043_navigator_workflow_runs",
+      "breakpoints": true
+    },
+    {
+      "idx": 45,
+      "version": "7",
+      "when": 1785600000000,
+      "tag": "0044_published_page",
+      "breakpoints": true
+    },
+    {
+      "idx": 46,
+      "version": "7",
+      "when": 1785700000000,
+      "tag": "0045_scheduled_task",
+      "breakpoints": true
+    },
+    {
+      "idx": 47,
+      "version": "7",
+      "when": 1785800000000,
+      "tag": "0046_sandbox_session",
+      "breakpoints": true
+    },
+    {
+      "idx": 48,
+      "version": "7",
+      "when": 1785900000000,
+      "tag": "0047_project_workflow",
+      "breakpoints": true
+    },
+    {
+      "idx": 49,
+      "version": "7",
+      "when": 1785900100000,
+      "tag": "0048_out_of_band_schema_baseline",
+      "breakpoints": true
+    },
+    {
+      "idx": 50,
+      "version": "7",
+      "when": 1786000000000,
+      "tag": "0049_tensorx_deployments",
+      "breakpoints": true
+    },
+    {
+      "idx": 51,
+      "version": "7",
+      "when": 1786100000000,
+      "tag": "0050_promote_shared_personal_orgs",
+      "breakpoints": true
+    },
+    {
+      "idx": 52,
+      "version": "7",
+      "when": 1786200000000,
+      "tag": "0051_backfill_untitled_chat_threads",
+      "breakpoints": true
+    },
+    {
+      "idx": 53,
+      "version": "7",
+      "when": 1786300000000,
+      "tag": "0052_kernel_browser_automation",
+      "breakpoints": true
+    },
+    {
+      "idx": 54,
+      "version": "7",
+      "when": 1786400000000,
+      "tag": "0053_unattended_browser_runs",
+      "breakpoints": true
+    },
+    {
+      "idx": 55,
+      "version": "7",
+      "when": 1786500000000,
+      "tag": "0054_browser_credential",
+      "breakpoints": true
+    },
+    {
+      "idx": 56,
+      "version": "7",
+      "when": 1786600000000,
+      "tag": "0055_base_model_glm_deployment",
+      "breakpoints": true
+    },
+    {
+      "idx": 57,
+      "version": "7",
+      "when": 1786700000000,
+      "tag": "0056_project_todo",
+      "breakpoints": true
+    },
+    {
+      "idx": 58,
+      "version": "7",
+      "when": 1786800000000,
+      "tag": "0057_drop_project_widget",
+      "breakpoints": true
+    },
+    {
+      "idx": 59,
+      "version": "7",
+      "when": 1786900000000,
+      "tag": "0058_problem_report",
+      "breakpoints": true
+    },
+    {
+      "idx": 60,
+      "version": "7",
+      "when": 1787000000000,
+      "tag": "0059_chat_thread_knowledge_bases",
+      "breakpoints": true
+    },
+    {
+      "idx": 61,
+      "version": "7",
+      "when": 1787100000000,
+      "tag": "0060_graph_parity",
+      "breakpoints": true
+    },
+    {
+      "idx": 62,
+      "version": "7",
+      "when": 1787200000000,
+      "tag": "0061_drop_project_brain_check_drift",
+      "breakpoints": true
+    },
+    {
+      "idx": 63,
+      "version": "7",
+      "when": 1787300000000,
+      "tag": "0062_navigator_workflows_source",
+      "breakpoints": true
+    },
+    {
+      "idx": 64,
+      "version": "7",
+      "when": 1787400000000,
+      "tag": "0063_navigator_workflows_integration_calls",
+      "breakpoints": true
+    },
+    {
+      "idx": 65,
+      "version": "7",
+      "when": 1787500000000,
+      "tag": "0064_navigator_workflows_dashboard",
+      "breakpoints": true
+    },
+    {
+      "idx": 66,
+      "version": "7",
+      "when": 1787600000000,
+      "tag": "0065_api_key",
+      "breakpoints": true
+    },
+    {
+      "idx": 67,
+      "version": "7",
+      "when": 1787700000000,
+      "tag": "0066_cockpit_connection",
+      "breakpoints": true
+    }
+  ]
+}
