@@ -67,5 +67,29 @@ function copyEnvFile() {
 }
 
 // Execute copy operation
-const result = copyEnvFile();
+/**
+ * Next.js only reads env files from the app directory (apps/web), so link
+ * apps/web/.env to the root .env; fall back to a copy where symlinks are
+ * unavailable (e.g. Windows without developer mode).
+ */
+function linkWebEnv() {
+  const webDir = path.join(ROOT, "apps", "web");
+  const webEnvPath = path.join(webDir, ".env");
+  if (!fs.existsSync(webDir) || fs.existsSync(webEnvPath)) return true;
+  try {
+    fs.symlinkSync(path.join("..", "..", ".env"), webEnvPath);
+    console.log("apps/web/.env → ../../.env symlink created.");
+  } catch {
+    try {
+      fs.copyFileSync(path.join(ROOT, ".env"), webEnvPath);
+      console.log("apps/web/.env copied from root .env (symlink unavailable).");
+    } catch (error) {
+      console.error("Could not create apps/web/.env:", error);
+      return false;
+    }
+  }
+  return true;
+}
+
+const result = copyEnvFile() && linkWebEnv();
 process.exit(result ? 0 : 1);

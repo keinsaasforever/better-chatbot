@@ -21,8 +21,8 @@ if (process.env.CI) {
 import { auth } from "auth/auth-instance";
 import { USER_ROLES } from "app-types/roles";
 import { sql } from "drizzle-orm";
-import { drizzle } from "drizzle-orm/node-postgres";
-import { Pool } from "pg";
+import { drizzle } from "drizzle-orm/postgres-js";
+import postgres from "postgres";
 import {
   UserTable,
   ChatMessageTable,
@@ -30,11 +30,9 @@ import {
 } from "lib/db/pg/schema.pg";
 import { like, eq } from "drizzle-orm";
 
-// Create database connection with Pool
-const pool = new Pool({
-  connectionString: process.env.POSTGRES_URL!,
-});
-const db = drizzle(pool);
+// Create database connection with postgres-js
+const client = postgres(process.env.POSTGRES_URL!, { prepare: false });
+const db = drizzle(client);
 
 // Helper function to get user by email
 async function getUserByEmail(email: string) {
@@ -382,24 +380,33 @@ async function seedSampleUsageData(userIds: string[]) {
       if (thread[0]) {
         // Create sample messages with token usage
         const timestamp = Date.now();
-        await db.insert(ChatMessageTable).values([
+        const messages = [
           {
             id: `${userId}-msg-1-${timestamp}`,
             threadId: thread[0].id,
             role: "user" as const,
-            parts: [{ type: "text", text: "Test user message" }],
+            parts: [{ type: "text" as const, text: "Test user message" }],
           },
           {
             id: `${userId}-msg-2-${timestamp}`,
             threadId: thread[0].id,
             role: "assistant" as const,
-            parts: [{ type: "text", text: "Test assistant response" }],
+            parts: [{ type: "text" as const, text: "Test assistant response" }],
             metadata: {
               chatModel: { provider: "openai", model: "gpt-4o" },
               usage: {
                 totalTokens: Math.floor(Math.random() * 100) + 100,
                 inputTokens: Math.floor(Math.random() * 100) + 50,
                 outputTokens: Math.floor(Math.random() * 100) + 50,
+                inputTokenDetails: {
+                  noCacheTokens: undefined,
+                  cacheReadTokens: undefined,
+                  cacheWriteTokens: undefined,
+                },
+                outputTokenDetails: {
+                  textTokens: undefined,
+                  reasoningTokens: undefined,
+                },
               },
             },
           },
@@ -407,7 +414,7 @@ async function seedSampleUsageData(userIds: string[]) {
             id: `${userId}-msg-3-${timestamp}`,
             threadId: thread[0].id,
             role: "assistant" as const,
-            parts: [{ type: "text", text: "Another test response" }],
+            parts: [{ type: "text" as const, text: "Another test response" }],
             metadata: {
               chatModel: {
                 provider: "anthropic",
@@ -417,10 +424,23 @@ async function seedSampleUsageData(userIds: string[]) {
                 totalTokens: Math.floor(Math.random() * 100) + 100,
                 inputTokens: Math.floor(Math.random() * 100) + 50,
                 outputTokens: Math.floor(Math.random() * 100) + 50,
+                inputTokenDetails: {
+                  noCacheTokens: undefined,
+                  cacheReadTokens: undefined,
+                  cacheWriteTokens: undefined,
+                },
+                outputTokenDetails: {
+                  textTokens: undefined,
+                  reasoningTokens: undefined,
+                },
               },
             },
           },
-        ]);
+        ];
+
+        for (const message of messages) {
+          await db.insert(ChatMessageTable).values(message);
+        }
       }
     }
 
@@ -440,12 +460,12 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   seedTestUsers()
     .then(async () => {
       console.log("🎉 Seeding completed!");
-      await pool.end();
+      await client.end();
       process.exit(0);
     })
     .catch(async (error) => {
       console.error("💥 Seeding failed:", error);
-      await pool.end();
+      await client.end();
       process.exit(1);
     });
 }

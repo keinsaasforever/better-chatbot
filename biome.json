@@ -8,7 +8,15 @@
   },
   "files": {
     "ignoreUnknown": false,
-    "ignore": ["node_modules", ".next", "public", "docker", "dist/**", "*.d.ts"]
+    "ignore": [
+      "node_modules",
+      ".next",
+      "public",
+      "docker",
+      "dist/**",
+      "*.d.ts",
+      "prototype"
+    ]
   },
   "formatter": {
     "enabled": true,
@@ -30,7 +38,14 @@
         "useArrayLiterals": "off",
         "useExhaustiveDependencies": "off"
       },
-      "style": { "noNamespace": "error", "useAsConstAssertion": "error" },
+      "style": {
+        "noNamespace": "error",
+        "useAsConstAssertion": "error",
+        "useFilenamingConvention": {
+          "level": "warn",
+          "options": { "filenameCases": ["kebab-case"] }
+        }
+      },
       "suspicious": {
         "noExplicitAny": "off",
         "noExtraNonNullAssertion": "error",
@@ -42,6 +57,10 @@
   },
   "javascript": { "formatter": { "quoteStyle": "double" } },
   "overrides": [
+    {
+      "include": ["tsconfig*.json"],
+      "json": { "parser": { "allowComments": true } }
+    },
     {
       "include": ["*.ts", "*.tsx", "*.mts", "*.cts"],
       "linter": {

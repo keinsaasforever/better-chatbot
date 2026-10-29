@@ -1,0 +1,25 @@
+{
+  "name": "@keinsaas/mcp-types",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "check-types": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.26.0",
+    "zod": "^4.1.12"
+  },
+  "peerDependencies": {
+    "ai": "^7.0.18"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.3"
+  }
+}

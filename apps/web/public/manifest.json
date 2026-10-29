@@ -1,0 +1,16 @@
+{
+  "name": "Keinsaas Navigator",
+  "short_name": "Navigator",
+  "description": "AI assistant with agents, workflows, and tools.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0a0a0a",
+  "theme_color": "#0d00e0",
+  "icons": [
+    {
+      "src": "/favicon.ico",
+      "sizes": "64x64",
+      "type": "image/x-icon"
+    }
+  ]
+}

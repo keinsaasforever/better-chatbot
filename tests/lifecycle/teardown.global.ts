@@ -1,17 +1,19 @@
-import { drizzle } from "drizzle-orm/node-postgres";
+import { drizzle } from "drizzle-orm/postgres-js";
+import postgres from "postgres";
 import {
   UserTable,
   SessionTable,
   AgentTable,
   BookmarkTable,
   ChatThreadTable,
-} from "../../src/lib/db/pg/schema.pg";
+} from "../../apps/web/src/lib/db/pg/schema.pg";
 import { eq, like, or } from "drizzle-orm";
 import { config } from "dotenv";
 
 config();
 
-const db = drizzle(process.env.POSTGRES_URL!);
+const client = postgres(process.env.POSTGRES_URL!, { prepare: false });
+const db = drizzle(client);
 
 async function cleanup() {
   console.log("Cleaning up test data...");

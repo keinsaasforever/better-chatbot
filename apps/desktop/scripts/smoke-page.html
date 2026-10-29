@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Desktop smoke test</title>
+  </head>
+  <body>
+    <h1 id="title">Keinsaas Navigator — desktop smoke test</h1>
+    <p id="platform">platform: …</p>
+    <p id="version">version: …</p>
+    <script>
+      const platformEl = document.getElementById("platform");
+      const versionEl = document.getElementById("version");
+      if (!window.desktop) {
+        platformEl.textContent = "platform: MISSING (preload not loaded)";
+      } else {
+        platformEl.textContent = `platform: ${window.desktop.platform}`;
+        window.desktop
+          .getVersion()
+          .then((v) => {
+            versionEl.textContent = `version: electron ${v.electron}, node ${v.node}`;
+            console.log("[smoke] desktop bridge OK", v);
+          })
+          .catch((err) => {
+            versionEl.textContent = `version: ERROR ${err?.message ?? err}`;
+            console.error("[smoke] getVersion failed", err);
+          });
+      }
+    </script>
+  </body>
+</html>

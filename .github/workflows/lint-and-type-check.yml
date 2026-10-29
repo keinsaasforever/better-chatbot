@@ -2,7 +2,10 @@ name: Lint and Type Check
 
 on:
   pull_request:
-    branches: [main]
+    # staging is where features accumulate before a release, so it needs the
+    # same gate as main — otherwise the branch that feeds releases is the one
+    # branch nothing is checked against.
+    branches: [main, staging]
 
 jobs:
   lint_and_type_check:
@@ -18,9 +21,11 @@ jobs:
           node-version: '20'
 
       - name: Install pnpm
+        # Must match `packageManager` in package.json. pnpm 8 cannot read this
+        # repo's lockfileVersion 9.0 and silently re-resolves instead.
         uses: pnpm/action-setup@v2
         with:
-          version: 8
+          version: 10.2.1
           run_install: false
 
       - name: Setup pnpm cache
@@ -32,7 +37,13 @@ jobs:
             ${{ runner.os }}-pnpm-store-
 
       - name: Install dependencies
-        run: pnpm install
+        # Frozen, like every other workflow here. A plain `pnpm install` re-resolves
+        # the `^` ranges against the registry, so CI tested a dependency tree no one
+        # had: it picked up @composio/vercel 0.11.2, published after the lockfile was
+        # written, whose ESM imports `deduplicateJsonSchemaRequiredArrays` from the
+        # pinned @composio/core 0.13.1 — which does not export it. Every test file
+        # reaching lib/composio/client then failed to load.
+        run: pnpm install --frozen-lockfile
 
       - name: Run Lint
         run: pnpm lint
