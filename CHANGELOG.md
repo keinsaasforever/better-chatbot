@@ -1,5 +1,37 @@
 # Changelog
 
+## [2.0.0](https://github.com/keinsaasforever/better-chatbot/compare/v1.26.0...v2.0.0) (2026-10-29)
+
+
+### ⚠ BREAKING CHANGES
+
+* the repository is a monorepo and the app lives in apps/web. Models are served through the Vercel AI Gateway: one AI_GATEWAY_API_KEY, or none on Vercel, replaces the per-provider keys. Archives become projects. Postgres must provide pgvector. To upgrade from 1.x, back up, then run scripts/upgrade/from-better-chatbot-1.ts with --dry-run, then with --yes.
+
+### Features
+
+* add DISABLE_EMAIL_SIGN_UP to control email and OAuth signups separately ([#331](https://github.com/keinsaasforever/better-chatbot/issues/331)) ([2811cf3](https://github.com/keinsaasforever/better-chatbot/commit/2811cf3dbcce03da467cd958587473326dab9cc1))
+* add HTTP/HTTPS proxy support ([#365](https://github.com/keinsaasforever/better-chatbot/issues/365)) ([dde98ed](https://github.com/keinsaasforever/better-chatbot/commit/dde98ed593b74e4cad2cb91ae10b32bd452afe78))
+* add norwegian translation ([#341](https://github.com/keinsaasforever/better-chatbot/issues/341)) ([64f88cc](https://github.com/keinsaasforever/better-chatbot/commit/64f88cc37fab0613c0711d9b30bff84daae74839))
+* better-chatbot 2.0, the community edition of keinsaas Navigator ([#402](https://github.com/keinsaasforever/better-chatbot/issues/402)) ([61e47d8](https://github.com/keinsaasforever/better-chatbot/commit/61e47d8770e39dccc8d9b16ec047c2dd39a8ce47))
+* cache MCP tool info in DB for lazy connection architecture ([#369](https://github.com/keinsaasforever/better-chatbot/issues/369)) ([57c638e](https://github.com/keinsaasforever/better-chatbot/commit/57c638e8eb72330dee8a2645886249730f969bcb))
+* **i18n:** add translations for tool-related components ([#367](https://github.com/keinsaasforever/better-chatbot/issues/367)) ([536beb2](https://github.com/keinsaasforever/better-chatbot/commit/536beb204cc354a83423b1f8fc38cc6b0c444e85))
+* improve Tiptap JSON content processing with recursive parser ([#375](https://github.com/keinsaasforever/better-chatbot/issues/375)) ([5cb318f](https://github.com/keinsaasforever/better-chatbot/commit/5cb318f3533392d9cefba1c194dff659053e7a64))
+
+
+### Bug Fixes
+
+* align chat messages with prompt input ([#366](https://github.com/keinsaasforever/better-chatbot/issues/366)) ([e65be9f](https://github.com/keinsaasforever/better-chatbot/commit/e65be9f584aa2dd62123431d72e1192b23ffb527))
+* blur prompt-input after submit to collapse mobile keyboard ([#337](https://github.com/keinsaasforever/better-chatbot/issues/337)) ([aec3530](https://github.com/keinsaasforever/better-chatbot/commit/aec35300c1ca7269aa5086a95f1a4f480b2564c7))
+* deploy on Vercel Hobby, and a working release workflow ([#404](https://github.com/keinsaasforever/better-chatbot/issues/404)) ([0bd2b43](https://github.com/keinsaasforever/better-chatbot/commit/0bd2b4359ef0d151dbffe3afb204956e8ab06402))
+* derive current user in password reset ([#377](https://github.com/keinsaasforever/better-chatbot/issues/377)) ([113a86d](https://github.com/keinsaasforever/better-chatbot/commit/113a86dfe0a050c7a820347fa916b1641b499c30))
+* enter ([78573e4](https://github.com/keinsaasforever/better-chatbot/commit/78573e4de8d509cf717123235e55e6d801eeb581))
+* **mcp:** improve 401 detection for OAuth flow trigger ([#362](https://github.com/keinsaasforever/better-chatbot/issues/362)) ([a99dca9](https://github.com/keinsaasforever/better-chatbot/commit/a99dca9a26117dec41611a1f40038b80026a675b))
+* preserve whitespace in chat input during editing ([#361](https://github.com/keinsaasforever/better-chatbot/issues/361)) ([e914a30](https://github.com/keinsaasforever/better-chatbot/commit/e914a30f66113c49b60ff3695b52db3d8d7e3a8f))
+* redirect authenticated users from auth pages to home ([#345](https://github.com/keinsaasforever/better-chatbot/issues/345)) ([5c98ab6](https://github.com/keinsaasforever/better-chatbot/commit/5c98ab67afd438982320515e65c4246ad418ac6e))
+* skip signup method selection when only email is enabled ([#338](https://github.com/keinsaasforever/better-chatbot/issues/338)) ([7538bc8](https://github.com/keinsaasforever/better-chatbot/commit/7538bc8babb0943f2857a9a9139bff79e2c5e486))
+* text message part inline buttons is not visible on mobile ([#334](https://github.com/keinsaasforever/better-chatbot/issues/334)) ([666c395](https://github.com/keinsaasforever/better-chatbot/commit/666c395865d03dd33884f9f17933b1a3659d44eb)), closes [#333](https://github.com/keinsaasforever/better-chatbot/issues/333)
+* use translation for user settings menu item ([#339](https://github.com/keinsaasforever/better-chatbot/issues/339)) ([eadc71a](https://github.com/keinsaasforever/better-chatbot/commit/eadc71ae6d62ae297aeff44979591bd03a86b19d))
+
 ## [1.26.0](https://github.com/cgoinglove/better-chatbot/compare/v1.25.0...v1.26.0) (2025-11-07)
 
 
