@@ -300,6 +300,31 @@ export const PreviewMessage = memo(
   },
 );
 
+/** Plain text with any http(s) URL turned into a link. */
+function LinkifiedText({ text }: { text: string }) {
+  return (
+    <>
+      {text.split(/(https?:\/\/\S+)/g).map((part, index) =>
+        /^https?:\/\//.test(part) ? (
+          <a
+            // Parts never reorder; the index is a stable key.
+            // biome-ignore lint/suspicious/noArrayIndexKey: static split
+            key={index}
+            href={part}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="underline break-all"
+          >
+            {part}
+          </a>
+        ) : (
+          part
+        ),
+      )}
+    </>
+  );
+}
+
 export const ErrorMessage = ({
   error,
   onRetry,
@@ -313,7 +338,9 @@ export const ErrorMessage = ({
   message?: UIMessage;
 }) => {
   const [isExpanded, setIsExpanded] = useState(false);
-  const maxLength = 200;
+  // Long enough for a server explanation with its link; longer raw errors
+  // (provider JSON) still collapse.
+  const maxLength = 400;
   const t = useTranslations();
   // A connection torn down by the browser (a frozen iOS tab, a dropped
   // network) reports itself as "Load failed" / "Failed to fetch" — the
@@ -356,9 +383,13 @@ export const ErrorMessage = ({
               <p className="font-medium text-sm mb-2">{t("Chat.Error")}</p>
               <div className="text-sm text-muted-foreground">
                 <div className="whitespace-pre-wrap">
-                  {isExpanded
-                    ? errorText
-                    : truncateString(errorText, maxLength)}
+                  <LinkifiedText
+                    text={
+                      isExpanded
+                        ? errorText
+                        : truncateString(errorText, maxLength)
+                    }
+                  />
                 </div>
                 {errorText.length > maxLength && (
                   <Button

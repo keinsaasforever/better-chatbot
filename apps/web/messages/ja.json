@@ -1624,6 +1624,12 @@
       "connectDone": "完了、セッションを保存",
       "connectFailed": "このサイトのブラウザを開けませんでした。",
       "sessionStored": "セッションを保存しました。"
+    },
+    "teamsPlan": {
+      "title": "Teams プランに参加しましょう",
+      "description": "共有ワークスペース、メンバー管理、メンバーごとの AI 予算を備えた組織は、keinsaas Navigator の Teams プランでご利用いただけます。料金は 1 ユーザーあたり 8 € です。",
+      "cta": "Teams プランを見る",
+      "dismiss": "今はしない"
     }
   },
   "Referral": {

@@ -1624,6 +1624,12 @@
       "connectDone": "완료, 세션 저장",
       "connectFailed": "이 사이트의 브라우저를 열 수 없습니다.",
       "sessionStored": "세션이 저장되었습니다."
+    },
+    "teamsPlan": {
+      "title": "Teams 플랜에 참여하세요",
+      "description": "공유 워크스페이스, 멤버 관리, 멤버별 AI 예산을 갖춘 조직은 keinsaas Navigator Teams 플랜에 포함되며, 사용자당 8 €입니다.",
+      "cta": "Teams 플랜 보기",
+      "dismiss": "나중에"
     }
   },
   "Referral": {

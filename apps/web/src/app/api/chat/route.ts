@@ -1711,6 +1711,10 @@ export async function POST(request: Request) {
             stream: result.stream,
             tools: vercelAITooles,
             sendSources: true,
+            // The default replaces every model error with "An error occurred.";
+            // handleError returns fixed, user-facing text instead (never the
+            // raw error), so a refused model can say why.
+            onError: handleError,
             messageMetadata: ({ part }) => {
               if (part.type == "finish") {
                 metadata.usage = part.totalUsage;

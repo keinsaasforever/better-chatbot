@@ -1,16 +1,38 @@
 "use client";
 
+import { Building2 } from "lucide-react";
+import { useTranslations } from "next-intl";
+import { DropdownMenuItem } from "ui/dropdown-menu";
+
+import { appStore } from "@/app/store";
+
 /**
  * Community implementation of the client-side edition seam.
  *
- * Team workspaces and billing are part of the hosted product, so every
- * surface here renders nothing. The exports mirror the cloud module so
- * consumers never branch on the edition themselves.
+ * Team workspaces and billing are part of the hosted product. The exports
+ * mirror the cloud module so consumers never branch on the edition
+ * themselves.
  */
 
-/** No workspace switching: an account owns its single personal workspace. */
+/**
+ * An account owns its single personal workspace. "Create Organization" stays
+ * in the menu, as in the hosted product, but opens the Teams plan pitch
+ * (`TeamsPlanDialog` in ./popups) instead of creating one. The dialog is
+ * opened through the store because it must outlive this menu, which unmounts
+ * its content as soon as it closes.
+ */
 export function WorkspaceMenuSection() {
-  return null;
+  const tOrg = useTranslations("Organization");
+  return (
+    <DropdownMenuItem
+      className="cursor-pointer"
+      onClick={() => appStore.setState({ openTeamsPlan: true })}
+      data-testid="create-organization-menu-item"
+    >
+      <Building2 className="size-4 text-foreground" />
+      <span>{tOrg("createOrganization")}</span>
+    </DropdownMenuItem>
+  );
 }
 
 /** Nothing to bill. */

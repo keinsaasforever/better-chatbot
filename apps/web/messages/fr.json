@@ -1624,6 +1624,12 @@
       "connectDone": "Terminé, enregistrer la session",
       "connectFailed": "Impossible d'ouvrir un navigateur pour ce site.",
       "sessionStored": "Session enregistrée."
+    },
+    "teamsPlan": {
+      "title": "Rejoignez notre offre Teams",
+      "description": "Les organisations avec espaces de travail partagés, gestion des membres et budgets IA par membre font partie de l'offre Teams de keinsaas Navigator, pour 8 € par utilisateur.",
+      "cta": "Voir l'offre Teams",
+      "dismiss": "Pas maintenant"
     }
   },
   "Referral": {
