@@ -8,7 +8,9 @@ import {
   MemberTable,
   ProjectMemberTable,
   ProjectTable,
+  SessionTable,
 } from "@/lib/db/pg/schema.pg";
+import { resolveDefaultActiveOrganizationId } from "lib/organization/default-org";
 
 export type ProjectRole = "viewer" | "editor" | "owner";
 
@@ -46,9 +48,26 @@ export async function requireActiveOrganization(): Promise<ProjectActor> {
     throw new ProjectAccessError(401, "unauthorized", "Unauthorized.");
   }
 
-  const organizationId = (
+  let organizationId = (
     session.session as { activeOrganizationId?: string | null } | undefined
   )?.activeOrganizationId;
+
+  // A session can lack an active workspace even though the user has one: the
+  // sign-in hook sets it on the row after the session cookie was cached, and
+  // nothing in a single-workspace setup switches workspaces to repair it.
+  // Fall back to the user's default workspace, chosen from their own
+  // memberships (re-checked below), and record it on the session.
+  if (!organizationId) {
+    organizationId = await resolveDefaultActiveOrganizationId(session.user.id);
+    const sessionId = (session.session as { id?: string } | undefined)?.id;
+    if (organizationId && sessionId) {
+      await pgDb
+        .update(SessionTable)
+        .set({ activeOrganizationId: organizationId })
+        .where(eq(SessionTable.id, sessionId))
+        .catch(() => {});
+    }
+  }
 
   if (!organizationId) {
     throw new ProjectAccessError(

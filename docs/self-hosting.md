@@ -47,8 +47,9 @@ set up a project by hand:
    to a key from [vercel.com/ai-gateway](https://vercel.com/ai-gateway).
 4. Deploy.
 
-The Deploy button also lists `COMPOSIO_API_KEY`, `TENSORX_API_KEY` and
-`ASSEMBLYAI_API_KEY`, pre-filled with `optional`, and pre-fills
+The Deploy button also lists `COMPOSIO_API_KEY`, `TENSORX_API_KEY`,
+`ASSEMBLYAI_API_KEY`, `EXA_API_KEY`, `E2B_API_KEY`, `INNGEST_EVENT_KEY` and
+`INNGEST_SIGNING_KEY`, pre-filled with `optional`, and pre-fills
 `AI_GATEWAY_API_KEY` with `required`. Vercel's form only has required fields;
 the app treats those words as "not set".
 
@@ -143,6 +144,11 @@ projects fall back to local search.
 Scheduled tasks, project-brain ingestion and the sandbox reaper run on Inngest.
 For local development `npx inngest-cli dev` needs no keys; for production set
 `INNGEST_SIGNING_KEY` and `INNGEST_EVENT_KEY`.
+
+On Vercel the simplest route is the Inngest integration from the Vercel
+Marketplace: it sets both keys and registers the app (`/api/inngest`) on every
+deploy. If you paste the keys yourself instead, open your app in the Inngest
+dashboard once and sync it with `https://your-instance/api/inngest`.
 
 You can run without Inngest. Two of the jobs are plain HTTP endpoints — set
 `SCHEDULED_TASK_SECRET` and drive them from cron:

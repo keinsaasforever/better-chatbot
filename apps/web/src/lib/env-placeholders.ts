@@ -10,6 +10,10 @@ export const OPTIONAL_DEPLOY_KEYS = [
   "COMPOSIO_API_KEY",
   "TENSORX_API_KEY",
   "ASSEMBLYAI_API_KEY",
+  "EXA_API_KEY",
+  "E2B_API_KEY",
+  "INNGEST_EVENT_KEY",
+  "INNGEST_SIGNING_KEY",
 ] as const;
 
 const PLACEHOLDERS = new Set(["required", "optional", "skip"]);

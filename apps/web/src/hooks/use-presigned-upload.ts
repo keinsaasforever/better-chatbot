@@ -119,8 +119,8 @@ export function useFileUpload(options: FileUploadOptions = {}) {
             endpoint: tusEndpoint,
             retryDelays: [0, 3000, 5000, 10000, 20000],
             headers: {
-              // Use Bearer token format for Supabase TUS uploads
-              Authorization: `Bearer ${token}`,
+              // The signed-upload token from /api/storage/upload-url.
+              "x-signature": token,
             },
             uploadDataDuringCreation: true,
             removeFingerprintOnSuccess: true,
