@@ -1627,8 +1627,8 @@
     },
     "teamsPlan": {
       "title": "Join our Teams plan",
-      "description": "Organizations with shared workspaces, member management and per-member AI budgets are part of the keinsaas Navigator Teams plan, for €8 per user.",
-      "cta": "See the Teams plan",
+      "description": "Organizations with shared workspaces, member management and per-member AI budgets are part of the keinsaas Navigator Teams plan, for €8 per user. Book a short call and we will set up billing and your organization with you.",
+      "cta": "Book a call",
       "dismiss": "Not now"
     }
   },

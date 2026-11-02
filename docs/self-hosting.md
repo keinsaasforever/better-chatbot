@@ -78,6 +78,32 @@ Everything in the sections below is optional. The Vercel Marketplace has
 integrations for Upstash (`KV_URL` — resumable streams) and Inngest
 (background jobs), which set their own variables.
 
+## Updating
+
+A copy made with the Deploy button has no link back to this repository, so it
+ships a workflow that brings updates to it
+(`.github/workflows/update-from-upstream.yml`):
+
+1. Every Monday, or when you run it from **Actions → Check for better-chatbot
+   updates → Run workflow**, it checks for a new version.
+2. If there is one, it opens a pull request in your repository with the
+   changes and a list of what is new. GitHub emails you about it.
+3. Vercel builds a preview of that pull request. Try it, then click
+   **Merge pull request**. Vercel deploys it, and migrations run in the build.
+
+Your own changes are kept. Where you changed a line that the new version also
+changed, the workflow does not guess: it opens an issue instead, and your live
+app stays as it is. Changes to workflow files cannot be applied by a workflow
+and are listed in the pull request for you to copy.
+
+If the workflow says it may not open pull requests, it opens an issue with a
+one-click link instead. To let it open them directly, tick **Allow GitHub
+Actions to create and approve pull requests** under Settings → Actions →
+General.
+
+Running from a fork or a clone instead? Pull from
+`keinsaasforever/better-chatbot` as usual; the workflow works there too.
+
 ## Storage
 
 File uploads go to Supabase Storage. Without it the app runs fine — attachments,

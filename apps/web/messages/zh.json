@@ -1627,8 +1627,8 @@
     },
     "teamsPlan": {
       "title": "加入我们的 Teams 方案",
-      "description": "包含共享工作区、成员管理和按成员分配 AI 预算的组织属于 keinsaas Navigator Teams 方案，每位用户 8 €。",
-      "cta": "查看 Teams 方案",
+      "description": "包含共享工作区、成员管理和按成员分配 AI 预算的组织属于 keinsaas Navigator Teams 方案，每位用户 8 €。预约一次简短通话，我们将与您一起设置账单和组织。",
+      "cta": "预约通话",
       "dismiss": "暂不"
     }
   },
