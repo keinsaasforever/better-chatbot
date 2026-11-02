@@ -7,6 +7,8 @@ describe("clearPlaceholderEnv", () => {
       COMPOSIO_API_KEY: "optional",
       TENSORX_API_KEY: " Optional ",
       ASSEMBLYAI_API_KEY: "skip",
+      EXA_API_KEY: "optional",
+      INNGEST_SIGNING_KEY: "optional",
       AI_GATEWAY_API_KEY: "required",
     };
     clearPlaceholderEnv(env);

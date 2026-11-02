@@ -87,8 +87,11 @@ export const POST = withAuth(async (request: Request, session) => {
       token: data.token,
       path: data.path,
       bucketName,
-      // Use direct storage hostname for better performance
-      tusEndpoint: `https://${projectId}.storage.supabase.co/storage/v1/upload/resumable`,
+      // Use direct storage hostname for better performance. A signed upload
+      // goes to the `/sign` variant with the token in `x-signature`; the plain
+      // endpoint reads a Bearer token as a user JWT and Storage's row-level
+      // security then rejects the upload.
+      tusEndpoint: `https://${projectId}.storage.supabase.co/storage/v1/upload/resumable/sign`,
       // Fallback for old clients
       fallbackUrl: "/api/storage/upload",
     });
