@@ -14,8 +14,11 @@ import {
 
 import { appStore } from "@/app/store";
 
-/** Where the hosted product, and its Teams plan, can be found. */
-const TEAMS_PLAN_URL = "https://keinsaas.com";
+/**
+ * The Teams plan is set up together with keinsaas on a short call: billing,
+ * and moving the team onto the hosted product, where organizations live.
+ */
+const TEAMS_PLAN_BOOKING_URL = "https://calendar.app.google/aLE4gKQ664c1X4HS9";
 
 /**
  * Community build: the billing, organization-settings and managed builder
@@ -47,7 +50,7 @@ function TeamsPlanDialog() {
           </Button>
           <Button asChild>
             <a
-              href={TEAMS_PLAN_URL}
+              href={TEAMS_PLAN_BOOKING_URL}
               target="_blank"
               rel="noopener noreferrer"
               onClick={close}

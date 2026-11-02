@@ -34,6 +34,10 @@ feature stays off. You can add any key later under Settings → Environment
 Variables and redeploy. The schema is created during the build. Open the
 deployment and create an account; the first one becomes the administrator.
 
+**Updates come to you.** Once a week your copy checks for a new version. When
+there is one, GitHub emails you a short guide: try the preview Vercel builds,
+then click **Merge**. Nothing changes in your live app until you do.
+
 Details and optional features: [docs/self-hosting.md](docs/self-hosting.md#vercel).
 
 ---

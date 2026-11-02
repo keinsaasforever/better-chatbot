@@ -1627,8 +1627,8 @@
     },
     "teamsPlan": {
       "title": "Rejoignez notre offre Teams",
-      "description": "Les organisations avec espaces de travail partagés, gestion des membres et budgets IA par membre font partie de l'offre Teams de keinsaas Navigator, pour 8 € par utilisateur.",
-      "cta": "Voir l'offre Teams",
+      "description": "Les organisations avec espaces de travail partagés, gestion des membres et budgets IA par membre font partie de l'offre Teams de keinsaas Navigator, pour 8 € par utilisateur. Réservez un court appel et nous configurerons avec vous la facturation et votre organisation.",
+      "cta": "Réserver un appel",
       "dismiss": "Pas maintenant"
     }
   },
