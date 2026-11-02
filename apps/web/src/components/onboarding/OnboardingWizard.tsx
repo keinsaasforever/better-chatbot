@@ -35,6 +35,8 @@ const connectAppsCopy = {
     primaryWithApps: "Navigator starten",
     primaryWithoutApps: "Zur App",
     continueError: "Weiter geht gerade nicht",
+    notConfigured:
+      "App-Verbindungen sind auf dieser Instanz noch nicht eingerichtet. Ein Admin kann sie mit einem Composio-Key (COMPOSIO_API_KEY) aktivieren. Navigator funktioniert auch ohne.",
   },
   en: {
     connectedLabel: "Connected",
@@ -55,6 +57,8 @@ const connectAppsCopy = {
     primaryWithApps: "Start using Navigator",
     primaryWithoutApps: "Go to app",
     continueError: "Failed to continue",
+    notConfigured:
+      "App connections are not set up on this instance yet. An admin can turn them on with a Composio key (COMPOSIO_API_KEY). Navigator works without them.",
   },
 } satisfies Record<
   OnboardingLanguage,
@@ -75,6 +79,7 @@ const connectAppsCopy = {
     primaryWithApps: string;
     primaryWithoutApps: string;
     continueError: string;
+    notConfigured: string;
   }
 >;
 
@@ -198,6 +203,7 @@ function ConnectAppsStep({
   const [toolkits, setToolkits] = useState<ComposioToolkit[]>([]);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [notConfigured, setNotConfigured] = useState(false);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [connectingSlug, setConnectingSlug] = useState<string | null>(null);
   const [isFinishing, setIsFinishing] = useState(false);
@@ -227,7 +233,9 @@ function ConnectAppsStep({
         const data: {
           toolkits: ComposioToolkit[];
           nextCursor?: string | null;
+          configured?: boolean;
         } = await res.json();
+        setNotConfigured(data.configured === false);
 
         setToolkits((prev) =>
           append ? [...prev, ...(data.toolkits ?? [])] : (data.toolkits ?? []),
@@ -337,6 +345,13 @@ function ConnectAppsStep({
             />
           ))}
         </div>
+      ) : notConfigured ? (
+        <p
+          className="rounded-xl border border-border bg-secondary/30 p-4 text-sm text-muted-foreground"
+          data-testid="onboarding-apps-not-configured"
+        >
+          {copy.notConfigured}
+        </p>
       ) : (
         <div className="flex flex-col gap-3">
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 max-h-[420px] overflow-y-auto pr-1">

@@ -41,8 +41,14 @@ set up a project by hand:
    `pgvector`). The integration sets `DATABASE_URL`, which the app reads when
    `POSTGRES_URL` is absent. Any other Postgres with pgvector works too — set
    `POSTGRES_URL` yourself, using the pooled connection string.
-3. Set `BETTER_AUTH_SECRET` to a long random string.
+3. Set `BETTER_AUTH_SECRET` to a long random string, and `AI_GATEWAY_API_KEY`
+   to a key from [vercel.com/ai-gateway](https://vercel.com/ai-gateway).
 4. Deploy.
+
+The Deploy button also lists `COMPOSIO_API_KEY`, `TENSORX_API_KEY` and
+`ASSEMBLYAI_API_KEY`, pre-filled with `optional`, and pre-fills
+`AI_GATEWAY_API_KEY` with `required`. Vercel's form only has required fields;
+the app treats those words as "not set".
 
 What happens without further configuration:
 
@@ -51,9 +57,14 @@ What happens without further configuration:
   Preview deployments migrate whichever database their `POSTGRES_URL` points
   at — give the Preview environment its own database if you use previews to
   try out upgrades.
-- **Models need no key.** On Vercel the AI Gateway authenticates with the
-  deployment's OIDC token and bills your Vercel team. Set `AI_GATEWAY_API_KEY`
-  only if you want to bill a different account.
+- **One key serves every model**, realtime voice included. Without
+  `AI_GATEWAY_API_KEY` a Vercel deployment still reaches the gateway through
+  its OIDC token. Either way the gateway bills your Vercel team: new teams may
+  be asked for a payment method before the free monthly credits unlock, and
+  until then the chat says the gateway refused the request. The free credits
+  cover only a subset of models ([the list](https://vercel.com/ai-gateway/models?freeTier=true));
+  any other model needs purchased AI Gateway credits, and the chat says so
+  when you pick one. TensorX works independently of the gateway.
 - **It fits the free Hobby plan.** Functions run for at most 300 seconds there,
   and the chat route is set to that limit; a turn wraps up a minute before it
   so the answer is always saved. On Pro, very long reasoning turns benefit from

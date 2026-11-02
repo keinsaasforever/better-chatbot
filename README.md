@@ -16,13 +16,23 @@ and give agents a place to work — on infrastructure you control.
 
 ## Deploy to Vercel
 
-[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fkeinsaasforever%2Fbetter-chatbot&project-name=better-chatbot&repository-name=better-chatbot&root-directory=apps%2Fweb&env=BETTER_AUTH_SECRET&envDescription=Session%20signing%20key%3A%20any%20long%20random%20string%2C%20e.g.%20the%20output%20of%20%60openssl%20rand%20-base64%2032%60.&envLink=https%3A%2F%2Fgithub.com%2Fkeinsaasforever%2Fbetter-chatbot%2Fblob%2Fmain%2Fdocs%2Fself-hosting.md%23vercel&stores=%5B%7B%22type%22%3A%22integration%22%2C%22integrationSlug%22%3A%22neon%22%2C%22productSlug%22%3A%22neon%22%2C%22protocol%22%3A%22storage%22%7D%5D)
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fkeinsaasforever%2Fbetter-chatbot&project-name=better-chatbot&repository-name=better-chatbot&root-directory=apps%2Fweb&env=BETTER_AUTH_SECRET%2CAI_GATEWAY_API_KEY%2CCOMPOSIO_API_KEY%2CTENSORX_API_KEY%2CASSEMBLYAI_API_KEY&envDefaults=%7B%22AI_GATEWAY_API_KEY%22%3A%22required%22%2C%22COMPOSIO_API_KEY%22%3A%22optional%22%2C%22TENSORX_API_KEY%22%3A%22optional%22%2C%22ASSEMBLYAI_API_KEY%22%3A%22optional%22%7D&envDescription=Required%3A%20BETTER_AUTH_SECRET%20%28any%20long%20random%20string%2C%20e.g.%20openssl%20rand%20-base64%2032%29%20and%20AI_GATEWAY_API_KEY%20%28vercel.com%2Fai-gateway%3B%20serves%20every%20model%2C%20including%20realtime%20voice%29.%20Optional%3A%20COMPOSIO_API_KEY%20%28connected%20apps%29%2C%20TENSORX_API_KEY%20%28EU-hosted%20models%29%2C%20ASSEMBLYAI_API_KEY%20%28voice%20transcription%29.%20Leave%20an%20optional%20field%20at%20optional%20to%20switch%20the%20feature%20off%3B%20add%20it%20later%20under%20Settings%2C%20Environment%20Variables.&envLink=https%3A%2F%2Fgithub.com%2Fkeinsaasforever%2Fbetter-chatbot%2Fblob%2Fmain%2Fdocs%2Fself-hosting.md%23vercel&stores=%5B%7B%22type%22%3A%22integration%22%2C%22integrationSlug%22%3A%22neon%22%2C%22productSlug%22%3A%22neon%22%2C%22protocol%22%3A%22storage%22%7D%5D)
 
-One click, one value. The button clones the repository, provisions a Neon
-Postgres database, and asks for a single secret — any long random string
-(`openssl rand -base64 32`). The schema is created during the build, and models
-run through the Vercel AI Gateway on your Vercel account with no API key. Open
-the deployment and create an account; the first one becomes the administrator.
+Two required values, a few optional ones. The button clones the repository,
+provisions a Neon Postgres database, and asks for:
+
+| Variable | |
+| --- | --- |
+| `BETTER_AUTH_SECRET` | **Required.** Any long random string (`openssl rand -base64 32`). |
+| `AI_GATEWAY_API_KEY` | **Required.** From [vercel.com/ai-gateway](https://vercel.com/ai-gateway). Serves every model in the catalog, including realtime voice. |
+| `COMPOSIO_API_KEY` | Optional. Lets users connect Gmail, Slack, GitHub and more. [Free key](https://platform.composio.dev) |
+| `TENSORX_API_KEY` | Optional. EU-hosted models from our [partner](#partners) TensorX. |
+| `ASSEMBLYAI_API_KEY` | Optional. Voice transcription via [AssemblyAI](https://www.assemblyai.com/). |
+
+The optional fields are pre-filled with `optional`; leave them like that and the
+feature stays off. You can add any key later under Settings → Environment
+Variables and redeploy. The schema is created during the build. Open the
+deployment and create an account; the first one becomes the administrator.
 
 Details and optional features: [docs/self-hosting.md](docs/self-hosting.md#vercel).
 
