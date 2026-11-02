@@ -22,7 +22,7 @@ const AVATAR_BUCKET = process.env.SUPABASE_AVATAR_BUCKET || "avatars";
 const ATTACHMENT_BUCKET =
   process.env.SUPABASE_ATTACHMENT_BUCKET || "attachments";
 const AI_GENERATED_BUCKET =
-  process.env.SUPABASE_AI_GENERATED_BUCKET || "Gemini Images";
+  process.env.SUPABASE_AI_GENERATED_BUCKET || "ai-generated";
 
 // Allow build without Supabase config (will fail at runtime if actually used)
 const supabase =

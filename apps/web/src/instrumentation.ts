@@ -3,8 +3,11 @@ import { registerObservability } from "./lib/observability/register";
 
 export async function register() {
   // Before anything reads them: "skip" from the deploy form means "not set".
-  const { clearPlaceholderEnv } = await import("./lib/env-placeholders");
+  const { applyEnvAliases, clearPlaceholderEnv } = await import(
+    "./lib/env-placeholders"
+  );
   clearPlaceholderEnv();
+  applyEnvAliases();
 
   // OpenTelemetry must be registered before the Vercel/CI guard below —
   // everything after it is skipped in production, so registering there would
