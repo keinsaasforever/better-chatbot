@@ -22,3 +22,20 @@ export function clearPlaceholderEnv(
     if (value && PLACEHOLDERS.has(value)) delete env[key];
   }
 }
+
+/**
+ * Names integrations provision for a variable the app reads under another
+ * name. Supabase's Vercel integration now sets SUPABASE_SECRET_KEY where the
+ * app expects SUPABASE_SERVICE_ROLE_KEY; an explicitly set value wins.
+ */
+const ENV_ALIASES: Record<string, string> = {
+  SUPABASE_SERVICE_ROLE_KEY: "SUPABASE_SECRET_KEY",
+};
+
+export function applyEnvAliases(
+  env: Record<string, string | undefined> = process.env,
+) {
+  for (const [name, alias] of Object.entries(ENV_ALIASES)) {
+    if (!env[name]?.trim() && env[alias]?.trim()) env[name] = env[alias];
+  }
+}

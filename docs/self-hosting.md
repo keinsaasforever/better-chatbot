@@ -37,10 +37,12 @@ set up a project by hand:
 
 1. Import the repository and set **Root Directory** to `apps/web`. The
    `vercel.json` there holds the monorepo install and build commands.
-2. Add a Postgres database from the Vercel Marketplace (Neon works; it ships
-   `pgvector`). The integration sets `DATABASE_URL`, which the app reads when
-   `POSTGRES_URL` is absent. Any other Postgres with pgvector works too — set
-   `POSTGRES_URL` yourself, using the pooled connection string.
+2. Under **Storage**, connect **Supabase** from the Vercel Marketplace. One
+   free project serves both the database (with `pgvector`) and file uploads,
+   and the integration sets every variable the app needs. Any other Postgres
+   with pgvector works for the database too (Neon sets `DATABASE_URL`, which
+   the app also reads); uploads then need Supabase Storage on its own, see
+   [Storage](#storage).
 3. Set `BETTER_AUTH_SECRET` to a long random string, and `AI_GATEWAY_API_KEY`
    to a key from [vercel.com/ai-gateway](https://vercel.com/ai-gateway).
 4. Deploy.
@@ -109,11 +111,19 @@ Running from a fork or a clone instead? Pull from
 File uploads go to Supabase Storage. Without it the app runs fine — attachments,
 avatars and generated images are simply unavailable.
 
-1. Create a Supabase project (the free tier is enough; you are using it for
-   object storage, not as your database unless you want to).
-2. Create three buckets: `attachments` (private), `avatars` (public) and
-   `ai-generated` (public).
-3. Set `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` and `NEXT_PUBLIC_SUPABASE_URL`.
+On Vercel with the Supabase integration there is nothing to do: the
+integration sets the variables, and the build creates the three buckets.
+Otherwise:
+
+1. Create a Supabase project (the free tier is enough; you can use it for
+   object storage only, or as your database too).
+2. Set `SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_URL` and the project's secret key
+   as `SUPABASE_SERVICE_ROLE_KEY` (`SUPABASE_SECRET_KEY` is read too).
+3. The Vercel build creates the buckets `attachments` (private), `avatars` and
+   `ai-generated` (public). Elsewhere, create them in the Supabase dashboard.
+
+Free Supabase projects pause after a week without activity; restore them from
+the Supabase dashboard.
 
 `NEXT_PUBLIC_SUPABASE_URL` must match `SUPABASE_URL`. The browser uses it to
 build file URLs and to run resumable (TUS) uploads, which is how large files

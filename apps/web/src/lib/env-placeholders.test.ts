@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { clearPlaceholderEnv } from "./env-placeholders";
+import { applyEnvAliases, clearPlaceholderEnv } from "./env-placeholders";
 
 describe("clearPlaceholderEnv", () => {
   it("unsets optional keys left at the deploy form's placeholder", () => {
@@ -27,5 +27,24 @@ describe("clearPlaceholderEnv", () => {
     };
     clearPlaceholderEnv(env);
     expect(env.BETTER_AUTH_SECRET).toBe("skip");
+  });
+});
+
+describe("applyEnvAliases", () => {
+  it("reads Supabase's new secret key name as the service role key", () => {
+    const env: Record<string, string | undefined> = {
+      SUPABASE_SECRET_KEY: "sb_secret_x",
+    };
+    applyEnvAliases(env);
+    expect(env.SUPABASE_SERVICE_ROLE_KEY).toBe("sb_secret_x");
+  });
+
+  it("keeps an explicitly set service role key", () => {
+    const env: Record<string, string | undefined> = {
+      SUPABASE_SERVICE_ROLE_KEY: "explicit",
+      SUPABASE_SECRET_KEY: "sb_secret_x",
+    };
+    applyEnvAliases(env);
+    expect(env.SUPABASE_SERVICE_ROLE_KEY).toBe("explicit");
   });
 });
