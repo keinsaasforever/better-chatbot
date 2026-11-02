@@ -1624,6 +1624,12 @@
       "connectDone": "Done, save session",
       "connectFailed": "Could not open a browser for this site.",
       "sessionStored": "Session saved."
+    },
+    "teamsPlan": {
+      "title": "Join our Teams plan",
+      "description": "Organizations with shared workspaces, member management and per-member AI budgets are part of the keinsaas Navigator Teams plan, for €8 per user.",
+      "cta": "See the Teams plan",
+      "dismiss": "Not now"
     }
   },
   "Referral": {

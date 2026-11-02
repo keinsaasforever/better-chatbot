@@ -22,8 +22,10 @@ describe("handleError", () => {
     const refusal = new Error(
       "Free tier users do not have access to this model. Upgrade to paid credits for unrestricted access.",
     );
-    expect(handleError(new Error("stream", { cause: refusal }))).toMatch(
-      /needs paid AI Gateway credits/,
+    const text = handleError(new Error("stream", { cause: refusal }));
+    expect(text).toMatch(/needs paid AI Gateway credits/);
+    expect(text).toContain(
+      "https://vercel.com/ai-gateway/models?freeTier=true",
     );
   });
 

@@ -1624,6 +1624,12 @@
       "connectDone": "Listo, guardar sesión",
       "connectFailed": "No se pudo abrir un navegador para este sitio.",
       "sessionStored": "Sesión guardada."
+    },
+    "teamsPlan": {
+      "title": "Únete a nuestro plan Teams",
+      "description": "Las organizaciones con espacios de trabajo compartidos, gestión de miembros y presupuestos de IA por miembro forman parte del plan Teams de keinsaas Navigator, por 8 € por usuario.",
+      "cta": "Ver el plan Teams",
+      "dismiss": "Ahora no"
     }
   },
   "Referral": {

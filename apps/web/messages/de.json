@@ -1624,6 +1624,12 @@
       "connectDone": "Fertig, Sitzung speichern",
       "connectFailed": "Für diese Website konnte kein Browser geöffnet werden.",
       "sessionStored": "Sitzung gespeichert."
+    },
+    "teamsPlan": {
+      "title": "Werde Teil unseres Teams-Plans",
+      "description": "Organisationen mit gemeinsamen Workspaces, Mitgliederverwaltung und KI-Budgets pro Mitglied gibt es im Teams-Plan von keinsaas Navigator, für 8 € pro Nutzer.",
+      "cta": "Teams-Plan ansehen",
+      "dismiss": "Nicht jetzt"
     }
   },
   "Referral": {

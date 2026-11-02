@@ -25,6 +25,16 @@ export function mergeSystemPrompt(
   return filteredPrompts.join("\n\n");
 }
 
+const FREE_TIER_MODELS_URL =
+  "https://vercel.com/ai-gateway/models?freeTier=true&features=vision%2Creasoning%2Ctool-use%2Cfile-input";
+
+/**
+ * Appended to chat errors. Empty here; the community edition, which runs on
+ * the Vercel AI Gateway's free credits by default, points to the free-tier
+ * model list instead (see REWRITES in scripts/oss-sync/manifest.ts).
+ */
+const MODEL_ACCESS_HINT = ` If you use the Vercel AI Gateway's free credits, the model may not be included in them. Free-tier models: ${FREE_TIER_MODELS_URL}`;
+
 /** The error, or anything in its `cause` chain, that matches. */
 function findInChain(
   error: unknown,
@@ -51,7 +61,7 @@ export function handleError(error: unknown) {
     logger.warn(
       `Chat AI Gateway free-tier refusal: ${(freeTierRefusal as Error).message}`,
     );
-    return "This model needs paid AI Gateway credits. Pick one of the free-tier models listed at vercel.com/ai-gateway/models?freeTier=true, or top up credits in your Vercel dashboard.";
+    return `This model needs paid AI Gateway credits. Pick one of the free-tier models (${FREE_TIER_MODELS_URL}), or top up credits in your Vercel dashboard.`;
   }
   // The gateway refused the request itself: no key and no OIDC token, or a
   // team whose AI Gateway is not activated (Vercel asks for a payment method
@@ -66,16 +76,16 @@ export function handleError(error: unknown) {
     logger.warn(
       `Chat AI Gateway refusal: ${(gatewayRefusal as Error).message}`,
     );
-    return "The AI Gateway refused the request. Open AI Gateway in your Vercel dashboard and activate it for this team (Vercel may ask for a payment method to unlock the free credits), or set AI_GATEWAY_API_KEY.";
+    return `The AI Gateway refused the request. Open AI Gateway in your Vercel dashboard and activate it for this team (Vercel may ask for a payment method to unlock the free credits), or set AI_GATEWAY_API_KEY.${MODEL_ACCESS_HINT}`;
   }
   if (LoadAPIKeyError.isInstance(error)) {
     logger.warn(`Chat API key error: ${error.name}`);
-    return "The selected model is not configured. Choose another model and try again.";
+    return `The selected model is not configured. Choose another model and try again.${MODEL_ACCESS_HINT}`;
   }
   logger.error(error);
   const name = error instanceof Error ? error.name : "UnknownError";
   logger.error(`Route Error: ${name}`);
-  return "The response could not be completed. Your message is saved; please try again.";
+  return `The response could not be completed. Your message is saved; please try again.${MODEL_ACCESS_HINT}`;
 }
 
 export function extractInProgressToolPart(message: UIMessage): ToolUIPart[] {

@@ -73,7 +73,7 @@ const staticModels = {
   // same MCP server chained correctly on kimi-k3 (4 steps) and claude-sonnet-5
   // (3 steps), so the loop was never the problem — the model was.
   Navigator: {
-    "Base model": "zai/glm-5.3-flash",
+    "Base model": "alibaba/qwen3.6-plus",
   },
   // Direct TensorX path (see `resolveTensorXModel`) — not an AI Gateway group.
   TensorX: tensorxProviderModelIds,
@@ -336,7 +336,7 @@ export const defaultNavigatorScreenVideoModelId =
  */
 export const projectBrainModelId = staticModels.Navigator["Base model"];
 
-const fallbackModel = staticModels.openai["gpt-5.6-terra"]; // "openai/gpt-5.6-terra"
+const fallbackModel = staticModels.Navigator["Base model"];
 
 export const customModelProvider = {
   modelsInfo: Object.entries(allModels).map(([provider, models]) => ({
