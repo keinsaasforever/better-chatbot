@@ -88,7 +88,11 @@ async function fetchToolkitsBySlug(
 export const GET = withAuth(async (req, session) => {
   // No Composio key on this instance: there is nothing to list or connect.
   if (!isComposioConfigured()) {
-    return NextResponse.json({ toolkits: [], nextCursor: null });
+    return NextResponse.json({
+      toolkits: [],
+      nextCursor: null,
+      configured: false,
+    });
   }
   try {
     const { searchParams } = new URL(req.url);

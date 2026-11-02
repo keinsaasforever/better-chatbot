@@ -44,6 +44,10 @@ set up a project by hand:
 3. Set `BETTER_AUTH_SECRET` to a long random string.
 4. Deploy.
 
+The Deploy button also lists `AI_GATEWAY_API_KEY`, `COMPOSIO_API_KEY` and
+`TENSORX_API_KEY`, pre-filled with `skip`. Vercel's form only has required
+fields; the app treats `skip` as not set.
+
 What happens without further configuration:
 
 - **Migrations run during the build**, before the app is compiled. A build
@@ -53,7 +57,10 @@ What happens without further configuration:
   try out upgrades.
 - **Models need no key.** On Vercel the AI Gateway authenticates with the
   deployment's OIDC token and bills your Vercel team. Set `AI_GATEWAY_API_KEY`
-  only if you want to bill a different account.
+  only if you want to bill a different account. Open **AI Gateway** in the
+  Vercel dashboard once before the first chat: new teams may be asked for a
+  payment method before the free monthly credits unlock, and until then the
+  chat says the gateway refused the request.
 - **It fits the free Hobby plan.** Functions run for at most 300 seconds there,
   and the chat route is set to that limit; a turn wraps up a minute before it
   so the answer is always saved. On Pro, very long reasoning turns benefit from

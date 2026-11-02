@@ -16,13 +16,27 @@ and give agents a place to work — on infrastructure you control.
 
 ## Deploy to Vercel
 
-[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fkeinsaasforever%2Fbetter-chatbot&project-name=better-chatbot&repository-name=better-chatbot&root-directory=apps%2Fweb&env=BETTER_AUTH_SECRET&envDescription=Session%20signing%20key%3A%20any%20long%20random%20string%2C%20e.g.%20the%20output%20of%20%60openssl%20rand%20-base64%2032%60.&envLink=https%3A%2F%2Fgithub.com%2Fkeinsaasforever%2Fbetter-chatbot%2Fblob%2Fmain%2Fdocs%2Fself-hosting.md%23vercel&stores=%5B%7B%22type%22%3A%22integration%22%2C%22integrationSlug%22%3A%22neon%22%2C%22productSlug%22%3A%22neon%22%2C%22protocol%22%3A%22storage%22%7D%5D)
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fkeinsaasforever%2Fbetter-chatbot&project-name=better-chatbot&repository-name=better-chatbot&root-directory=apps%2Fweb&env=BETTER_AUTH_SECRET%2CAI_GATEWAY_API_KEY%2CCOMPOSIO_API_KEY%2CTENSORX_API_KEY&envDefaults=%7B%22AI_GATEWAY_API_KEY%22%3A%22skip%22%2C%22COMPOSIO_API_KEY%22%3A%22skip%22%2C%22TENSORX_API_KEY%22%3A%22skip%22%7D&envDescription=BETTER_AUTH_SECRET%20is%20required%3A%20any%20long%20random%20string%20%28openssl%20rand%20-base64%2032%29.%20The%20other%20three%20are%20optional%3B%20leave%20them%20at%20skip%20to%20turn%20the%20feature%20off%2C%20and%20add%20them%20later%20under%20Settings%2C%20Environment%20Variables.&envLink=https%3A%2F%2Fgithub.com%2Fkeinsaasforever%2Fbetter-chatbot%2Fblob%2Fmain%2Fdocs%2Fself-hosting.md%23vercel&stores=%5B%7B%22type%22%3A%22integration%22%2C%22integrationSlug%22%3A%22neon%22%2C%22productSlug%22%3A%22neon%22%2C%22protocol%22%3A%22storage%22%7D%5D)
 
-One click, one value. The button clones the repository, provisions a Neon
-Postgres database, and asks for a single secret — any long random string
-(`openssl rand -base64 32`). The schema is created during the build, and models
-run through the Vercel AI Gateway on your Vercel account with no API key. Open
-the deployment and create an account; the first one becomes the administrator.
+One click, one required value. The button clones the repository, provisions a
+Neon Postgres database, and asks for:
+
+| Variable | |
+| --- | --- |
+| `BETTER_AUTH_SECRET` | **Required.** Any long random string (`openssl rand -base64 32`). |
+| `AI_GATEWAY_API_KEY` | Optional. Without it, models run through the Vercel AI Gateway on your Vercel account. |
+| `COMPOSIO_API_KEY` | Optional. Lets users connect Gmail, Slack, GitHub and more. [Free key](https://platform.composio.dev) |
+| `TENSORX_API_KEY` | Optional. EU-hosted models from our [partner](#partners) TensorX. |
+
+Leave the optional ones at `skip` and the feature stays off; you can add them
+later under Settings → Environment Variables. The schema is created during the
+build. Open the deployment and create an account; the first one becomes the
+administrator.
+
+**Before the first chat:** open **AI Gateway** in your Vercel dashboard once.
+Vercel may ask new teams for a payment method before it unlocks the free monthly
+credits; until then every model request is refused. Or use your own
+`AI_GATEWAY_API_KEY`, or TensorX.
 
 Details and optional features: [docs/self-hosting.md](docs/self-hosting.md#vercel).
 

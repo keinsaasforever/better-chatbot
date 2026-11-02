@@ -1,5 +1,9 @@
 import "server-only";
 import {
+  GatewayAuthenticationError,
+  GatewayForbiddenError,
+} from "@ai-sdk/gateway";
+import {
   LoadAPIKeyError,
   ToolUIPart,
   UIMessage,
@@ -21,7 +25,35 @@ export function mergeSystemPrompt(
   return filteredPrompts.join("\n\n");
 }
 
+/** The error, or anything in its `cause` chain, that matches. */
+function findInChain(
+  error: unknown,
+  match: (candidate: unknown) => boolean,
+): unknown {
+  let current: unknown = error;
+  for (let depth = 0; current && depth < 5; depth++) {
+    if (match(current)) return current;
+    current = (current as { cause?: unknown }).cause;
+  }
+  return undefined;
+}
+
 export function handleError(error: unknown) {
+  // The gateway refused the request itself: no key and no OIDC token, or a
+  // team whose AI Gateway is not activated (Vercel asks for a payment method
+  // before it unlocks the free credits). Retrying cannot help, so say so.
+  const gatewayRefusal = findInChain(
+    error,
+    (e) =>
+      GatewayAuthenticationError.isInstance(e) ||
+      GatewayForbiddenError.isInstance(e),
+  );
+  if (gatewayRefusal) {
+    logger.warn(
+      `Chat AI Gateway refusal: ${(gatewayRefusal as Error).message}`,
+    );
+    return "The AI Gateway refused the request. Open AI Gateway in your Vercel dashboard and activate it for this team (Vercel may ask for a payment method to unlock the free credits), or set AI_GATEWAY_API_KEY.";
+  }
   if (LoadAPIKeyError.isInstance(error)) {
     logger.warn(`Chat API key error: ${error.name}`);
     return "The selected model is not configured. Choose another model and try again.";

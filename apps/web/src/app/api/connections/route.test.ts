@@ -211,7 +211,11 @@ describe("GET /api/connections without a Composio key", () => {
     const res = await GET(request("http://localhost/api/connections"));
 
     expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ toolkits: [], nextCursor: null });
+    expect(await res.json()).toEqual({
+      toolkits: [],
+      nextCursor: null,
+      configured: false,
+    });
     expect(mocks.toolkits).not.toHaveBeenCalled();
     expect(mocks.connectedAccountsList).not.toHaveBeenCalled();
   });
