@@ -90,6 +90,25 @@ Prefer running it directly? See [docs/self-hosting.md](docs/self-hosting.md).
 
 ---
 
+## See it in action
+
+<table>
+<tr>
+<td width="50%" valign="top"><img src="docs/assets/demo-web-search.webp" alt="A chat that searches the web and answers with sources" width="100%" /><br /><sub><b>Web search</b> with sources, right in the chat (with the optional Exa key).</sub></td>
+<td width="50%" valign="top"><img src="docs/assets/demo-chart.webp" alt="A chat that answers with a bar chart" width="100%" /><br /><sub><b>Charts and tables</b> from a single sentence.</sub></td>
+</tr>
+<tr>
+<td width="50%" valign="top"><img src="docs/assets/demo-code.webp" alt="A chat that runs Python and shows the result as a table" width="100%" /><br /><sub><b>Code execution</b> in a sandbox (optional E2B key), results as an interactive table.</sub></td>
+<td width="50%" valign="top"><img src="docs/assets/demo-agent.webp" alt="Mentioning an agent with @ and getting a researched answer" width="100%" /><br /><sub><b>Agents</b>: mention one with <code>@</code> and it takes over.</sub></td>
+</tr>
+<tr>
+<td width="50%" valign="top"><img src="docs/assets/demo-image.webp" alt="A chat that generates a watercolor image" width="100%" /><br /><sub><b>Image generation</b> inside the conversation.</sub></td>
+<td width="50%" valign="top"><img src="docs/assets/demo-mcp.webp" alt="Connected apps and the catalog of tools to connect" width="100%" /><br /><sub><b>Tools and MCP servers</b>: connect your apps (catalog via the optional Composio integration).</sub></td>
+</tr>
+</table>
+
+---
+
 ## What you get
 
 **Chat that does things.** Streaming conversations with tool calling, file
