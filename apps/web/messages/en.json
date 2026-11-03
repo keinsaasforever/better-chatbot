@@ -2216,5 +2216,12 @@
     "derivedFrom": "Pre-filled from {path}",
     "openDashboard": "Open dashboard",
     "openDashboardFailed": "Couldn't open the dashboard. Try again in a moment."
+  },
+  "Updates": {
+    "title": "Turn on automatic updates",
+    "description": "Get an email whenever a new version of better-chatbot is out. GitHub opens a prepared file in your repository; just click Commit changes.",
+    "turnOn": "Turn on",
+    "later": "Later",
+    "menuItem": "Turn on automatic updates"
   }
 }

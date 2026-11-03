@@ -13,6 +13,7 @@ import {
 } from "ui/dialog";
 
 import { appStore } from "@/app/store";
+import { UpdatesNotice } from "./updates";
 
 /**
  * The Teams plan is set up together with keinsaas on a short call: billing,
@@ -26,7 +27,12 @@ const TEAMS_PLAN_BOOKING_URL = "https://calendar.app.google/aLE4gKQ664c1X4HS9";
  * "Create Organization": team workspaces are a hosted Teams plan.
  */
 export function CloudPopups() {
-  return <TeamsPlanDialog />;
+  return (
+    <>
+      <TeamsPlanDialog />
+      <UpdatesNotice />
+    </>
+  );
 }
 
 function TeamsPlanDialog() {

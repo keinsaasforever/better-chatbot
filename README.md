@@ -1,5 +1,7 @@
 <div align="center">
 
+<img src="docs/assets/navigator-banner.webp" alt="keinsaas Navigator: your operating system for the AI era. Powered by agents, skills, MCP and workflows." width="100%" />
+
 # better-chatbot
 
 **An open-source AI chat and agent platform you can host yourself.**
@@ -43,9 +45,12 @@ Free Supabase projects pause after a week without use. If your app stops
 loading after a quiet week, open the project in the Supabase dashboard and
 click **Restore**.
 
-**Updates come to you.** Once a week your copy checks for a new version. When
-there is one, GitHub emails you a short guide: try the preview Vercel builds,
-then click **Merge**. Nothing changes in your live app until you do.
+**Updates come to you.** After your first sign-in, the app asks once to
+**Turn on** automatic updates: it opens GitHub with the update check ready,
+and you click **Commit changes**. From then on your copy checks every week.
+When there is a new version, GitHub emails you a short guide: try the preview
+Vercel builds, then click **Merge**. Nothing changes in your live app until
+you do.
 
 Details and optional features: [docs/self-hosting.md](docs/self-hosting.md#vercel).
 
@@ -114,8 +119,13 @@ Self-hosted instances can run stdio servers; the desktop app runs them locally.
 
 **Voice.** Realtime voice conversations through the gateway, plus transcription.
 
-**Desktop app.** An Electron build that adds local MCP servers, filesystem
-access, and the system keychain.
+**Desktop app (beta for self-hosting).** The keinsaas Navigator desktop app
+([download at keinsaas.com](https://keinsaas.com)) adds local (stdio) MCP servers, which a server on Vercel cannot run, plus
+native notifications. On first launch it asks where to connect: pick **My own
+server** and enter your instance's address, e.g. `https://my-chatbot.vercel.app`.
+Connecting it to a self-hosted instance is in beta; tell us in
+[Discord](https://discord.gg/9dwdAYKBPp) what works and what does not. You can
+switch servers any time under **Change Server…** in the app menu.
 
 **Model routing.** Pick a model per message, or let the router choose from the
 catalog based on the task.

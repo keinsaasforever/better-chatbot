@@ -1,7 +1,11 @@
 import { Menu, type MenuItemConstructorOptions, app, shell } from "electron";
 import { checkForUpdatesNow } from "./auto-updater.js";
 
-export function createApplicationMenu(): void {
+export function createApplicationMenu(server: {
+  /** The host the app is connected to, shown in the menu. */
+  host: string | null;
+  onChange: () => void;
+}): void {
   const isMac = process.platform === "darwin";
 
   // Windows and Linux show an empty panel unless the fields are supplied, and
@@ -11,6 +15,14 @@ export function createApplicationMenu(): void {
     applicationName: "Keinsaas Navigator",
     applicationVersion: app.getVersion(),
   });
+
+  // Which server the app talks to, and the way back to the picker.
+  const serverItems: MenuItemConstructorOptions[] = [
+    ...(server.host
+      ? [{ label: `Connected to ${server.host}`, enabled: false }]
+      : []),
+    { label: "Change Server…", click: server.onChange },
+  ];
 
   const template: MenuItemConstructorOptions[] = [
     ...(isMac
@@ -25,6 +37,8 @@ export function createApplicationMenu(): void {
                   void checkForUpdatesNow("manual");
                 },
               },
+              { type: "separator" as const },
+              ...serverItems,
               { type: "separator" as const },
               { role: "services" as const },
               { type: "separator" as const },
@@ -89,6 +103,7 @@ export function createApplicationMenu(): void {
             void checkForUpdatesNow("manual");
           },
         },
+        ...(isMac ? [] : [{ type: "separator" as const }, ...serverItems]),
       ],
     },
   ];

@@ -2216,5 +2216,12 @@
     "derivedFrom": "Vorausgefüllt aus {path}",
     "openDashboard": "Dashboard öffnen",
     "openDashboardFailed": "Das Dashboard konnte nicht geöffnet werden. Versuche es gleich noch einmal."
+  },
+  "Updates": {
+    "title": "Automatische Updates einschalten",
+    "description": "Bekomme eine E-Mail, sobald es eine neue Version von better-chatbot gibt. GitHub öffnet eine vorbereitete Datei in deinem Repository; klick einfach auf Commit changes.",
+    "turnOn": "Einschalten",
+    "later": "Später",
+    "menuItem": "Automatische Updates einschalten"
   }
 }

@@ -2216,5 +2216,12 @@
     "derivedFrom": "已根据 {path} 预填",
     "openDashboard": "打开仪表板",
     "openDashboardFailed": "无法打开仪表板。请稍后重试。"
+  },
+  "Updates": {
+    "title": "开启自动更新",
+    "description": "每当 better-chatbot 发布新版本时，你都会收到一封邮件。GitHub 会在你的仓库中打开一个准备好的文件，只需点击 Commit changes。",
+    "turnOn": "开启",
+    "later": "稍后",
+    "menuItem": "开启自动更新"
   }
 }

@@ -2216,5 +2216,12 @@
     "derivedFrom": "{path} から事前入力",
     "openDashboard": "ダッシュボードを開く",
     "openDashboardFailed": "ダッシュボードを開けませんでした。少し待ってからもう一度お試しください。"
+  },
+  "Updates": {
+    "title": "自動アップデートを有効にする",
+    "description": "better-chatbot の新しいバージョンが出るたびにメールでお知らせします。GitHub がリポジトリに準備済みのファイルを開くので、Commit changes をクリックするだけです。",
+    "turnOn": "有効にする",
+    "later": "後で",
+    "menuItem": "自動アップデートを有効にする"
   }
 }

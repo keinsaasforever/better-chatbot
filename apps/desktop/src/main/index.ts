@@ -30,25 +30,32 @@ import {
   recordDesktopError,
   shutdownDesktopTelemetry,
 } from "./otel.js";
+import { resolveStartupServer } from "./server-config.js";
+import {
+  changeServer,
+  openServerPickerWindow,
+  registerServerPickerIpc,
+} from "./server-picker.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const appIconPath = resolveAppIconPath();
 
 const isDev = process.env.NODE_ENV === "development" || !app.isPackaged;
 
-function resolveWebUrl(): string {
-  if (isDev) {
-    const port = process.env.PORT || "3000";
-    return `http://localhost:${port}`;
-  }
-  if (process.env.KEINSAAS_WEB_URL) {
-    return process.env.KEINSAAS_WEB_URL;
-  }
-  return "https://app.keinsaas.com";
-}
-
-const webUrl = resolveWebUrl();
-const appOrigin = new URL(webUrl).origin;
+// The cloud address is baked in at build time (scripts/build-main.mjs). It is
+// what the first-run picker offers as "keinsaas Navigator (cloud)", not a
+// fixed destination: a self-hosted better-chatbot can be chosen instead.
+const cloudUrl = process.env.KEINSAAS_WEB_URL || "https://app.keinsaas.com";
+const userDataDir = app.getPath("userData");
+const startup = resolveStartupServer({
+  isDev,
+  devUrl: `http://localhost:${process.env.PORT || "3000"}`,
+  cloudUrl,
+  userDataDir,
+});
+/** Null on a first run, while the picker is open. */
+const webUrl = "url" in startup ? startup.url : null;
+const appOrigin = webUrl ? new URL(webUrl).origin : "";
 
 // A `keinsaas://` launch on Windows and Linux starts a second copy of the app
 // whose only job is to forward its argv to the running one. Without the lock
@@ -93,7 +100,7 @@ function registerProtocolClient(): void {
   app.setAsDefaultProtocolClient(DESKTOP_PROTOCOL);
 }
 
-async function createMainWindow(): Promise<BrowserWindow> {
+async function createMainWindow(webUrl: string): Promise<BrowserWindow> {
   const preloadPath = path.join(__dirname, "../preload/index.js");
 
   const window = new BrowserWindow({
@@ -198,7 +205,15 @@ async function createMainWindow(): Promise<BrowserWindow> {
 
 /** Creates the window and points every main-window-aware module at it. */
 async function openMainWindow(): Promise<BrowserWindow> {
-  const window = await createMainWindow();
+  if (!webUrl) {
+    return openServerPickerWindow({
+      userDataDir,
+      cloudUrl,
+      preloadPath: path.join(__dirname, "../preload/index.js"),
+      iconPath: appIconPath,
+    });
+  }
+  const window = await createMainWindow(webUrl);
   setNotificationMainWindow(window);
   setUpdateMainWindow(window);
   setDesktopAuthMainWindow(window);
@@ -219,9 +234,28 @@ async function bootstrap(): Promise<void> {
   registerMcpIpcHandlers();
   registerNotificationHandlers();
   registerUpdateIpcHandlers();
+  createApplicationMenu({
+    host: webUrl ? new URL(webUrl).host : null,
+    onChange: () => changeServer(userDataDir),
+  });
+
+  // First run: nothing that depends on the server starts until one is chosen.
+  // The choice restarts the app (./server-picker.ts).
+  if (!webUrl) {
+    registerServerPickerIpc({ userDataDir, cloudUrl });
+    try {
+      await openMainWindow();
+      initAutoUpdater();
+    } catch (error) {
+      console.error("Desktop startup failed:", error);
+      recordDesktopError("desktop.bootstrap", error);
+      void shutdownDesktopTelemetry().finally(() => app.exit(1));
+    }
+    return;
+  }
+
   registerDesktopAuthIpcHandlers(webUrl);
   registerDownloadHandler(session.defaultSession, appOrigin);
-  createApplicationMenu();
   try {
     await openMainWindow();
     initAutoUpdater();

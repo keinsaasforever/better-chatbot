@@ -2216,5 +2216,12 @@
     "derivedFrom": "Prérempli depuis {path}",
     "openDashboard": "Ouvrir le tableau de bord",
     "openDashboardFailed": "Impossible d'ouvrir le tableau de bord. Réessaie dans un instant."
+  },
+  "Updates": {
+    "title": "Activer les mises à jour automatiques",
+    "description": "Recevez un e-mail dès qu'une nouvelle version de better-chatbot sort. GitHub ouvre un fichier préparé dans votre dépôt ; cliquez simplement sur Commit changes.",
+    "turnOn": "Activer",
+    "later": "Plus tard",
+    "menuItem": "Activer les mises à jour automatiques"
   }
 }
