@@ -1,10 +1,11 @@
 "use client";
 
-import { Building2 } from "lucide-react";
+import { Building2, RefreshCw } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { DropdownMenuItem } from "ui/dropdown-menu";
 
 import { appStore } from "@/app/store";
+import { useUpdateSetupUrl } from "./updates";
 
 /**
  * Community implementation of the client-side edition seam.
@@ -23,15 +24,27 @@ import { appStore } from "@/app/store";
  */
 export function WorkspaceMenuSection() {
   const tOrg = useTranslations("Organization");
+  const tUpdates = useTranslations("Updates");
+  const updateSetupUrl = useUpdateSetupUrl();
   return (
-    <DropdownMenuItem
-      className="cursor-pointer"
-      onClick={() => appStore.setState({ openTeamsPlan: true })}
-      data-testid="create-organization-menu-item"
-    >
-      <Building2 className="size-4 text-foreground" />
-      <span>{tOrg("createOrganization")}</span>
-    </DropdownMenuItem>
+    <>
+      <DropdownMenuItem
+        className="cursor-pointer"
+        onClick={() => appStore.setState({ openTeamsPlan: true })}
+        data-testid="create-organization-menu-item"
+      >
+        <Building2 className="size-4 text-foreground" />
+        <span>{tOrg("createOrganization")}</span>
+      </DropdownMenuItem>
+      {updateSetupUrl && (
+        <DropdownMenuItem asChild className="cursor-pointer">
+          <a href={updateSetupUrl} target="_blank" rel="noopener noreferrer">
+            <RefreshCw className="size-4 text-foreground" />
+            <span>{tUpdates("menuItem")}</span>
+          </a>
+        </DropdownMenuItem>
+      )}
+    </>
   );
 }
 

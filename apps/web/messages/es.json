@@ -2216,5 +2216,12 @@
     "derivedFrom": "Rellenado a partir de {path}",
     "openDashboard": "Abrir panel",
     "openDashboardFailed": "No se pudo abrir el panel. Inténtalo de nuevo en un momento."
+  },
+  "Updates": {
+    "title": "Activar las actualizaciones automáticas",
+    "description": "Recibe un correo cada vez que salga una nueva versión de better-chatbot. GitHub abre un archivo preparado en tu repositorio; solo haz clic en Commit changes.",
+    "turnOn": "Activar",
+    "later": "Más tarde",
+    "menuItem": "Activar las actualizaciones automáticas"
   }
 }

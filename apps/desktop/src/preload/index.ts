@@ -30,6 +30,12 @@ type DesktopBrowserSignInFailure = {
 contextBridge.exposeInMainWorld("desktop", {
   platform: process.platform,
   getVersion: () => ipcRenderer.invoke("desktop:get-version"),
+  // Used by the first-run server picker only; the main process refuses the
+  // call from any other window.
+  server: {
+    choose: (input: { mode: "cloud" | "own"; url?: string }) =>
+      ipcRenderer.invoke("server:choose", input),
+  },
   mcp: {
     listTools: (config: DesktopMcpConfig) =>
       ipcRenderer.invoke("mcp:list-tools", { config }),

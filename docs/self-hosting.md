@@ -83,9 +83,18 @@ integrations for Upstash (`KV_URL` — resumable streams) and Inngest
 
 ## Updating
 
-A copy made with the Deploy button has no link back to this repository, so it
-ships a workflow that brings updates to it
-(`.github/workflows/update-from-upstream.yml`):
+A copy made with the Deploy button has no link back to this repository. A
+small workflow brings updates to it
+(`.github/workflows/update-from-upstream.yml`).
+
+**Turn it on once.** Vercel copies everything except workflow files, so the
+app adds this one for you: after you sign in as the admin, a card asks to
+**Turn on** automatic updates (it is also in the workspace menu as **Turn on
+automatic updates**). It opens GitHub with the file filled in; click **Commit
+changes**. That commit also redeploys your app, which is harmless. (Prefer to
+do it by hand? Copy the file from this repository to the same path in yours.)
+
+From then on:
 
 1. Every Monday, or when you run it from **Actions → Check for better-chatbot
    updates → Run workflow**, it checks for a new version.

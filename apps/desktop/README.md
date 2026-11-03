@@ -1,9 +1,22 @@
 # Keinsaas Navigator desktop
 
-Electron shell that loads the deployed web app (`https://app.keinsaas.com`, or
-`http://localhost:3000` in development) and adds what a browser cannot: local
-stdio MCP servers, native notifications, auto-updates, and a Stripe checkout
-window.
+Electron shell that loads the deployed web app and adds what a browser cannot:
+local stdio MCP servers, native notifications, auto-updates, and a Stripe
+checkout window.
+
+## Which server it loads
+
+One build serves both editions. On a first run the app asks where to connect:
+keinsaas Navigator in the cloud (`https://app.keinsaas.com`, baked in by
+`scripts/build-main.mjs` from `KEINSAAS_WEB_URL`), or a self-hosted
+better-chatbot (beta). The choice is stored in `<userData>/server.json`;
+**Change Server…** in the app menu clears it and shows the picker again.
+Installs from before the picker had cloud browser data and are kept on the
+cloud without asking. A custom server is accepted only over https (or
+`http://localhost`) and only if `/api/auth/ok` answers `{ ok: true }`. Only the
+picker window may change the server, never a loaded page
+(`src/main/server-picker.ts`). In development it is always
+`http://localhost:3000`.
 
 ```sh
 pnpm --filter desktop dev        # web (SKIP_DB_MIGRATE=1) + electron

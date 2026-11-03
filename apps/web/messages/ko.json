@@ -2216,5 +2216,12 @@
     "derivedFrom": "{path}에서 미리 채움",
     "openDashboard": "대시보드 열기",
     "openDashboardFailed": "대시보드를 열지 못했습니다. 잠시 후 다시 시도하세요."
+  },
+  "Updates": {
+    "title": "자동 업데이트 켜기",
+    "description": "better-chatbot의 새 버전이 나올 때마다 이메일을 받으세요. GitHub가 저장소에 준비된 파일을 열면 Commit changes만 클릭하면 됩니다.",
+    "turnOn": "켜기",
+    "later": "나중에",
+    "menuItem": "자동 업데이트 켜기"
   }
 }

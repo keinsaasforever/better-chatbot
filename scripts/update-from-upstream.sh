@@ -7,8 +7,9 @@
 # applies it with a three-way merge: changes made in this copy are kept, and
 # a clash with an upstream change is reported rather than overwritten.
 #
-# Run by .github/workflows/update-from-upstream.yml. Writes its outcome as
-# key=value lines to $GITHUB_OUTPUT (or stdout):
+# Run by .github/workflows/update-from-upstream.yml, before publish-update.sh.
+# Writes its outcome as key=value lines to $OUT (default: $GITHUB_OUTPUT, or
+# stdout):
 #   status   up-to-date | ready | conflict | unknown-base | exists
 #   branch, version, latest   for status=ready
 #   notes    path of a file with the list of changes
@@ -18,7 +19,7 @@ set -euo pipefail
 UPSTREAM_URL="${UPSTREAM_URL:-https://github.com/keinsaasforever/better-chatbot.git}"
 UPSTREAM_BRANCH="${UPSTREAM_BRANCH:-main}"
 REMOTE="${REMOTE:-origin}"
-OUT="${GITHUB_OUTPUT:-/dev/stdout}"
+OUT="${OUT:-${GITHUB_OUTPUT:-/dev/stdout}}"
 TRAILER="Updated-To"
 
 say() { echo "$1=$2" >> "$OUT"; }
@@ -30,17 +31,32 @@ latest=$(git rev-parse "refs/upstream/$UPSTREAM_BRANCH")
 # Which upstream version is this copy at? In order of confidence:
 #   1. the trailer an earlier update left behind;
 #   2. shared history, when the copy was made with it (a fork or clone);
-#   3. an upstream commit whose files match this copy's first commit exactly,
-#      which is what a one-click deploy creates.
+#   3. an upstream commit whose files match this copy's first commit, which
+#      is what a one-click deploy creates. Vercel's copy leaves out
+#      .github/workflows (and may leave out .github), so that is not compared.
 base=$(git log --format=%B HEAD |
   sed -n "s/^$TRAILER: \([0-9a-f]\{40\}\)\$/\1/p" | head -n 1)
 if [ -z "$base" ]; then
   base=$(git merge-base HEAD "$latest" 2>/dev/null || true)
 fi
+# A commit's files without .github/workflows; with "bare", without .github.
+signature() {
+  git ls-tree "$1" | grep -v $'\t\.github$' || true
+  if [ "${2:-}" != bare ]; then
+    git ls-tree "$1:.github" 2>/dev/null | grep -v $'\tworkflows$' || true
+  fi
+}
 if [ -z "$base" ]; then
-  root_tree=$(git rev-parse "$(git rev-list --max-parents=0 HEAD | tail -n 1)^{tree}")
-  base=$(git log --format='%H %T' "$latest" |
-    awk -v tree="$root_tree" '$2 == tree { print $1; exit }')
+  root=$(git rev-list --max-parents=0 HEAD | tail -n 1)
+  mode=""
+  git cat-file -e "$root:.github" 2>/dev/null || mode=bare
+  want=$(signature "$root" "$mode" | git hash-object --stdin)
+  for commit in $(git rev-list --first-parent "$latest"); do
+    if [ "$(signature "$commit" "$mode" | git hash-object --stdin)" = "$want" ]; then
+      base=$commit
+      break
+    fi
+  done
 fi
 if [ -z "$base" ]; then
   say status unknown-base
