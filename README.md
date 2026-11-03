@@ -2,7 +2,9 @@
 
 <img src="docs/assets/navigator-banner.webp" alt="keinsaas Navigator: your operating system for the AI era. Powered by agents, skills, MCP and workflows." width="100%" />
 
-# better-chatbot
+# keinsaas Navigator – Community Edition
+
+<sub>formerly <b>better-chatbot</b></sub>
 
 **An open-source AI chat and agent platform you can host yourself.**
 
@@ -256,7 +258,7 @@ The gateway is the default and covers the whole catalog. You can also:
 ## Partners
 
 **[TensorX](https://tensorx.ai/)** — EU-hosted model inference with zero data
-retention. better-chatbot talks to TensorX directly rather than through a
+retention. The Community Edition talks to TensorX directly rather than through a
 gateway, so prompts go straight to TensorX's EU infrastructure. Create a key at
 [tensorx.ai](https://tensorx.ai/), set `TENSORX_API_KEY`, and its models appear
 in the model picker next to the gateway's. See its
@@ -279,8 +281,10 @@ TensorX is optional. Without the key everything else works as before.
 
 ## This edition, and the hosted one
 
-better-chatbot is the community edition of
-[keinsaas Navigator](https://keinsaas.com). Everything above is here, in full,
+This repository is the Community Edition of
+[keinsaas Navigator](https://keinsaas.com), formerly known as better-chatbot. The
+repository keeps its name, so existing links, forks and automatic updates keep
+working. Everything above is here, in full,
 with no usage caps and no telemetry.
 
 What Navigator adds is what teams need and single users do not: shared team
