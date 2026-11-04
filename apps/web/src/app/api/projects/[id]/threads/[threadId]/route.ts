@@ -8,6 +8,9 @@ import {
   toProjectErrorResponse,
 } from "@/lib/projects/access";
 
+/** Without Inngest the brain run executes after the response, in this function. */
+export const maxDuration = 300;
+
 export async function PUT(
   _request: Request,
   {

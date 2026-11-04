@@ -1,7 +1,8 @@
 import { formatAgentsetError } from "@/lib/agentset/projects";
-import { requireBillingContext } from "@/lib/gate";
 import { pgDb } from "@/lib/db/pg/db.pg";
 import { DocumentTable } from "@/lib/db/pg/schema.pg";
+import { requireBillingContext } from "@/lib/gate";
+import { enqueueProjectBrainRun } from "@/lib/project-brain/enqueue";
 import {
   requireProjectAccess,
   toProjectErrorResponse,
@@ -10,6 +11,9 @@ import { withAuth } from "auth/route-guard";
 import { serverFileStorage } from "lib/file-storage";
 import { generateUUID } from "lib/utils";
 import { NextResponse } from "next/server";
+
+/** Without Inngest the brain run executes after the response, in this function. */
+export const maxDuration = 300;
 
 /**
  * Process uploaded file for RAG ingestion.
@@ -132,9 +136,10 @@ export const POST = withAuth(
       }
 
       // Local RAG fallback
+      let documentId: string;
       try {
         const { processProjectDocument } = await import("@/lib/ai/rag/ingest");
-        await processProjectDocument({
+        ({ documentId } = await processProjectDocument({
           fileBuffer: buffer,
           projectId,
           userId: session.user.id,
@@ -142,7 +147,7 @@ export const POST = withAuth(
           filename,
           contentType: contentType || "application/octet-stream",
           embeddingModel: embeddingModel || "text-embedding-3-small",
-        });
+        }));
       } catch (ingestError) {
         console.error("RAG Ingestion failed:", ingestError);
         return NextResponse.json(
@@ -151,8 +156,25 @@ export const POST = withAuth(
         );
       }
 
+      // The brain learns from the document's local chunks. Best effort: the
+      // upload itself already succeeded.
+      try {
+        await enqueueProjectBrainRun({
+          projectId,
+          actorUserId: actor.userId,
+          sourceType: "document",
+          sourceRef: documentId,
+          sourceScope: `document:${documentId}`,
+          trigger: "document_ingested",
+          idempotencyKey: `upload:${documentId}`,
+        });
+      } catch (brainError) {
+        console.error("[process-upload] brain run not queued", brainError);
+      }
+
       return NextResponse.json({
         success: true,
+        documentId,
         storageKey,
         filename,
         projectId,

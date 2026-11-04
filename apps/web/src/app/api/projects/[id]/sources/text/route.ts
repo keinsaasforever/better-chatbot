@@ -10,6 +10,9 @@ import { TextSourceSchema } from "@/lib/projects/text-source-schema";
 import { generateUUID } from "lib/utils";
 import { NextResponse } from "next/server";
 
+/** Without Inngest the brain run executes after the response, in this function. */
+export const maxDuration = 300;
+
 /**
  * Ingest pasted text (meeting transcripts, notes) as a project source:
  * stored as a text document with local chunks/embeddings, mirrored into

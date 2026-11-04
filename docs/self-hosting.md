@@ -170,7 +170,11 @@ curl -X POST https://your-instance/api/sandbox/reaper \
   -H "X-Scheduled-Task-Auth: $SCHEDULED_TASK_SECRET"
 ```
 
-Project-brain ingestion has no HTTP fallback and stays idle without Inngest.
+Project-brain ingestion works without Inngest too: each run starts right after
+the change that caused it (a new document, a project chat, a tool sync) and
+finishes inside that request's function, within about four minutes. With
+Inngest it runs in the background with retries, and connected tools also sync
+once a day.
 
 ## Connected apps (Composio)
 
