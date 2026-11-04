@@ -26,6 +26,13 @@
 export const PROJECT_BRAIN_RUN_BUDGET_MS = 13 * 60_000;
 
 /**
+ * Budget when no Inngest is configured and the run executes inline, after the
+ * response, inside the request's own function. That function is capped at
+ * 300 s on Vercel Hobby, so the pipeline must settle the row well before.
+ */
+export const PROJECT_BRAIN_INLINE_RUN_BUDGET_MS = 4 * 60_000 + 15_000;
+
+/**
  * Ceiling for one extraction attempt. `generateObjectResilient` makes up to
  * three sequential model calls, so without a cap it can absorb whatever budget
  * the earlier stages left behind.
@@ -35,10 +42,14 @@ export const PROJECT_BRAIN_EXTRACTION_MAX_MS = 4 * 60_000;
 export class ProjectBrainBudgetError extends Error {
   readonly code = "budget_exhausted";
 
-  constructor(stage: string, elapsedMs: number) {
+  constructor(
+    stage: string,
+    elapsedMs: number,
+    budgetMs: number = PROJECT_BRAIN_RUN_BUDGET_MS,
+  ) {
     super(
       `Project brain run exceeded its ${Math.round(
-        PROJECT_BRAIN_RUN_BUDGET_MS / 60_000,
+        budgetMs / 60_000,
       )}m budget before ${stage} (elapsed ${Math.round(elapsedMs / 1000)}s).`,
     );
     this.name = "ProjectBrainBudgetError";
@@ -73,13 +84,11 @@ export function assertRunBudgetRemaining(
   anchor: string | Date | null | undefined,
   stage: string,
   now: number = Date.now(),
+  budgetMs: number = PROJECT_BRAIN_RUN_BUDGET_MS,
 ): number {
-  const remaining = remainingRunBudgetMs(anchor, now);
+  const remaining = remainingRunBudgetMs(anchor, now, budgetMs);
   if (remaining <= 0) {
-    throw new ProjectBrainBudgetError(
-      stage,
-      PROJECT_BRAIN_RUN_BUDGET_MS - remaining,
-    );
+    throw new ProjectBrainBudgetError(stage, budgetMs - remaining, budgetMs);
   }
   return remaining;
 }

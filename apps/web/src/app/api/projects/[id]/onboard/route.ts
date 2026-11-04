@@ -10,6 +10,9 @@ import {
   toProjectErrorResponse,
 } from "@/lib/projects/access";
 
+/** Without Inngest the brain run executes after the response, in this function. */
+export const maxDuration = 300;
+
 const OnboardSchema = z.object({
   goal: z.string().trim().max(4000),
   memberUserIds: z.array(z.string().uuid()).max(30).default([]),

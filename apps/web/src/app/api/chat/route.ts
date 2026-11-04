@@ -18,7 +18,6 @@ import {
   isToolCallUnsupportedModel,
   supportsImageInput,
 } from "lib/ai/models";
-import { SERVER_TOOL_STEP_BUDGET_MS } from "lib/code-runner/timeouts";
 import {
   MemberBudgetExceededError,
   type RoutingCandidate,
@@ -28,14 +27,15 @@ import {
   extractRouteSignals,
   finalizeMemberBudget,
   findPreviousThreadChatModel,
-  resolveBrowserAutomationGate,
-  resolveUnattendedBrowserGate,
   isRoutingSchemaUnavailableError,
   releaseMemberBudget,
   reserveMemberBudget,
   resolveAutomaticRoute,
+  resolveBrowserAutomationGate,
+  resolveUnattendedBrowserGate,
   validateManualModel,
 } from "lib/ai/routing";
+import { SERVER_TOOL_STEP_BUDGET_MS } from "lib/code-runner/timeouts";
 
 // Removed: import { getMCPClientsManager } from "lib/ai/mcp/mcp-manager";
 
@@ -66,9 +66,9 @@ import {
   chatRepository,
   skillRepository,
 } from "lib/db/repository";
+import { flushLogs } from "lib/observability/register";
 import globalLogger from "logger";
 import { after } from "next/server";
-import { flushLogs } from "lib/observability/register";
 
 import { generateThreadTitle } from "lib/chat/generate-thread-title";
 import { buildThreadTitleSeed } from "lib/chat/thread-title";
@@ -76,7 +76,6 @@ import { buildThreadTitleSeed } from "lib/chat/thread-title";
 import { errorIf, safe } from "ts-safe";
 
 import { buildAgentKnowledgeRetrievalPrompt } from "@/lib/agentset/agent-knowledge";
-import { resolveKnowledgeBaseBindings } from "@/lib/chat/knowledge-base-mentions";
 import { AGENTSET_CITATION_GUIDELINES } from "@/lib/agentset/citation-context";
 import { parseAgentModel } from "@/lib/ai/agent-model";
 import { normalizeAgentInstructions } from "@/lib/ai/agent/normalize";
@@ -93,8 +92,9 @@ import {
 } from "@/lib/ai/document-context";
 import { buildIngestionPreviewParts } from "@/lib/ai/ingest";
 import { loadHitlTools } from "@/lib/ai/tools/hitl/load-hitl-tools";
+import { billingRunKey } from "@/lib/billing/usage-idempotency";
+import { resolveKnowledgeBaseBindings } from "@/lib/chat/knowledge-base-mentions";
 import { buildCitationSystemPrompt } from "@/lib/citations/parse-citations";
-import { isBrowserToolkitOn } from "lib/chat/browser-tool-pin";
 import { pgDb } from "@/lib/db/pg/db.pg";
 import { ProjectTable } from "@/lib/db/pg/schema.pg";
 import {
@@ -104,6 +104,10 @@ import {
   requireFeature,
   trackUsage,
 } from "@/lib/gate";
+import {
+  enqueueProjectBrainRun,
+  projectChatBrainRunKey,
+} from "@/lib/project-brain/enqueue";
 import { buildProjectRetrievalPrompt } from "@/lib/project-brain/retrieve-for-chat";
 import { colorize } from "consola/utils";
 import { getContextWindow } from "lib/ai/model-context-windows";
@@ -114,19 +118,6 @@ import {
 import { createRequestTimer } from "lib/ai/request-timer";
 import { collectSandboxAssets } from "lib/ai/sandbox-assets";
 import { createResearchAgentTool } from "lib/ai/subagents/research-subagent";
-import { createBrowserAutomationTool } from "lib/ai/tools/browser/browser-automation-tool";
-import { IS_KERNEL_CONFIGURED } from "lib/kernel/client";
-import { isUnattended } from "lib/chat/run-mode";
-import {
-  DENIED_UNATTENDED_CONTEXT,
-  loadUnattendedContext,
-} from "lib/chat/unattended-context";
-import {
-  resolveBrowserToolSuppression,
-  shouldReadBrowserPolicy,
-} from "lib/chat/browser-tool-gate";
-import { resolveBrowserCredentials } from "lib/kernel/credential-vault";
-import { browserCredentialRepository } from "lib/db/repository";
 import { aiTelemetry } from "lib/ai/telemetry";
 import {
   DefaultToolName,
@@ -134,11 +125,24 @@ import {
   PublishPageToolName,
   ResearchToolName,
 } from "lib/ai/tools";
+import { createBrowserAutomationTool } from "lib/ai/tools/browser/browser-automation-tool";
 import { createImageTool } from "lib/ai/tools/image";
 import { createPlanTool } from "lib/ai/tools/planning/create-plan-tool";
 import { createPublishPageTool } from "lib/ai/tools/publish/publish-page-tool";
+import {
+  resolveBrowserToolSuppression,
+  shouldReadBrowserPolicy,
+} from "lib/chat/browser-tool-gate";
+import { isBrowserToolkitOn } from "lib/chat/browser-tool-pin";
+import { isUnattended } from "lib/chat/run-mode";
+import {
+  DENIED_UNATTENDED_CONTEXT,
+  loadUnattendedContext,
+} from "lib/chat/unattended-context";
+import { browserCredentialRepository } from "lib/db/repository";
 import { serverFileStorage } from "lib/file-storage";
-import { billingRunKey } from "@/lib/billing/usage-idempotency";
+import { IS_KERNEL_CONFIGURED } from "lib/kernel/client";
+import { resolveBrowserCredentials } from "lib/kernel/credential-vault";
 import { generateUUID } from "lib/utils";
 import {
   rememberAgentAction,
@@ -1790,6 +1794,32 @@ export async function POST(request: Request) {
             } catch (error) {
               logger.error("Failed to schedule thread titling", error);
             }
+          }
+        }
+
+        // A project's brain learns from its chats. One run per thread per
+        // window keeps a lively conversation from paying for an extraction on
+        // every turn; the run reads the whole thread, so nothing is lost.
+        const brainProjectId = thread?.projectId;
+        if (brainProjectId && metadata.runStatus !== "failed") {
+          try {
+            after(async () => {
+              try {
+                await enqueueProjectBrainRun({
+                  projectId: brainProjectId,
+                  actorUserId: session.user.id,
+                  sourceType: "chat",
+                  sourceRef: id,
+                  sourceScope: `chat:${id}`,
+                  trigger: "chat_completed",
+                  idempotencyKey: projectChatBrainRunKey(id),
+                });
+              } catch (error) {
+                logger.error("Failed to queue the project brain run", error);
+              }
+            });
+          } catch (error) {
+            logger.error("Failed to schedule the project brain run", error);
           }
         }
 

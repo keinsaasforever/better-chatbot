@@ -1,11 +1,20 @@
 import "server-only";
 
-import { and, eq } from "drizzle-orm";
 import { pgDb } from "@/lib/db/pg/db.pg";
 import { ProjectBrainRunTable } from "@/lib/db/pg/schema.pg";
 import { inngest } from "@/lib/inngest/client";
+import { and, eq } from "drizzle-orm";
+import { after } from "next/server";
+import { isInngestConfigured, runProjectBrainInline } from "./run-inline";
 
 export const PROJECT_BRAIN_RUN_EVENT = "project-brain/run.requested" as const;
+
+/** Chats feed the brain at most once per window per thread. */
+export const PROJECT_CHAT_BRAIN_WINDOW_MS = 15 * 60_000;
+
+export function projectChatBrainRunKey(threadId: string, now = Date.now()) {
+  return `chat-completed:${threadId}:${Math.floor(now / PROJECT_CHAT_BRAIN_WINDOW_MS)}`;
+}
 
 export type EnqueueProjectBrainRunInput = {
   projectId: string;
@@ -69,6 +78,22 @@ export async function enqueueProjectBrainRun(
 
   if (!run) {
     throw new Error("Could not resolve project brain run.");
+  }
+
+  if (!run.enqueuedAt && !isInngestConfigured()) {
+    // No background queue: run it right after the response, in this request's
+    // function. Outside a request (a script) there is no `after`, so it simply
+    // runs now.
+    await pgDb
+      .update(ProjectBrainRunTable)
+      .set({ enqueuedAt: new Date(), updatedAt: new Date() })
+      .where(eq(ProjectBrainRunTable.id, run.id));
+    try {
+      after(() => runProjectBrainInline(run.id));
+    } catch {
+      await runProjectBrainInline(run.id);
+    }
+    return run;
   }
 
   if (!run.enqueuedAt) {
