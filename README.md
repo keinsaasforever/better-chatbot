@@ -266,17 +266,19 @@ Useful commands:
 
 ## Optional integrations
 
-Everything below is off until you configure it. The server prints which
+Everything below is off until you configure it, except file uploads on Vercel,
+which the Supabase integration sets up for you. The server prints which
 features are disabled at startup, so you always know why something is missing.
 
 | Feature | Set | Without it |
 | --- | --- | --- |
-| File uploads | `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `NEXT_PUBLIC_SUPABASE_URL` | Attachments, avatars and generated images are disabled |
+| File uploads | Nothing on Vercel: the Supabase integration sets it. Docker and local: `SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` ([details](docs/self-hosting.md#storage)) | Attachments, avatars and generated images are disabled |
 | Knowledge bases | `AGENTSET_API_KEY` | Knowledge bases unavailable; project documents still search locally with pgvector |
 | Background jobs | `INNGEST_SIGNING_KEY`, `INNGEST_EVENT_KEY` | Scheduled tasks and the project brain need your own cron — see below |
 | Resumable streams | `REDIS_URL` | A stream ends when the viewer navigates away |
 | Code sandbox | `E2B_API_KEY` | Generated code runs in the in-browser worker only |
 | Web search | `EXA_API_KEY` | The web search tool is unavailable |
+| EU-hosted models | `TENSORX_API_KEY` | TensorX models (zero data retention) do not appear in the model picker |
 | Voice transcription | `ASSEMBLYAI_API_KEY` | Realtime voice still works; transcription does not |
 | Browser notifications | `NEXT_PUBLIC_VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY` | No notifications while the app is closed |
 | Connected apps | `COMPOSIO_API_KEY` | Users cannot connect Gmail, Slack, GitHub and other apps |
