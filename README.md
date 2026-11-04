@@ -94,20 +94,71 @@ Prefer running it directly? See [docs/self-hosting.md](docs/self-hosting.md).
 
 ## See it in action
 
-<table>
-<tr>
-<td width="50%" valign="top"><img src="docs/assets/demo-web-search.webp" alt="A chat that searches the web and answers with sources" width="100%" /><br /><sub><b>Web search</b> with sources, right in the chat (with the optional Exa key).</sub></td>
-<td width="50%" valign="top"><img src="docs/assets/demo-chart.webp" alt="A chat that answers with a bar chart" width="100%" /><br /><sub><b>Charts and tables</b> from a single sentence.</sub></td>
-</tr>
-<tr>
-<td width="50%" valign="top"><img src="docs/assets/demo-code.webp" alt="A chat that runs Python and shows the result as a table" width="100%" /><br /><sub><b>Code execution</b> in a sandbox (optional E2B key), results as an interactive table.</sub></td>
-<td width="50%" valign="top"><img src="docs/assets/demo-agent.webp" alt="Mentioning an agent with @ and getting a researched answer" width="100%" /><br /><sub><b>Agents</b>: mention one with <code>@</code> and it takes over.</sub></td>
-</tr>
-<tr>
-<td width="50%" valign="top"><img src="docs/assets/demo-image.webp" alt="A chat that generates a watercolor image" width="100%" /><br /><sub><b>Image generation</b> inside the conversation.</sub></td>
-<td width="50%" valign="top"><img src="docs/assets/demo-mcp.webp" alt="Connected apps and the catalog of tools to connect" width="100%" /><br /><sub><b>Tools and MCP servers</b>: connect your apps (catalog via the optional Composio integration).</sub></td>
-</tr>
-</table>
+### Web search
+
+Ask about anything current and get an answer with its sources. Needs the optional `EXA_API_KEY`.
+
+<img src="docs/assets/demo-web-search.webp" alt="A chat that searches the web and answers with sources" width="100%" />
+
+### Charts and tables
+
+One sentence in, a chart or an interactive table out.
+
+<img src="docs/assets/demo-chart.webp" alt="A chat that answers with a bar chart" width="100%" />
+
+### Code execution
+
+Python and JavaScript run in a sandbox; results come back as tables and charts. Needs the optional `E2B_API_KEY`.
+
+<img src="docs/assets/demo-code.webp" alt="A chat that runs Python and shows the result as a table" width="100%" />
+
+### Agents
+
+Mention an agent with `@` and it takes over the conversation with its own instructions and tools.
+
+<img src="docs/assets/demo-agent.webp" alt="Mentioning an agent with @ and getting a researched answer" width="100%" />
+
+### Legal document review
+
+An example from the agent library: paste a clause or attach a contract, and the Legal Document Reviewer flags the risks and suggests changes.
+
+<img src="docs/assets/demo-legal.webp" alt="The Legal Document Reviewer agent analysing the risks of an NDA clause" width="100%" />
+
+### Image generation
+
+Generate images right inside the conversation.
+
+<img src="docs/assets/demo-image.webp" alt="A chat that generates a watercolor image" width="100%" />
+
+### Tools and MCP servers
+
+Connect your apps and any MCP server. The catalog of 250+ apps comes with the optional Composio integration.
+
+<img src="docs/assets/demo-mcp.webp" alt="Connected apps and the catalog of tools to connect" width="100%" />
+
+### TensorX: EU-hosted, zero data retention
+
+Pick a model under **TensorX (0 Data Retention)** and your prompts go straight to EU infrastructure that keeps nothing. Needs the optional `TENSORX_API_KEY`; see [Partners](#partners).
+
+<img src="docs/assets/demo-tensorx.webp" alt="Choosing a TensorX model marked 0 Data Retention and chatting with it" width="100%" />
+
+### Local models
+
+At the end of the model menu, **Add local Model** connects Ollama, LM Studio or any OpenAI-compatible server. Your data stays on your hardware.
+
+<img src="docs/assets/demo-local-models.webp" alt="Opening Add local Model at the end of the model menu and entering a server address" width="100%" />
+
+### Voice input
+
+Click the microphone, speak, and your words are transcribed into the message box by AssemblyAI. Needs the optional `ASSEMBLYAI_API_KEY`.
+
+<img src="docs/assets/demo-voice.webp" alt="Clicking the microphone button, which turns red while recording" width="100%" />
+
+### Desktop app (beta)
+
+The keinsaas Navigator desktop app for Windows and macOS, with local (stdio) MCP servers and native notifications. It connects to the cloud or to your own instance; see [What you get](#what-you-get).
+
+<img src="docs/assets/desktop-app.webp" alt="The keinsaas Navigator desktop app on Windows, showing the sign-in screen" width="100%" />
 
 ---
 
