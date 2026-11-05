@@ -191,6 +191,13 @@ Self-hosted instances can run stdio servers; the desktop app runs them locally.
 
 **Voice.** Realtime voice conversations through the gateway, plus transcription.
 
+**Voice device.** Pair an [M5Stack Atom Echo S3R](https://docs.m5stack.com/en/atom/Atom%20EchoS3R),
+press its button and talk: what you say is transcribed and handed to your
+agent with its tools, or turned into a new agent or a scheduled task. Pairing and device management are in
+the app; the device streams its audio through a small WebSocket bridge, which
+is not published for self-hosting yet
+([#429](https://github.com/keinsaasforever/better-chatbot/issues/429)).
+
 **Desktop app (beta for self-hosting).** The keinsaas Navigator desktop app
 ([download at keinsaas.com](https://keinsaas.com)) adds local (stdio) MCP servers, which a server on Vercel cannot run, plus
 native notifications. On first launch it asks where to connect: pick **My own
