@@ -3,9 +3,10 @@
 import { useCopy } from "@/hooks/use-copy";
 import type { UseChatHelpers } from "@ai-sdk/react";
 import { UIMessage } from "ai";
+import { truncateMessageMentions } from "lib/chat/message-mentions";
 import equal from "lib/equal";
 import { scrollToScrollportTop } from "lib/scroll-to-scrollport-top";
-import { cn, truncateString } from "lib/utils";
+import { cn } from "lib/utils";
 import {
   Check,
   ChevronDownIcon,
@@ -21,6 +22,7 @@ import { Button } from "ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "ui/tooltip";
 import { MessageEditor } from "../message-editor";
 import { type TextMessagePart, useDeleteMessage } from "./shared";
+import { UserMessageText } from "./user-message-text";
 
 interface UserMessagePartProps {
   part: TextMessagePart;
@@ -60,7 +62,7 @@ export const UserMessagePart = memo(
     const displayText =
       expanded || !isLongText
         ? part.text
-        : truncateString(part.text, MAX_TEXT_LENGTH);
+        : truncateMessageMentions(part.text, MAX_TEXT_LENGTH);
 
     useEffect(() => {
       if (status === "submitted" && isLast && !scrolledRef.current) {
@@ -108,7 +110,7 @@ export const UserMessagePart = memo(
             <div className="absolute pointer-events-none bg-gradient-to-t from-accent to-transparent w-full h-40 bottom-0 left-0" />
           )}
           <p className={cn("whitespace-pre-wrap text-sm break-words")}>
-            {displayText}
+            <UserMessageText text={displayText} />
           </p>
           {isLongText && (
             <Button
