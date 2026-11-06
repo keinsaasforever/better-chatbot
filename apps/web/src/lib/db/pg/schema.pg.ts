@@ -1052,6 +1052,8 @@ export const MemberAiPolicyTable = pgTable("member_ai_policy", {
     .primaryKey()
     .notNull()
     .references(() => MemberTable.id, { onDelete: "cascade" }),
+  // Despite the name, a fixed total that never resets: spend is summed over
+  // every `member_ai_usage_period` row. Kept to avoid a column rename.
   monthlyCapMicros: bigint("monthly_cap_micros", { mode: "number" }),
   hardStop: boolean("hard_stop").notNull().default(true),
   createdAt: timestamp("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
