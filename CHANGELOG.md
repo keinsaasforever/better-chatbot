@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.0.1](https://github.com/keinsaasforever/better-chatbot/compare/v2.0.0...v2.0.1) (2026-11-06)
+
+
+### Bug Fixes
+
+* project brain works without Inngest and learns from project chats and uploads ([#425](https://github.com/keinsaasforever/better-chatbot/issues/425)) ([93fdb8e](https://github.com/keinsaasforever/better-chatbot/commit/93fdb8ea5af24a5de75d80f5f3f4503aa60a6488))
+* render mentions as chips in sent messages ([#432](https://github.com/keinsaasforever/better-chatbot/issues/432)) ([989dc36](https://github.com/keinsaasforever/better-chatbot/commit/989dc362b89257df065d82de1fd41bafdaba29ca))
+
 ## [2.0.0](https://github.com/keinsaasforever/better-chatbot/compare/v1.26.0...v2.0.0) (2026-11-04)
 
 
