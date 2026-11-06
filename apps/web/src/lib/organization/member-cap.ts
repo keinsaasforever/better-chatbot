@@ -5,7 +5,9 @@
  * model router (`lib/ai/routing/budget.ts`) use. 1_000_000 micros = €1.
  *
  * Product rule: an org admin manages billing for the whole workspace and each
- * invited employee ("member") is capped at €15 / calendar month by default.
+ * invited employee ("member") gets a €15 allowance by default. The allowance is
+ * a fixed total, not a monthly budget: it does not refill, only an admin raising
+ * the limit grants more (see `getMemberSpentMicros` in the model router).
  * Org owners (the billing manager) and solo users in their personal workspace
  * are never capped by default.
  */
@@ -29,8 +31,8 @@ export function isPersonalOrgMetadata(
 }
 
 /**
- * Default monthly cap (micros) to show/enforce for a member that has no
- * explicit `member_ai_policy` row yet. Team members default to €15; owners and
+ * Default cap (micros) to show/enforce for a member that has no
+ * explicit `member_ai_policy` row yet. Team members default to €15 in total; owners and
  * members of a personal workspace have no default cap.
  */
 export function defaultMemberCapMicros(input: {

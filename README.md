@@ -1,8 +1,8 @@
+# keinsaas Navigator – Community Edition
+
 <div align="center">
 
 <img src="docs/assets/navigator-banner.webp" alt="keinsaas Navigator: your operating system for the AI era. Powered by agents, skills, MCP and workflows." width="100%" />
-
-# keinsaas Navigator – Community Edition
 
 <sub>formerly <b>better-chatbot</b></sub>
 

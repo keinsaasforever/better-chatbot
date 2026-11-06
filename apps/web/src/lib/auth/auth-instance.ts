@@ -137,8 +137,8 @@ async function findUserIdByEmail(email: string): Promise<string | undefined> {
 }
 
 /**
- * Seed the default monthly AI allowance for a freshly-joined member. Team
- * members (role !== "owner") are capped at €15/month by default; owners and
+ * Seed the default AI allowance for a freshly-joined member. Team
+ * members (role !== "owner") are capped at €15 in total by default; owners and
  * personal-workspace members are left uncapped. Never overwrites an existing
  * policy row (admins can edit caps in the AI-policy tab).
  */
@@ -328,7 +328,7 @@ const options = {
             });
           }
         },
-        // Give every newly-joined member their default monthly AI allowance.
+        // Give every newly-joined member their default AI allowance.
         afterAcceptInvitation: async ({ member }) => {
           await onMemberJoined(member);
         },

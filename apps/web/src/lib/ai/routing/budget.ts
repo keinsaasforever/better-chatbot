@@ -6,7 +6,7 @@ import {
   MemberAiReservationTable,
   MemberAiUsagePeriodTable,
 } from "@/lib/db/pg/schema.pg";
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import {
   resolveCacheRatios,
   weightInputTokens,
@@ -18,13 +18,13 @@ const RESERVATION_TTL_MS = 15 * 60 * 1000;
 
 export class MemberBudgetExceededError extends Error {
   constructor() {
-    super("Your monthly AI allowance has been reached.");
+    super("Your AI allowance has been used up.");
     this.name = "MemberBudgetExceededError";
   }
 }
 
 /**
- * The €15 member caps run on a second, parallel cost model. It has to weigh
+ * The member caps (€15 total by default) run on a second, parallel cost model. It has to weigh
  * cached input the same way `trackCostBasedTokens` does, or a capped member is
  * charged against their allowance at a rate the invoice never sees - stricter
  * than the billing they can actually check.
@@ -58,6 +58,32 @@ export function estimateCostMicros(input: {
     (input.outputTokens * input.candidate.outputPriceMicrosPerMillion) /
     MICROS_PER_MILLION;
   return Math.ceil(inputCost + outputCost);
+}
+
+/**
+ * A member's cap is a fixed total, not a monthly budget: the organization
+ * bought its credits once, so an allowance must not refill on the 1st. It only
+ * grows when an admin raises the member's limit. The usage rows stay split by
+ * calendar month purely as a ledger; what counts against the cap is the sum
+ * over all of them, reserved runs included.
+ *
+ * Takes the executor so `reserveMemberBudget` can read inside its locked
+ * transaction.
+ */
+export async function getMemberSpentMicros(
+  memberIds: string[],
+  executor: Pick<typeof pgDb, "select"> = pgDb,
+): Promise<Map<string, number>> {
+  if (memberIds.length === 0) return new Map();
+  const rows = await executor
+    .select({
+      memberId: MemberAiUsagePeriodTable.memberId,
+      spentMicros: sql<string>`COALESCE(SUM(${MemberAiUsagePeriodTable.finalizedMicros} + ${MemberAiUsagePeriodTable.reservedMicros}), 0)`,
+    })
+    .from(MemberAiUsagePeriodTable)
+    .where(inArray(MemberAiUsagePeriodTable.memberId, memberIds))
+    .groupBy(MemberAiUsagePeriodTable.memberId);
+  return new Map(rows.map((row) => [row.memberId, Number(row.spentMicros)]));
 }
 
 export function getCurrentPeriod(now = new Date()) {
@@ -126,10 +152,11 @@ export async function reserveMemberBudget(input: {
     });
     if (existing) return existing;
 
-    if (
-      period.finalizedMicros + period.reservedMicros + input.estimateMicros >
-      policy.monthlyCapMicros
-    ) {
+    const spentMicros =
+      (await getMemberSpentMicros([input.memberId!], tx)).get(
+        input.memberId!,
+      ) ?? 0;
+    if (spentMicros + input.estimateMicros > policy.monthlyCapMicros) {
       throw new MemberBudgetExceededError();
     }
 
